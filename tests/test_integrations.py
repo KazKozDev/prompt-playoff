@@ -492,3 +492,23 @@ def test_every_preset_declares_its_licence():
         assert preset.licence, name
         assert preset.citation, name
         assert preset.fields
+
+
+def test_mbpp_keeps_only_references_supported_by_the_pure_module_whitelist():
+    from prompt_selector.integrations.huggingface import MBPP, code_example
+
+    base = {
+        "prompt": "Return the integer square root.",
+        "test_list": ["assert root(81) == 9"],
+        "test_imports": ["import math"],
+        "code": "import math\ndef root(x):\n    return math.floor(math.sqrt(x))",
+    }
+    example = code_example(base, MBPP, "mbpp-safe")
+    assert example is not None
+    assert example["grader_options"]["test_setup"] == "import math"
+
+    unsafe = dict(base, code="import os\ndef root(x):\n    return x")
+    assert code_example(unsafe, MBPP, "mbpp-unsafe") is None
+
+    unsupported = dict(base, code="def root(x):\n    return bin(x)", test_imports=[])
+    assert code_example(unsupported, MBPP, "mbpp-unsupported") is None

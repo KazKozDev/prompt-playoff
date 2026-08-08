@@ -5,16 +5,20 @@ out. That means running code the model wrote, which is not something to do with
 ``exec``: a prompt-injected input could otherwise read files, open sockets, or
 spawn a process.
 
-So this evaluates an explicit subset of Python's AST and nothing else. There is
-no import, no attribute access, no function definition, no comprehension over
-unbounded ranges — anything outside the subset raises rather than degrading to
-something permissive. Loops carry a step budget so a runaway program stops
-instead of hanging the benchmark.
+So this evaluates an explicit subset of Python's AST and nothing else. A few
+pure standard-library names can be requested with ordinary import syntax, but
+the import is only declarative: approved callables are bound up front and no
+module object or general attribute traversal is exposed. Anything outside the
+subset raises rather than degrading to something permissive. Loops carry a
+step budget so a runaway program stops instead of hanging the benchmark.
 """
 
 from __future__ import annotations
 
 import ast
+import collections
+import itertools
+import math
 import operator
 from dataclasses import dataclass
 from typing import Any
@@ -25,6 +29,134 @@ MAX_SEQUENCE = 100_000
 
 class SandboxError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class _SafeCallable:
+    """A host callable that the interpreter, and only the interpreter, may invoke."""
+
+    function: Any
+
+
+def _bounded_iterator(function):
+    """Keep combinatoric iterators from bypassing the sandbox sequence cap."""
+
+    def call(*args, **kwargs):
+        iterator = function(*args, **kwargs)
+        values = list(itertools.islice(iterator, MAX_SEQUENCE + 1))
+        if len(values) > MAX_SEQUENCE:
+            raise SandboxError("iterator produced too many items")
+        return iter(values)
+
+    return call
+
+
+def _bounded_product(*iterables, **kwargs):
+    repeat = kwargs.get("repeat", 1)
+    if not isinstance(repeat, int) or repeat < 0 or repeat > 1_000:
+        raise SandboxError("product repeat is too large")
+    return _bounded_iterator(itertools.product)(*iterables, **kwargs)
+
+
+# These are values, not module objects. Import syntax is stripped before the
+# interpreter runs and module-qualified uses are rewritten to private bound
+# names, so `math.sqrt` support does not create a general Attribute path.
+SAFE_MODULES: dict[str, dict[str, Any]] = {
+    "math": {
+        "ceil": math.ceil,
+        "cos": math.cos,
+        "degrees": math.degrees,
+        "e": math.e,
+        "fabs": math.fabs,
+        "floor": math.floor,
+        "gcd": math.gcd,
+        "isclose": math.isclose,
+        "isfinite": math.isfinite,
+        "isinf": math.isinf,
+        "isnan": math.isnan,
+        "isqrt": math.isqrt,
+        "lcm": math.lcm,
+        "log": math.log,
+        "log10": math.log10,
+        "log2": math.log2,
+        "pi": math.pi,
+        "radians": math.radians,
+        "sin": math.sin,
+        "sqrt": math.sqrt,
+        "tan": math.tan,
+        "tau": math.tau,
+        "trunc": math.trunc,
+    },
+    "itertools": {
+        "combinations": _bounded_iterator(itertools.combinations),
+        "combinations_with_replacement": _bounded_iterator(itertools.combinations_with_replacement),
+        "permutations": _bounded_iterator(itertools.permutations),
+        "product": _bounded_product,
+    },
+    "collections": {
+        "Counter": collections.Counter,
+        "defaultdict": collections.defaultdict,
+    },
+}
+
+
+class _SafeImportBinder(ast.NodeTransformer):
+    """Replace approved imports with names bound before interpretation."""
+
+    def __init__(self) -> None:
+        self.bindings: dict[str, Any] = {}
+        # Qualified uses work even when an answer omits a redundant import.
+        self.module_aliases = {name: name for name in SAFE_MODULES}
+
+    def visit_Import(self, node: ast.Import):  # noqa: N802 - ast visitor API
+        for alias in node.names:
+            if alias.name not in SAFE_MODULES:
+                raise SandboxError(f"module {alias.name!r} is not allowed")
+            self.module_aliases[alias.asname or alias.name] = alias.name
+        return None
+
+    def visit_ImportFrom(self, node: ast.ImportFrom):  # noqa: N802 - ast visitor API
+        if node.level or node.module not in SAFE_MODULES:
+            raise SandboxError(f"module {node.module or ''!r} is not allowed")
+        exports = SAFE_MODULES[node.module]
+        for alias in node.names:
+            if alias.name == "*" or alias.name not in exports:
+                raise SandboxError(f"{node.module}.{alias.name} is not allowed")
+            self.bindings[alias.asname or alias.name] = _bound_value(exports[alias.name])
+        return None
+
+    def visit_Attribute(self, node: ast.Attribute):  # noqa: N802 - ast visitor API
+        if isinstance(node.value, ast.Name) and node.value.id in self.module_aliases:
+            module = self.module_aliases[node.value.id]
+            exports = SAFE_MODULES[module]
+            if node.attr.startswith("_") or node.attr not in exports:
+                raise SandboxError(f"{module}.{node.attr} is not allowed")
+            bound_name = f"_safe_{module}_{node.attr}"
+            self.bindings[bound_name] = _bound_value(exports[node.attr])
+            return ast.copy_location(ast.Name(id=bound_name, ctx=node.ctx), node)
+        return self.generic_visit(node)
+
+
+def _bound_value(value: Any) -> Any:
+    return _SafeCallable(value) if callable(value) else value
+
+
+def _prepare_program(tree: ast.Module) -> tuple[ast.Module, dict[str, Any]]:
+    binder = _SafeImportBinder()
+    prepared = binder.visit(tree)
+    assert isinstance(prepared, ast.Module)
+    return ast.fix_missing_locations(prepared), binder.bindings
+
+
+def imports_are_supported(source: str) -> bool:
+    """Whether every import/module reference in *source* is on the pure whitelist."""
+
+    try:
+        tree = ast.parse(source, mode="exec")
+        _prepare_program(tree)
+    except (SyntaxError, SandboxError):
+        return False
+    return True
 
 
 BINARY = {
@@ -107,7 +239,7 @@ SAFE_METHODS = frozenset(
     get keys values items update setdefault fromkeys
     add discard union intersection difference symmetric_difference
     issubset issuperset isdisjoint
-    bit_length is_integer conjugate
+    bit_length is_integer conjugate most_common
     """.split()
 )
 
@@ -157,8 +289,8 @@ class _Function:
 
 
 class _Interpreter:
-    def __init__(self) -> None:
-        self.scopes: list[dict[str, Any]] = [{}]
+    def __init__(self, bindings: dict[str, Any] | None = None) -> None:
+        self.scopes: list[dict[str, Any]] = [dict(bindings or {})]
         self.steps = 0
         self.depth = 0
 
@@ -410,7 +542,10 @@ class _Interpreter:
         if isinstance(target, _Function):
             return self.invoke(target, args, kwargs)
 
-        function = BUILTINS.get(node.func.id)
+        if isinstance(target, _SafeCallable):
+            function = target.function
+        else:
+            function = BUILTINS.get(node.func.id)
         if function is None:
             raise SandboxError(f"{node.func.id!r} is not an allowed function")
         # `sorted(xs, key=lambda x: ...)` hands our function object to CPython,
@@ -422,6 +557,8 @@ class _Interpreter:
     def as_callable(self, value: Any) -> Any:
         if isinstance(value, _Function):
             return lambda *call_args: self.invoke(value, list(call_args), {})
+        if isinstance(value, _SafeCallable):
+            return value.function
         return value
 
     def method_call(self, node: ast.Call) -> Any:
@@ -520,7 +657,12 @@ def run_program(source: str, answer_name: str = "answer") -> Result:
     except SyntaxError as exc:
         return Result(error=f"syntax error: {exc.msg} (line {exc.lineno})")
 
-    interpreter = _Interpreter()
+    try:
+        tree, bindings = _prepare_program(tree)
+    except SandboxError as exc:
+        return Result(error=str(exc))
+
+    interpreter = _Interpreter(bindings)
     try:
         last = interpreter.run(tree.body)
     except SandboxError as exc:

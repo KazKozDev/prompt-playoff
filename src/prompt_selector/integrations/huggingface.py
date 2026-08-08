@@ -14,7 +14,6 @@ separately and hoping the two agree.
 from __future__ import annotations
 
 import random
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -151,8 +150,7 @@ class CodePreset:
 
 
 #: MBPP is the practical choice over HumanEval: its problems are elementary and
-#: mostly avoid imports, which matters because the sandbox that runs the answers
-#: allows no imports at all.
+#: mostly avoid dependencies outside the sandbox's small pure-module whitelist.
 MBPP = CodePreset(
     repo_id="google-research-datasets/mbpp",
     config="sanitized",
@@ -165,8 +163,8 @@ MBPP = CodePreset(
     notes=[
         "Graded by running the task's own asserts in the restricted interpreter, so the "
         "score is the share of tests that pass, not a text comparison.",
-        "Tasks needing imports are dropped on import: the sandbox does not allow them, and "
-        "scoring them zero would measure the sandbox rather than the prompt.",
+        "Tasks needing modules outside the sandbox's pure math/itertools/collections "
+        "whitelist are dropped; scoring them zero would measure the sandbox, not the prompt.",
     ],
 )
 
@@ -456,14 +454,31 @@ def code_example(row: dict[str, Any], preset: CodePreset, example_id: str) -> di
     """One programming task -> one benchmark example, or None if unusable here."""
     prompt = " ".join((row.get(preset.prompt_column) or "").split())
     tests = [str(t) for t in (row.get(preset.tests_column) or []) if str(t).strip()]
-    setup = str(row.get(preset.setup_column) or "") if preset.setup_column else ""
+    setup_parts = [str(row.get(preset.setup_column) or "")] if preset.setup_column else []
+    setup_parts.extend(str(item) for item in (row.get("test_imports") or []) if str(item).strip())
+    setup = "\n".join(part for part in setup_parts if part.strip())
     if not prompt or not tests:
         return None
-    # A task whose reference solution or tests need an import cannot be graded by
-    # the sandbox; keeping it would measure the sandbox, not the prompt.
-    blob = " ".join([*tests, setup, str(row.get("code") or "")])
-    if "import " in blob or re.search(r"\b(math|re|collections|itertools|heapq|sys)\.", blob):
+    # Keep tasks using the sandbox's pre-bound pure names, but continue dropping
+    # every dynamic or non-whitelisted dependency.
+    from prompt_selector.sandbox import imports_are_supported
+
+    reference = str(row.get("code") or "")
+    blob = "\n".join([setup, reference, *tests])
+    if not imports_are_supported(blob):
         return None
+
+    # Import compatibility alone is insufficient: an otherwise valid task can
+    # still rely on an AST feature the restricted interpreter intentionally
+    # omits. Keep the benchmark honest by requiring its supplied reference to
+    # pass every assertion before exposing the task to a model.
+    if reference.strip():
+        from prompt_selector.sandbox import run_program
+
+        for assertion in tests:
+            program = "\n".join(part for part in (reference, setup, assertion) if part.strip())
+            if not run_program(program).ok:
+                return None
 
     # The first assert shows the expected function name and signature — without it
     # the model cannot know what to call the function, and every test would fail.

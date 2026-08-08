@@ -42,8 +42,10 @@ recipe:
     title: WRITE A PROGRAM
     body: 'Write a short Python program that computes the answer and assigns it to a variable named `answer`.
       Allowed: arithmetic, comparisons, lists, dicts, strings, loops, comprehensions and these builtins:
-      len, sum, min, max, abs, round, sorted, range, int, float, str, enumerate, zip, any, all. Not allowed:
-      imports, method calls, defining functions. Output the program only, in a ```python block.
+      len, sum, min, max, abs, round, sorted, range, int, float, str, enumerate, zip, any, all; local
+      functions; safe data methods; and whitelisted pure names from math, itertools, Counter, and defaultdict.
+      Imports outside that whitelist, general attribute access, files, processes, and network access remain forbidden.
+      Output the program only, in a ```python block.
 
       '
   - name: input
@@ -119,8 +121,8 @@ source:
   authors: Chen et al.
   url: https://arxiv.org/abs/2211.12588
   year: 2022
-  note: 'Runs in a restricted AST interpreter, not a Python process: no imports, no attribute access,
-    no filesystem or network.'
+  note: 'Runs in a restricted AST interpreter, not a Python process: only pre-bound pure math/itertools/collections
+    names are importable; there is no general attribute access, filesystem, or network.'
 benchmark_priors:
   default: 0.76
   task:coding: 0.88

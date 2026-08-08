@@ -160,6 +160,50 @@ def test_sandbox_allows_local_pure_functions():
     assert result.value == 1
 
 
+def test_sandbox_prebinds_only_whitelisted_pure_module_names():
+    """Safe imports are declarations; no module object enters the interpreter."""
+    from prompt_selector.sandbox import run_program
+
+    programs = {
+        "import math\nanswer = math.floor(math.pi)": 3,
+        "from math import sqrt as root\nanswer = root(81)": 9.0,
+        "from collections import Counter\nanswer = Counter('abaca')": {
+            "a": 3,
+            "b": 1,
+            "c": 1,
+        },
+        (
+            "from collections import defaultdict\n"
+            "counts = defaultdict(int)\ncounts['x'] += 1\nanswer = counts['x']"
+        ): 1,
+        (
+            "from itertools import combinations_with_replacement\n"
+            "answer = list(combinations_with_replacement('ab', 2))"
+        ): [("a", "a"), ("a", "b"), ("b", "b")],
+    }
+    for source, expected in programs.items():
+        result = run_program(source)
+        assert result.ok, result.error
+        assert result.value == expected
+
+
+def test_sandbox_rejects_modules_and_members_outside_the_whitelist():
+    from prompt_selector.sandbox import run_program
+
+    rejected = [
+        "import os\nanswer = 1",
+        "from math import __dict__\nanswer = 1",
+        "import math\nanswer = math.__class__",
+        "import collections\nanswer = collections.ChainMap({}, {})",
+        "from itertools import count\nanswer = list(count())",
+        "from itertools import product\nanswer = list(product('a', repeat=1001))",
+    ]
+    for source in rejected:
+        result = run_program(source)
+        assert not result.ok, source
+        assert result.value is None
+
+
 def test_sandbox_stops_a_runaway_program():
     from prompt_selector.sandbox import run_program
 
