@@ -1,0 +1,90 @@
+id: direct.explicit-constraints
+version: 1.0.0
+title: Direct prompting with explicit constraints
+family: direct
+description: A concise instruction, explicit constraints, and a clear output contract.
+strong_tasks:
+- classification
+- summarization
+- translation
+acceptable_tasks:
+- structured_extraction
+- coding
+- creative_writing
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: false
+characteristics:
+  quality: 0.72
+  reliability: 0.7
+  latency_efficiency: 0.98
+  token_efficiency: 0.97
+  simplicity: 0.99
+recipe:
+  system: Perform the requested task directly. Respect every explicit constraint.
+  instructions:
+  - Use the input as the only source of task content.
+  - Follow the requested format.
+  - Do not describe your process unless requested.
+  validators: []
+  fallback: Clarify the output contract and retry once.
+  blocks:
+  - name: role
+    body: 'Perform this {task_type} task on the input below.
+
+      '
+    title: OBJECTIVE
+  - name: constraints
+    body: '{instructions}
+
+      '
+    title: CONSTRAINTS
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: contract_text
+    body: 'Return exactly the requested artifact and nothing else.
+
+      '
+    title: OUTPUT CONTRACT
+    when: free_text
+  - name: input
+    body: '{input}
+
+      '
+    title: INPUT
+benchmark_priors:
+  default: 0.72
+  task:classification: 0.81
+  task:summarization: 0.82
+  task:translation: 0.78
+  class:small: 0.8
+evidence_level: documented
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: single
+source:
+  paper: Language Models are Few-Shot Learners
+  authors: Brown et al.
+  url: https://arxiv.org/abs/2005.14165
+  year: 2020
+  note: Plain zero-shot prompting as characterised in the source paper; the explicit-constraint framing
+    is ours.

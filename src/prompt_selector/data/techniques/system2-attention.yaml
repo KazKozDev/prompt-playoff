@@ -1,0 +1,112 @@
+version: 1.0.0
+acceptable_tasks:
+- structured_extraction
+- classification
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.system2-attention
+title: System 2 attention (S2A)
+family: input-processing
+description: Strip the input down to what actually bears on the task, then solve using only the stripped
+  version. Aimed at inputs carrying distractors.
+strong_tasks:
+- research
+- summarization
+min_calls: 2
+characteristics:
+  quality: 0.83
+  reliability: 0.85
+  latency_efficiency: 0.5
+  token_efficiency: 0.55
+  simplicity: 0.7
+recipe:
+  system: Separate the relevant content from the noise before reasoning about it.
+  instructions:
+  - Copy out only the parts of the input that bear on the task.
+  - Solve using that extract alone.
+  blocks:
+  - name: procedure
+    title: FILTER
+    body: 'Copy out only the parts of the input that bear on the task. Drop opinions, asides and anything
+      that would bias the answer. Copy verbatim — do not summarize or rewrite. Output the extract only.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: solve_task
+    title: SOLVE
+    body: 'Relevant content, extracted:
+
+
+      {previous}
+
+
+      Answer using only this extract. Ignore anything not in it.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - grounding_overlap
+  fallback: Widen the extract and solve again if it dropped something needed.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: filter
+    blocks:
+    - procedure
+    - input
+    system: Extract relevant content verbatim. Do not answer.
+    carries_schema: false
+  - name: solve
+    blocks:
+    - solve_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:research: 0.84
+source:
+  paper: System 2 Attention (is something you might need too)
+  authors: Weston and Sukhbaatar
+  url: https://arxiv.org/abs/2311.11829
+  year: 2023

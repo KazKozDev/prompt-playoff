@@ -1,0 +1,84 @@
+id: creative.constraint-lattice
+version: 1.0.0
+title: Creative constraint lattice
+family: creative-control
+description: Organize premise, audience, voice, exclusions, and structural beats without overconstraining
+  prose.
+strong_tasks:
+- creative_writing
+acceptable_tasks:
+- translation
+- summarization
+avoid_tasks:
+- classification
+- structured_extraction
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: false
+characteristics:
+  quality: 0.91
+  reliability: 0.75
+  latency_efficiency: 0.85
+  token_efficiency: 0.79
+  simplicity: 0.83
+recipe:
+  system: Create original prose that satisfies the declared premise, audience, voice, and exclusions.
+  instructions:
+  - Treat the premise and audience as fixed.
+  - Use structural beats as guidance rather than visible headings.
+  - Honor exclusions without mentioning them.
+  - Prioritize coherent narrative over decorative language.
+  validators:
+  - contains_all
+  fallback: Revise only the missed constraint while preserving the strongest prose.
+  blocks:
+  - name: role
+    body: 'Write original prose that satisfies every constraint below.
+
+      '
+    title: OBJECTIVE
+  - name: lattice
+    body: 'Premise: {premise}
+
+      Audience: {audience}
+
+      Voice: {voice}
+
+      Exclusions: {exclusions}
+
+      '
+    title: CONSTRAINT LATTICE
+  - name: rules
+    body: 'Treat the lattice as fixed. Use structural beats as guidance, never as visible headings. Honor
+      exclusions without naming them. Coherence outranks ornament.
+
+      '
+    title: RULES
+  - name: input
+    body: '{input}
+
+      '
+    title: BRIEF
+  variables:
+    premise: Use the premise stated in the input.
+    audience: a general adult reader
+    voice: close third person, plain contemporary prose
+    exclusions: none
+benchmark_priors:
+  default: 0.76
+  task:creative_writing: 0.95
+  class:small: 0.78
+evidence_level: heuristic
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: single

@@ -1,0 +1,100 @@
+id: reasoning.plan-execute
+version: 1.0.0
+title: Plan and execute
+family: planning
+description: Create a bounded plan, execute it step by step, and verify the final result.
+strong_tasks:
+- coding
+- research
+- agents
+acceptable_tasks:
+- translation
+- summarization
+avoid_tasks:
+- classification
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.9
+  reliability: 0.86
+  latency_efficiency: 0.42
+  token_efficiency: 0.4
+  simplicity: 0.49
+recipe:
+  system: Create a minimal executable plan before solving the task. Do not add unnecessary steps.
+  instructions:
+  - Define the success condition.
+  - Create the shortest plan that can satisfy it.
+  - Execute each step and verify the final answer against the success condition.
+  validators:
+  - coverage
+  fallback: Revise only the failed plan step.
+  blocks:
+  - name: planning_task
+    body: 'State the success condition in one sentence, then write the shortest numbered plan that satisfies
+      it. Do not solve the task yet. No step may be decorative.
+
+      '
+    title: PLANNING
+  - name: input
+    body: '{input}
+
+      '
+    title: TASK
+  - name: execution_task
+    body: 'Plan:
+
+
+      {previous}
+
+
+      Execute every step in order, then verify the result against the success condition. Return only the
+      final answer.
+
+      '
+    title: EXECUTION
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+benchmark_priors:
+  default: 0.75
+  task:coding: 0.88
+  task:research: 0.86
+  task:agents: 0.89
+  class:reasoning: 0.92
+evidence_level: benchmarked
+tags: []
+execution:
+  strategy: multi_stage
+  stages:
+  - name: plan
+    blocks:
+    - planning_task
+    - input
+    system: Produce a minimal executable plan. Never solve the task in this step.
+    carries_schema: false
+  - name: execute
+    blocks:
+    - input
+    - execution_task
+    - contract_embedded
+source:
+  paper: 'Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning'
+  authors: Wang et al.
+  url: https://arxiv.org/abs/2305.04091
+  year: 2023

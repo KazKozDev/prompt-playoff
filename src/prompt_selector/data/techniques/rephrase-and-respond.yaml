@@ -1,0 +1,113 @@
+version: 1.0.0
+acceptable_tasks:
+- structured_extraction
+- summarization
+- coding
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.rephrase-and-respond
+title: Rephrase and respond (RaR)
+family: input-processing
+description: Restate the task in the model's own words, expanding what is implicit, then answer the restated
+  version.
+strong_tasks:
+- classification
+- research
+min_calls: 2
+characteristics:
+  quality: 0.81
+  reliability: 0.83
+  latency_efficiency: 0.52
+  token_efficiency: 0.5
+  simplicity: 0.78
+recipe:
+  system: Make the task explicit before solving it.
+  instructions:
+  - Restate the task, making implicit requirements explicit.
+  - Answer the restated task.
+  blocks:
+  - name: procedure
+    title: REPHRASE
+    body: 'Restate this task in your own words and spell out anything left implicit: what counts, what
+      does not, and what the edge cases are. Do not answer it yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: respond_task
+    title: RESPOND
+    body: 'Your restatement:
+
+
+      {previous}
+
+
+      Now answer the task as you restated it. Answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Answer the original task directly if the restatement drifted.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: rephrase
+    blocks:
+    - procedure
+    - input
+    system: Restate the task. Do not solve it.
+    carries_schema: false
+  - name: respond
+    blocks:
+    - input
+    - respond_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.74
+  task:classification: 0.81
+source:
+  paper: 'Rephrase and Respond: Let Large Language Models Ask Better Questions for Themselves'
+  authors: Deng et al.
+  url: https://arxiv.org/abs/2311.04205
+  year: 2023

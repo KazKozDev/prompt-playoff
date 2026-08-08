@@ -1,0 +1,126 @@
+version: 1.0.0
+acceptable_tasks:
+- structured_extraction
+- classification
+- research
+avoid_tasks:
+- creative_writing
+- translation
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.program-of-thought
+title: Program of thought
+family: computation
+description: The model writes a program that computes the answer; the program runs in a restricted interpreter
+  and the model answers from its output.
+strong_tasks:
+- coding
+min_calls: 2
+characteristics:
+  quality: 0.85
+  reliability: 0.8
+  latency_efficiency: 0.5
+  token_efficiency: 0.55
+  simplicity: 0.5
+recipe:
+  system: Compute the answer instead of reasoning it out in prose.
+  instructions:
+  - Write a program that computes the answer.
+  - Answer from what it printed.
+  blocks:
+  - name: procedure
+    title: WRITE A PROGRAM
+    body: 'Write a short Python program that computes the answer and assigns it to a variable named `answer`.
+      Allowed: arithmetic, comparisons, lists, dicts, strings, loops, comprehensions and these builtins:
+      len, sum, min, max, abs, round, sorted, range, int, float, str, enumerate, zip, any, all. Not allowed:
+      imports, method calls, defining functions. Output the program only, in a ```python block.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: retry
+    title: PREVIOUS ATTEMPT FAILED
+    when: always
+    body: '{errors}
+
+      '
+  - name: answer_task
+    title: ANSWER
+    body: 'Your program computed:
+
+
+      {result}
+
+
+      Give the final answer from that. If the program failed, answer from the input directly instead.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - python_syntax
+  fallback: Answer from the input when the program does not run.
+execution:
+  strategy: program_of_thought
+  params:
+    repair_attempts: 1
+  stages:
+  - name: code
+    blocks:
+    - procedure
+    - input
+    - retry
+    system: Write the program only.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - input
+    - answer_task
+    - contract_native
+    - contract_embedded
+    - fields
+source:
+  paper: 'Program of Thoughts Prompting: Disentangling Computation from Reasoning'
+  authors: Chen et al.
+  url: https://arxiv.org/abs/2211.12588
+  year: 2022
+  note: 'Runs in a restricted AST interpreter, not a Python process: no imports, no attribute access,
+    no filesystem or network.'
+benchmark_priors:
+  default: 0.76
+  task:coding: 0.88

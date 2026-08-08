@@ -1,0 +1,114 @@
+id: context.map-reduce
+version: 1.0.0
+title: Long-context map-reduce
+family: context-management
+description: Process bounded chunks independently, retain structured intermediate state, and reduce globally.
+strong_tasks:
+- summarization
+- research
+- translation
+- structured_extraction
+acceptable_tasks:
+- coding
+avoid_tasks:
+- classification
+- creative_writing
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.88
+  reliability: 0.89
+  latency_efficiency: 0.31
+  token_efficiency: 0.28
+  simplicity: 0.38
+recipe:
+  system: Process each chunk without losing global constraints. Merge only normalized intermediate results.
+  instructions:
+  - Split input at semantic boundaries.
+  - Produce the same intermediate schema for every chunk.
+  - Deduplicate and resolve conflicts during reduction.
+  - Check global completeness after merging.
+  validators:
+  - coverage
+  - deduplication
+  fallback: Reprocess only chunks implicated by the failed global check.
+  blocks:
+  - name: map_task
+    body: 'Process this chunk in isolation. Produce the same intermediate structure you would produce
+      for any other chunk, so the parts can be merged mechanically. Do not summarize across chunks you
+      cannot see.
+
+      '
+    title: CHUNK TASK
+  - name: chunk
+    body: '{chunk}
+
+      '
+    title: CHUNK
+  - name: reduce_task
+    body: 'Partial results from every chunk:
+
+
+      {partials}
+
+
+      Merge them: deduplicate, resolve conflicts in favor of the more specific partial, and check global
+      completeness. Return only the merged result.
+
+      '
+    title: REDUCE
+  - name: contract_native
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+    title: OUTPUT CONTRACT
+    when: native_schema
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+benchmark_priors:
+  default: 0.75
+  task:summarization: 0.93
+  task:translation: 0.89
+  task:structured_extraction: 0.88
+  class:small: 0.86
+evidence_level: heuristic
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: map_reduce
+  params:
+    chunk_chars: 3000
+    overlap_chars: 200
+    max_chunks: 12
+  stages:
+  - name: map
+    blocks:
+    - map_task
+    - chunk
+    system: Process one chunk without losing the global constraints.
+    carries_schema: false
+  - name: reduce
+    blocks:
+    - reduce_task
+    - contract_native
+    - contract_embedded
+    system: Merge normalized partial results into one consistent answer.

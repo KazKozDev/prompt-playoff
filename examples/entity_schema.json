@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "people": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "people",
+    "places"
+  ],
+  "additionalProperties": false
+}

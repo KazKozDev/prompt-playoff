@@ -1,0 +1,82 @@
+id: coding.tests-first
+version: 1.0.0
+title: Tests-first implementation
+family: verification
+description: Define observable behavior, implement the smallest change, and validate with tests.
+strong_tasks:
+- coding
+acceptable_tasks:
+- agents
+avoid_tasks:
+- creative_writing
+- translation
+- classification
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.94
+  reliability: 0.95
+  latency_efficiency: 0.36
+  token_efficiency: 0.32
+  simplicity: 0.45
+recipe:
+  system: Treat executable tests and explicit acceptance criteria as the source of truth.
+  instructions:
+  - Restate observable behavior as tests.
+  - Implement the smallest complete change.
+  - Run or mentally verify edge cases.
+  - Return code and relevant validation results.
+  validators:
+  - python_syntax
+  fallback: Fix the smallest failing behavior and rerun validation.
+  blocks:
+  - name: tests_task
+    body: 'Restate the required behavior as concrete test cases: input, expected output, and the edge
+      cases that would break a naive implementation. Write no implementation code in this step.
+
+      '
+    title: TEST DESIGN
+  - name: input
+    body: '{input}
+
+      '
+    title: REQUIREMENT
+  - name: implement_task
+    body: 'Test cases:
+
+
+      {previous}
+
+
+      Write the smallest implementation that satisfies every case. Then walk each case against your code
+      and state pass or fail. Return the code and that result table.
+
+      '
+    title: IMPLEMENTATION
+benchmark_priors:
+  default: 0.81
+  task:coding: 0.97
+  class:reasoning: 0.93
+evidence_level: heuristic
+tags: []
+execution:
+  strategy: multi_stage
+  stages:
+  - name: tests
+    blocks:
+    - tests_task
+    - input
+    system: Treat observable behavior as the specification. Produce tests only.
+    carries_schema: false
+  - name: implement
+    blocks:
+    - input
+    - implement_task

@@ -1,0 +1,124 @@
+version: 1.0.0
+acceptable_tasks:
+- structured_extraction
+- summarization
+- coding
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.metacognitive
+title: Metacognitive prompting
+family: self-reflection
+description: Understand, judge, then criticise that judgement before committing. Aimed at inputs where
+  the first reading is plausible but wrong.
+strong_tasks:
+- classification
+- research
+min_calls: 2
+characteristics:
+  quality: 0.86
+  reliability: 0.84
+  latency_efficiency: 0.46
+  token_efficiency: 0.42
+  simplicity: 0.62
+recipe:
+  system: Judge, then interrogate your own judgement before committing to it.
+  instructions:
+  - Restate what the input is asking.
+  - Make a preliminary judgement.
+  - Argue against it.
+  - Commit only if it survives.
+  blocks:
+  - name: procedure
+    title: REFLECT
+    body: 'Work through these four steps, briefly:
+
+      1. What is this input actually asking for?
+
+      2. Your preliminary answer.
+
+      3. The strongest case against that answer — what would make it wrong?
+
+      4. Does it survive? If not, what replaces it?
+
+      Do not produce the final formatted answer here.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: commit_task
+    title: COMMIT
+    body: 'Your reflection:
+
+
+      {previous}
+
+
+      Give the answer you settled on in step 4. Answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Fall back to the preliminary judgement if the critique was inconclusive.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: reflect
+    blocks:
+    - procedure
+    - input
+    system: Reflect through the four steps. Do not format an answer.
+    carries_schema: false
+  - name: commit
+    blocks:
+    - input
+    - commit_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.77
+  task:classification: 0.85
+source:
+  paper: Metacognitive Prompting Improves Understanding in Large Language Models
+  authors: Wang and Zhao
+  url: https://arxiv.org/abs/2308.05342
+  year: 2023

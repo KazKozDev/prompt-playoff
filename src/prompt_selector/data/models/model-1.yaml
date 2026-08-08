@@ -1,0 +1,9 @@
+provider: ollama
+model_id: generic-local
+model_class: medium
+local: true
+context_window: 8192
+capabilities:
+- system_messages
+notes:
+- Conservative fallback profile. Declare capabilities explicitly when known.

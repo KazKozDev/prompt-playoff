@@ -1,0 +1,114 @@
+version: 1.0.0
+acceptable_tasks:
+- coding
+- structured_extraction
+- summarization
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.step-back
+title: Step-back prompting
+family: abstraction
+description: Ask a general question about the principles involved, then answer the specific one with that
+  context in hand.
+strong_tasks:
+- research
+- classification
+min_calls: 2
+characteristics:
+  quality: 0.84
+  reliability: 0.82
+  latency_efficiency: 0.5
+  token_efficiency: 0.46
+  simplicity: 0.72
+recipe:
+  system: Establish the general rule before applying it to the specific case.
+  instructions:
+  - State the general principle the task depends on.
+  - Apply it to the specific input.
+  blocks:
+  - name: procedure
+    title: STEP BACK
+    body: 'Before answering, state the general rule or definition this task turns on. What distinction
+      has to be made correctly? Answer that general question only — not the specific case.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: apply_task
+    title: NOW APPLY IT
+    body: 'The general rule you established:
+
+
+      {previous}
+
+
+      Apply it to the input and give the answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-apply the stated rule and answer again.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: abstract
+    blocks:
+    - procedure
+    - input
+    system: Answer the general question only.
+    carries_schema: false
+  - name: apply
+    blocks:
+    - input
+    - apply_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.76
+  task:research: 0.84
+  task:classification: 0.8
+source:
+  paper: 'Take a Step Back: Evoking Reasoning via Abstraction in Large Language Models'
+  authors: Zheng et al.
+  url: https://arxiv.org/abs/2310.06117
+  year: 2023

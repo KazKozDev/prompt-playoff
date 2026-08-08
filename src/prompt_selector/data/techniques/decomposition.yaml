@@ -1,0 +1,101 @@
+id: reasoning.decomposition
+version: 1.0.0
+title: Task decomposition
+family: decomposition
+description: Split a complex task into explicit subproblems and combine verified partial results.
+strong_tasks:
+- coding
+- research
+- agents
+acceptable_tasks:
+- structured_extraction
+- summarization
+- translation
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.91
+  reliability: 0.84
+  latency_efficiency: 0.48
+  token_efficiency: 0.44
+  simplicity: 0.53
+recipe:
+  system: Break complex work into bounded subproblems. Keep intermediate conclusions traceable to the
+    input.
+  instructions:
+  - Identify independent subproblems.
+  - Solve each subproblem using only relevant context.
+  - Verify compatibility before combining the results.
+  validators:
+  - coverage
+  fallback: Re-run only the failed subproblem and merge again.
+  blocks:
+  - name: split_task
+    body: 'List the independent subproblems this task decomposes into. One line each, numbered, with the
+      input each subproblem needs. Do not solve them.
+
+      '
+    title: DECOMPOSITION
+  - name: input
+    body: '{input}
+
+      '
+    title: TASK
+  - name: solve_task
+    body: 'Subproblems:
+
+
+      {previous}
+
+
+      Solve each subproblem using only the context it needs, check the partial results are mutually compatible,
+      then combine them. Return only the combined answer.
+
+      '
+    title: SOLVE AND MERGE
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+benchmark_priors:
+  default: 0.77
+  task:coding: 0.9
+  task:research: 0.88
+  task:agents: 0.86
+  class:reasoning: 0.91
+evidence_level: benchmarked
+tags: []
+execution:
+  strategy: multi_stage
+  stages:
+  - name: decompose
+    blocks:
+    - split_task
+    - input
+    system: Break the work into bounded subproblems. Do not solve anything yet.
+    carries_schema: false
+  - name: solve
+    blocks:
+    - input
+    - solve_task
+    - contract_embedded
+source:
+  paper: Least-to-Most Prompting Enables Complex Reasoning in Large Language Models
+  authors: Zhou et al.
+  url: https://arxiv.org/abs/2205.10625
+  year: 2022

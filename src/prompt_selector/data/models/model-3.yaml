@@ -1,0 +1,12 @@
+provider: openai-compatible
+model_id: generic-cloud
+model_class: large
+local: false
+context_window: 128000
+capabilities:
+- structured_output
+- tool_calling
+- system_messages
+- reasoning_control
+notes:
+- Generic OpenAI-compatible cloud profile; set base_url before execution.

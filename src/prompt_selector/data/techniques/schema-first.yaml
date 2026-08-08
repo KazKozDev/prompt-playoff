@@ -1,0 +1,98 @@
+id: structured.schema-first
+version: 1.0.0
+title: Schema-first output
+family: structured-output
+description: Use a declared schema as the primary output contract and validate the response.
+strong_tasks:
+- structured_extraction
+- classification
+acceptable_tasks:
+- coding
+- summarization
+avoid_tasks:
+- creative_writing
+required_capabilities:
+- structured_output
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.84
+  reliability: 0.96
+  latency_efficiency: 0.92
+  token_efficiency: 0.9
+  simplicity: 0.92
+recipe:
+  system: Produce only information supported by the input. Follow the output contract exactly.
+  instructions:
+  - Identify the requested fields before generating the answer.
+  - Return values using the declared schema.
+  - Do not add keys or explanatory prose.
+  validators:
+  - json_validity
+  - json_schema
+  - no_prose
+  fallback: Retry once with the validation errors and the same schema.
+  blocks:
+  - name: role
+    body: 'Extract a {task_type} result from the input below.
+
+      '
+    title: OBJECTIVE
+  - name: contract_native
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+    title: OUTPUT CONTRACT
+    when: native_schema
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: fields
+    body: '{schema_fields}
+
+      '
+    title: FIELDS
+    when: has_schema
+  - name: procedure
+    body: '1. Locate the evidence for every required field before writing anything.
+
+      2. Copy values verbatim from the input; never normalize or invent them.
+
+      3. Use an empty array or null for a field with no evidence.
+
+      4. Emit the document.
+
+      '
+    title: PROCEDURE
+  - name: input
+    body: '{input}
+
+      '
+    title: INPUT
+benchmark_priors:
+  default: 0.84
+  task:structured_extraction: 0.95
+  task:classification: 0.91
+  provider:ollama: 0.88
+  class:small: 0.86
+evidence_level: heuristic
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: single

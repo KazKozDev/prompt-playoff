@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.env
+.DS_Store
+benchmark-results/*.json
+!benchmark-results/.gitkeep
+
+# Third-party papers: indexed in references/README.md, fetched with `make papers`
+references/papers/

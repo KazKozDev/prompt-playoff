@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prompt-selector"
+version = "0.1.0"
+description = "Explainable prompt-technique selection, compilation, and benchmarking for local and cloud LLMs."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Artem Kazakov Kozlov" }]
+keywords = [
+  "prompt-engineering",
+  "ollama",
+  "llm-evaluation",
+  "structured-output",
+  "local-llm",
+]
+dependencies = [
+  "fastapi>=0.128,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.13,<3",
+  "pyyaml>=6.0,<7",
+  "rich>=14,<15",
+  "typer>=0.26,<1",
+  "uvicorn[standard]>=0.40,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+  "pytest-asyncio>=1.2,<2",
+  "ruff>=0.14,<1",
+]
+# DSPy as an alternative optimizer search backend (MIPROv2, GEPA, BootstrapFewShot).
+# litellm is pinned below 1.81 because newer releases build a Rust extension that
+# needs rustc >= 1.94; drop the pin once your toolchain is newer.
+dspy = [
+  "dspy>=3,<4",
+  "litellm<1.81",
+  # MIPROv2 drives its search with optuna; without it that backend raises on the
+  # third step, after already spending model calls.
+  "optuna>=4,<5",
+]
+# Tracing to Langfuse, or to Phoenix / any OTLP collector.
+tracing = [
+  "langfuse>=3,<5",
+  "opentelemetry-sdk>=1.30",
+  "opentelemetry-exporter-otlp-proto-http>=1.30",
+]
+# Importing Hugging Face NER corpora as benchmark datasets.
+huggingface = [
+  "datasets>=3,<6",
+]
+all = [
+  "prompt-selector[dspy,tracing,huggingface]",
+]
+
+[project.scripts]
+prompt-selector = "prompt_selector.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+prompt_selector = ["data/**/*.yaml", "data/**/*.jsonl", "data/static/*.html"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

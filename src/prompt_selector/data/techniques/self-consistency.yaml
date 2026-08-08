@@ -1,0 +1,90 @@
+id: reasoning.self-consistency
+version: 1.0.0
+title: Self-consistency sampling
+family: sampling
+description: Generate several independent solutions and aggregate the most consistent answer.
+strong_tasks:
+- coding
+- classification
+- research
+acceptable_tasks:
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- translation
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 3
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.93
+  reliability: 0.9
+  latency_efficiency: 0.18
+  token_efficiency: 0.15
+  simplicity: 0.26
+recipe:
+  system: Solve the task on your own. Commit to a single answer rather than listing alternatives.
+  instructions:
+  - Reach an answer without hedging between alternatives.
+  - Apply the task criteria literally.
+  - Return the answer only.
+  validators:
+  - agreement
+  fallback: Use a deterministic verifier to break a tie.
+  blocks:
+  - name: role
+    body: 'Solve the task independently. Do not hedge across alternatives — commit to one answer.
+
+      '
+    title: OBJECTIVE
+  - name: criteria
+    body: 'Work the task through once and commit. Do not enumerate alternatives, do not explain your reasoning,
+      and do not qualify the answer.
+
+      '
+    title: METHOD
+  - name: contract_native
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+    title: OUTPUT CONTRACT
+    when: native_schema
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: input
+    body: '{input}
+
+      '
+    title: TASK
+benchmark_priors:
+  default: 0.74
+  task:coding: 0.91
+  task:classification: 0.89
+  class:reasoning: 0.94
+evidence_level: benchmarked
+tags: []
+execution:
+  strategy: self_consistency
+  params:
+    samples: 3
+    temperature: 0.8
+    aggregator: majority_vote
+source:
+  paper: Self-Consistency Improves Chain of Thought Reasoning in Language Models
+  authors: Wang et al.
+  url: https://arxiv.org/abs/2203.11171
+  year: 2022

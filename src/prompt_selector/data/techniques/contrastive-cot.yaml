@@ -1,0 +1,99 @@
+version: 1.0.0
+acceptable_tasks:
+- coding
+- research
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: few-shot.contrastive-cot
+title: Contrastive chain of thought
+family: few-shot
+description: Show both a correct and an incorrect worked example, so the model learns the boundary rather
+  than only the target. Needs demonstrations.
+strong_tasks:
+- classification
+- structured_extraction
+min_calls: 1
+characteristics:
+  quality: 0.85
+  reliability: 0.87
+  latency_efficiency: 0.8
+  token_efficiency: 0.6
+  simplicity: 0.72
+recipe:
+  system: Follow the demonstrated distinction, not just the demonstrated format.
+  instructions:
+  - Study which example is right and which is wrong, and why.
+  - Apply the same distinction to the new input.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task, matching the demonstrated distinction.
+
+      '
+  - name: examples
+    title: DEMONSTRATIONS
+    when: has_exemplars
+    body: '{exemplars}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'The demonstrations include cases done correctly and cases done wrongly. Work out which distinction
+      separates them, then apply that distinction — do not copy the demonstrated content.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - no_prose
+  fallback: Retry with the violated distinction stated explicitly.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.76
+  task:classification: 0.85
+source:
+  paper: Contrastive Chain-of-Thought Prompting
+  authors: Chia et al.
+  url: https://arxiv.org/abs/2311.09277
+  year: 2023

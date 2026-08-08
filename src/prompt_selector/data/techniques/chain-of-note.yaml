@@ -1,0 +1,104 @@
+version: 1.0.0
+acceptable_tasks:
+- summarization
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- translation
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+- rag
+id: grounding.chain-of-note
+title: Chain of note
+family: grounding
+description: Write a reading note for each supplied source before answering, so an irrelevant source is
+  rejected explicitly rather than quietly absorbed (arXiv 2311.09210).
+strong_tasks:
+- research
+min_calls: 2
+characteristics:
+  quality: 0.87
+  reliability: 0.88
+  latency_efficiency: 0.48
+  token_efficiency: 0.44
+  simplicity: 0.65
+recipe:
+  system: Judge each source before using it. An irrelevant source is worse than none.
+  instructions:
+  - 'Write a note per source: relevant or not, and what it supports.'
+  - Answer from the relevant notes only, or say the sources do not settle it.
+  blocks:
+  - name: procedure
+    title: READING NOTES
+    body: 'For each source in the input, write one short note:
+
+      - relevant or not relevant to the question;
+
+      - if relevant, the one fact it contributes, quoted.
+
+      Say ''not relevant'' plainly where it is. Do not answer yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: answer_task
+    title: ANSWER
+    body: 'Your reading notes:
+
+
+      {previous}
+
+
+      Answer using only the notes marked relevant. If none of them settle the question, say so directly
+      instead of guessing.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  validators:
+  - grounding_overlap
+  - contains_all
+  fallback: State the evidence gap rather than answering from an irrelevant source.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: notes
+    blocks:
+    - procedure
+    - input
+    system: Write one note per source. Do not answer.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - answer_task
+    - contract_embedded
+benchmark_priors:
+  default: 0.79
+  task:research: 0.89
+source:
+  paper: 'Chain-of-Note: Enhancing Robustness in Retrieval-Augmented Language Models'
+  authors: Yu et al.
+  url: https://arxiv.org/abs/2311.09210
+  year: 2023

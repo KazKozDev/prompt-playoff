@@ -1,0 +1,101 @@
+version: 1.0.0
+acceptable_tasks:
+- summarization
+- translation
+- research
+avoid_tasks: []
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+- local-friendly
+- small-model-friendly
+id: reasoning.re-reading
+title: Re-reading (RE2)
+family: input-processing
+description: Present the input twice and instruct the model to read it again before answering. One extra
+  sentence, one call, no reasoning trace.
+strong_tasks:
+- structured_extraction
+- classification
+min_calls: 1
+characteristics:
+  quality: 0.79
+  reliability: 0.92
+  latency_efficiency: 0.88
+  token_efficiency: 0.74
+  simplicity: 0.95
+recipe:
+  system: Read the input carefully, twice, before answering.
+  instructions:
+  - Read the input again.
+  - Answer only from what it says.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Read the input again, below, before you answer. Details missed on a first pass are the usual
+      cause of a wrong answer here.
+
+      '
+  - name: reread
+    title: INPUT (again)
+    body: '{input}
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - no_prose
+  fallback: Retry once with the validation errors attached.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.72
+  task:structured_extraction: 0.78
+source:
+  paper: Re-Reading Improves Reasoning in Large Language Models
+  authors: Xu et al.
+  url: https://arxiv.org/abs/2309.06275
+  year: 2023

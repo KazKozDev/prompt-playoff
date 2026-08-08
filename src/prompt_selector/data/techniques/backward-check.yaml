@@ -1,0 +1,120 @@
+version: 1.0.0
+acceptable_tasks:
+- research
+- coding
+- summarization
+avoid_tasks:
+- creative_writing
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: verification.backward-check
+title: Backward verification
+family: self-verification
+description: 'Answer, then work backwards: given the answer, check it against the input and correct it.
+  This is the verification half of Self-Verification (Weng et al. 2022); the published method also ranks
+  several candidates by verification score, which needs a strategy this registry does not have yet.'
+strong_tasks:
+- structured_extraction
+- classification
+min_calls: 2
+characteristics:
+  quality: 0.86
+  reliability: 0.9
+  latency_efficiency: 0.5
+  token_efficiency: 0.5
+  simplicity: 0.68
+recipe:
+  system: Check an answer by reasoning from it back to the input.
+  instructions:
+  - Produce an answer.
+  - Work backwards from it to the input and check every part.
+  - Correct what fails.
+  blocks:
+  - name: procedure
+    title: ANSWER
+    body: 'Produce your answer to the task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: check_task
+    title: BACKWARD CHECK
+    body: 'Proposed answer:
+
+
+      {previous}
+
+
+      Now work backwards. For each part of that answer, point to what in the input supports it. Anything
+      you cannot support, drop. Anything the input requires but the answer omits, add. Then give the corrected
+      answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - coverage
+  fallback: Keep the original answer if the check supported all of it.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: answer
+    blocks:
+    - procedure
+    - input
+    system: Answer the task. Formatting comes later.
+    carries_schema: false
+  - name: check
+    blocks:
+    - input
+    - check_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.78
+  task:structured_extraction: 0.86
+source:
+  paper: Large Language Models are Better Reasoners with Self-Verification
+  authors: Weng et al.
+  url: https://arxiv.org/abs/2212.09561
+  year: 2022
+  note: Implements the verification half only; the published method also ranks several candidates by verification
+    score, which needs a strategy this registry does not have.

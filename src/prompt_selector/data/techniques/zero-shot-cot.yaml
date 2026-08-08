@@ -1,0 +1,117 @@
+version: 1.0.0
+acceptable_tasks:
+- classification
+- structured_extraction
+- summarization
+avoid_tasks:
+- translation
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.zero-shot-cot
+title: Zero-shot chain of thought
+family: thought-generation
+description: Reason step by step before answering, without any worked examples. Published as a single
+  call; split here so the answer can still obey a schema.
+strong_tasks:
+- coding
+- research
+min_calls: 2
+characteristics:
+  quality: 0.82
+  reliability: 0.8
+  latency_efficiency: 0.5
+  token_efficiency: 0.45
+  simplicity: 0.8
+recipe:
+  system: Work the problem out before committing to an answer.
+  instructions:
+  - Reason through the task one step at a time.
+  - Only then state the answer.
+  blocks:
+  - name: procedure
+    title: PROCEDURE
+    body: 'Think step by step. Work through what the input actually says before deciding anything. Do
+      not produce the final answer yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: answer_task
+    title: ANSWER
+    body: 'Your reasoning:
+
+
+      {previous}
+
+
+      Now give the answer alone, based on that reasoning. No explanation.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-answer from the same reasoning, this time obeying the format.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: reason
+    blocks:
+    - procedure
+    - input
+    system: Reason out loud. Do not answer yet.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - input
+    - answer_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.74
+  task:coding: 0.83
+  task:research: 0.8
+source:
+  paper: Large Language Models are Zero-Shot Reasoners
+  authors: Kojima et al.
+  url: https://arxiv.org/abs/2205.11916
+  year: 2022
+  note: Split into a reasoning stage and an answer stage so the answer can obey a schema; published as
+    a single call.

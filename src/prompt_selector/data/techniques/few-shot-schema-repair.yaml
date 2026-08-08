@@ -1,0 +1,135 @@
+id: structured.few-shot-repair
+version: 1.0.0
+title: Few-shot schema with repair
+family: few-shot
+description: Demonstrate valid outputs, parse the response, and repair one invalid generation.
+strong_tasks:
+- structured_extraction
+- classification
+acceptable_tasks:
+- translation
+avoid_tasks:
+- creative_writing
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.88
+  reliability: 0.91
+  latency_efficiency: 0.56
+  token_efficiency: 0.48
+  simplicity: 0.64
+recipe:
+  system: Follow the demonstrated output pattern exactly and preserve only supported facts.
+  instructions:
+  - Study the examples as formatting constraints, not as content.
+  - Apply the same transformation to the new input.
+  - Return only the required structured result.
+  validators:
+  - json_validity
+  - json_schema
+  - no_prose
+  fallback: Send validation errors and request a corrected JSON object only.
+  blocks:
+  - name: role
+    body: 'Match the demonstrated output pattern exactly.
+
+      '
+    title: OBJECTIVE
+  - name: examples
+    body: '{exemplars}
+
+      '
+    title: DEMONSTRATIONS
+    when: has_exemplars
+  - name: contract_native
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+    title: OUTPUT CONTRACT
+    when: native_schema
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: fields
+    body: '{schema_fields}
+
+      '
+    title: FIELDS
+    when: has_schema
+  - name: rules
+    body: 'Treat the demonstrations as formatting constraints, not as content. Apply the same transformation
+      to the new input. Emit the document only.
+
+      '
+    title: RULES
+  - name: input
+    body: '{input}
+
+      '
+    title: INPUT
+  - name: repair_task
+    body: 'A previous attempt produced this document:
+
+
+      {previous}
+
+
+      Check it against the schema and the demonstrations. If it is already valid and complete, return
+      it byte for byte. Otherwise return the corrected document. Emit JSON only either way.
+
+      '
+    title: REPAIR
+benchmark_priors:
+  default: 0.78
+  task:structured_extraction: 0.9
+  class:small: 0.89
+  provider:ollama: 0.84
+evidence_level: benchmarked
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: multi_stage
+  stages:
+  - name: draft
+    blocks:
+    - role
+    - examples
+    - contract_native
+    - contract_embedded
+    - fields
+    - rules
+    - input
+    description: First pass against the demonstrated pattern.
+  - name: repair
+    blocks:
+    - contract_native
+    - contract_embedded
+    - fields
+    - repair_task
+    system: You are a validator. Return only the corrected JSON document.
+    description: Validate and repair the draft against the schema.
+source:
+  paper: Language Models are Few-Shot Learners
+  authors: Brown et al.
+  url: https://arxiv.org/abs/2005.14165
+  year: 2020
+  note: Few-shot prompting from the source paper, extended here with a schema-repair stage that is not
+    part of it.

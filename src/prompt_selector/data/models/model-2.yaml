@@ -1,0 +1,11 @@
+provider: ollama
+model_id: generic-local-structured
+model_class: medium
+local: true
+context_window: 32768
+capabilities:
+- structured_output
+- system_messages
+- reasoning_control
+notes:
+- Example profile for a local model with JSON Schema support.

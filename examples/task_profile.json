@@ -1,0 +1,31 @@
+{
+  "task_type": "structured_extraction",
+  "domain": "literary_text",
+  "input_modality": "text",
+  "output_contract": "json_schema",
+  "complexity": "medium",
+  "priorities": {
+    "quality": 0.3,
+    "reliability": 0.5,
+    "latency": 0.1,
+    "token_cost": 0.1
+  },
+  "constraints": {
+    "local_only": true,
+    "max_calls": 2,
+    "tools_allowed": false,
+    "strict_json": true,
+    "requires_validation": true
+  },
+  "model": {
+    "provider": "ollama",
+    "model_id": "qwen3:14b",
+    "model_class": "medium",
+    "local": true,
+    "context_window": 32768,
+    "capabilities": [
+      "structured_output",
+      "system_messages"
+    ]
+  }
+}

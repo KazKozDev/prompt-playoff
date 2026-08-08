@@ -1,0 +1,96 @@
+id: translation.glossary-context
+version: 1.0.0
+title: Glossary-constrained translation
+family: translation-control
+description: Translate with terminology constraints, neighboring context, and a consistency check.
+strong_tasks:
+- translation
+acceptable_tasks:
+- structured_extraction
+avoid_tasks:
+- coding
+- agents
+- classification
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.92
+  reliability: 0.93
+  latency_efficiency: 0.72
+  token_efficiency: 0.67
+  simplicity: 0.71
+recipe:
+  system: Translate faithfully while preserving required terminology, voice, and document structure.
+  instructions:
+  - Apply glossary entries according to their declared mode.
+  - Use neighboring context to resolve references.
+  - Preserve meaning before surface form.
+  - Check terminology consistency before returning the translation.
+  validators:
+  - glossary_consistency
+  - omission_check
+  fallback: Review only inconsistent glossary terms and omitted segments.
+  blocks:
+  - name: role
+    body: 'Translate the source into {target_language}.
+
+      '
+    title: OBJECTIVE
+  - name: glossary
+    body: '{glossary}
+
+      '
+    title: GLOSSARY (binding)
+  - name: rules
+    body: 'Register: {register}.
+
+      Preserve meaning before surface form. Preserve markup, numbers, and names exactly. Apply every glossary
+      entry. Do not add or omit content.
+
+      '
+    title: RULES
+  - name: examples
+    body: '{exemplars}
+
+      '
+    title: REFERENCE RENDERINGS
+    when: has_exemplars
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: input
+    body: '{input}
+
+      '
+    title: SOURCE
+  variables:
+    glossary: No glossary supplied; keep terminology internally consistent.
+    target_language: the requested target language
+    register: match the register of the source
+benchmark_priors:
+  default: 0.8
+  task:translation: 0.96
+  provider:ollama: 0.87
+  class:small: 0.83
+evidence_level: heuristic
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: single

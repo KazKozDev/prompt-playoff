@@ -1,0 +1,141 @@
+version: 1.0.0
+acceptable_tasks:
+- classification
+- structured_extraction
+avoid_tasks:
+- translation
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.tree-of-thought
+title: Tree of thoughts
+family: search
+description: Expand several partial solutions, have the model rank them, keep the best and repeat. Buys
+  accuracy on problems with a wrong-looking first step, at many calls.
+strong_tasks:
+- coding
+- research
+min_calls: 6
+characteristics:
+  quality: 0.9
+  reliability: 0.82
+  latency_efficiency: 0.12
+  token_efficiency: 0.1
+  simplicity: 0.3
+recipe:
+  system: Explore alternatives before committing to one.
+  instructions:
+  - Propose distinct next steps.
+  - Rank them.
+  - Continue from the best.
+  blocks:
+  - name: procedure
+    title: EXPAND
+    body: 'Progress so far:
+
+      {path}
+
+
+      Propose 3 distinct next steps toward the answer. Number them. Make them genuinely different approaches,
+      not rewordings. Do not answer yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: evaluate_task
+    title: RANK
+    body: 'Candidate continuations:
+
+
+      {candidates}
+
+
+      Rank them best-first by how likely each is to reach a correct answer. Reply with the numbers in
+      order, best first, and nothing else.
+
+      '
+  - name: answer_task
+    title: ANSWER
+    body: 'Best line of reasoning:
+
+
+      {path}
+
+
+      Give the final answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Answer from the highest-ranked branch if the search stalled.
+execution:
+  strategy: tree_search
+  params:
+    depth: 2
+    beam: 2
+    breadth: 3
+    temperature: 0.8
+  stages:
+  - name: expand
+    blocks:
+    - procedure
+    - input
+    system: Propose alternatives. Do not answer.
+    carries_schema: false
+  - name: evaluate
+    blocks:
+    - evaluate_task
+    system: Rank the options. Numbers only.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - input
+    - answer_task
+    - contract_native
+    - contract_embedded
+    - fields
+source:
+  paper: 'Tree of Thoughts: Deliberate Problem Solving with Large Language Models'
+  authors: Yao et al.
+  url: https://arxiv.org/abs/2305.10601
+  year: 2023
+  note: Expansion asks for several alternatives in one call rather than one per call, so the call count
+    does not scale with the branching factor.
+benchmark_priors:
+  default: 0.8
+  task:coding: 0.9

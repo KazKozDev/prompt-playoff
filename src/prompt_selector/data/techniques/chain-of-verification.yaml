@@ -1,0 +1,142 @@
+version: 1.0.0
+acceptable_tasks:
+- summarization
+- classification
+- coding
+avoid_tasks:
+- creative_writing
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: verification.chain-of-verification
+title: Chain of verification (CoVe)
+family: self-verification
+description: Draft an answer, generate questions that would expose its errors, answer those, then revise.
+  Three calls, aimed at hallucination.
+strong_tasks:
+- research
+- structured_extraction
+min_calls: 3
+characteristics:
+  quality: 0.88
+  reliability: 0.9
+  latency_efficiency: 0.3
+  token_efficiency: 0.28
+  simplicity: 0.55
+recipe:
+  system: Verify a draft against checkable questions before committing to it.
+  instructions:
+  - Draft an answer.
+  - Write questions whose answers would expose an error in it.
+  - Answer those questions and revise.
+  blocks:
+  - name: procedure
+    title: DRAFT
+    body: 'Produce a first answer to the task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: verify_task
+    title: VERIFY
+    body: 'Draft answer:
+
+
+      {previous}
+
+
+      Write three short questions whose answers would reveal a mistake in that draft, then answer each
+      one strictly from the input. If the input does not settle a question, say so.
+
+      '
+  - name: revise_task
+    title: FINAL ANSWER
+    body: 'Draft:
+
+
+      {draft}
+
+
+      Verification:
+
+
+      {previous}
+
+
+      Produce the corrected final answer. Fix anything verification contradicted, keep the rest. Answer
+      alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - coverage
+  fallback: Keep the draft if verification found nothing to change.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: draft
+    blocks:
+    - procedure
+    - input
+    - contract_native
+    - contract_embedded
+    - fields
+    carries_schema: false
+  - name: verify
+    blocks:
+    - input
+    - verify_task
+    system: Interrogate the draft. Do not rewrite it.
+    carries_schema: false
+  - name: revise
+    blocks:
+    - input
+    - revise_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.79
+  task:research: 0.88
+source:
+  paper: Chain-of-Verification Reduces Hallucination in Large Language Models
+  authors: Dhuliawala et al.
+  url: https://arxiv.org/abs/2309.11495
+  year: 2023

@@ -1,0 +1,82 @@
+id: grounding.evidence-first
+version: 1.0.0
+title: Evidence-first grounded answer
+family: grounding
+description: Collect evidence first, map claims to sources, and answer only from supported material.
+strong_tasks:
+- research
+- summarization
+acceptable_tasks:
+- coding
+- agents
+avoid_tasks:
+- creative_writing
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.89
+  reliability: 0.95
+  latency_efficiency: 0.6
+  token_efficiency: 0.58
+  simplicity: 0.67
+recipe:
+  system: Use only the supplied evidence. Clearly separate supported facts from uncertainty.
+  instructions:
+  - Extract evidence relevant to the question.
+  - Map each material claim to supporting evidence.
+  - Omit unsupported claims.
+  - State material uncertainty explicitly.
+  validators:
+  - grounding_overlap
+  fallback: Return the evidence gap instead of inventing an answer.
+  blocks:
+  - name: role
+    body: 'Answer using only the supplied evidence. Unsupported claims are failures, not stylistic choices.
+
+      '
+    title: OBJECTIVE
+  - name: procedure
+    body: '1. Quote the evidence spans that bear on the question.
+
+      2. Derive each claim from a quoted span.
+
+      3. Drop any claim without a span.
+
+      4. State remaining uncertainty in one sentence.
+
+      '
+    title: PROCEDURE
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: input
+    body: '{input}
+
+      '
+    title: EVIDENCE AND QUESTION
+benchmark_priors:
+  default: 0.82
+  task:research: 0.96
+  task:summarization: 0.9
+  provider:ollama: 0.84
+evidence_level: heuristic
+tags:
+- local-friendly
+execution:
+  strategy: single

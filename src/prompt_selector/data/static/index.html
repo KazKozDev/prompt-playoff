@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prompt Selector</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --panel2:#10131a; --border:#2a2f3a; --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344; --good:#4ade80; --bad:#f87171; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    main { width:min(1240px,calc(100% - 32px)); margin:36px auto 80px; }
+    header { margin-bottom:24px; }
+    h1 { font-size:clamp(28px,4.5vw,46px); line-height:1; margin:0 0 10px; letter-spacing:-.04em; }
+    header p { color:var(--muted); max-width:760px; font-size:17px; line-height:1.5; margin:0; }
+    .layout { display:grid; grid-template-columns:minmax(280px,360px) 1fr; gap:20px; align-items:start; }
+    .panel { border:1px solid var(--border); background:var(--panel); border-radius:14px; padding:18px; }
+    .panel + .panel { margin-top:16px; }
+    h2 { margin:0 0 4px; font-size:19px; }
+    h3 { margin:0 0 10px; font-size:15px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+    label { display:block; font-size:13px; color:var(--muted); margin:12px 0 5px; }
+    textarea, input, select { width:100%; border:1px solid var(--border); border-radius:9px; padding:10px 11px; background:var(--panel2); color:var(--text); font:inherit; }
+    textarea { min-height:110px; resize:vertical; }
+    button { width:100%; margin-top:14px; border:0; border-radius:9px; padding:11px 14px; background:var(--accent); color:#111; font-weight:700; cursor:pointer; }
+    button.ghost { background:transparent; border:1px solid var(--border); color:var(--text); font-weight:600; }
+    button:disabled { opacity:.5; cursor:wait; }
+    .empty { color:var(--muted); min-height:150px; display:grid; place-items:center; text-align:center; padding:20px; }
+    .result { border-top:1px solid var(--border); padding:16px 0; }
+    .result:first-child { border-top:0; padding-top:0; }
+    .topline { display:flex; gap:10px; justify-content:space-between; align-items:flex-start; }
+    .rank { color:var(--accent); font-weight:800; font-size:13px; }
+    .meta { color:var(--muted); font-size:12.5px; margin-top:4px; }
+    .score { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    ul { color:#d1d5db; line-height:1.5; padding-left:19px; font-size:14px; margin:10px 0 0; }
+    .warning { border-left:3px solid var(--accent); padding:8px 12px; margin-top:12px; color:#fde68a; background:#2a2413; border-radius:0 8px 8px 0; font-size:14px; }
+    .error { border-left:3px solid var(--bad); padding:8px 12px; color:#fecaca; background:#2a1616; border-radius:0 8px 8px 0; font-size:14px; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+    .checks label { margin:0; display:flex; gap:7px; align-items:center; color:var(--text); font-size:13px; }
+    .checks input { width:auto; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); margin-left:6px; vertical-align:middle; }
+    .pill.measured { color:#111; background:var(--good); border-color:var(--good); font-weight:700; }
+    .pill.prior { color:var(--muted); }
+    pre { background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:12px; overflow-x:auto; font-size:12.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; margin:0 0 10px; }
+    .stage-title { font-size:12px; color:var(--accent); text-transform:uppercase; letter-spacing:.08em; margin:14px 0 6px; font-weight:700; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    th, td { text-align:right; padding:7px 8px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
+    th:first-child, td:first-child { text-align:left; }
+    th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+    .delta.up { color:var(--good); }
+    .delta.down { color:var(--bad); }
+    .tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+    .tabs button { width:auto; margin:0; padding:7px 13px; font-size:13px; background:transparent; border:1px solid var(--border); color:var(--muted); font-weight:600; }
+    .tabs button.active { background:var(--accent); color:#111; border-color:var(--accent); }
+    .progress { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .selected { outline:2px solid var(--accent); outline-offset:6px; border-radius:6px; }
+    .helplink { display:inline-block; margin-top:12px; color:var(--accent); font-size:14px; text-decoration:none; border:1px solid var(--border); padding:6px 12px; border-radius:8px; }
+    .helplink:hover { border-color:var(--accent); }
+    @media (max-width:900px) { .layout { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Prompt Selector</h1>
+    <p>Describe the job, pick a technique, read the prompt it compiles to, then measure that prompt against a real model. Every number below the fold comes from actual calls.</p>
+    <p><a class="helplink" href="/help/en">Help: what every number means and what to do about it →</a>
+       <a class="helplink" href="/help">Справка по-русски →</a></p>
+  </header>
+
+  <div class="layout">
+    <div>
+      <section class="panel">
+        <h3>1 — Task</h3>
+        <label for="description">Task and constraints</label>
+        <textarea id="description">Extract people and places from a book into strict JSON. It must run locally through Ollama and reliability matters most.</textarea>
+        <label for="model">Model</label>
+        <input id="model" value="llama3.2:3b">
+        <div class="row">
+          <div>
+            <label for="model-class">Model class</label>
+            <select id="model-class"><option selected>small</option><option>medium</option><option>large</option><option>reasoning</option></select>
+          </div>
+          <div>
+            <label for="provider">Provider</label>
+            <select id="provider"><option value="ollama" selected>ollama</option><option value="openai">openai-compatible</option></select>
+          </div>
+        </div>
+        <label>Declared capabilities</label>
+        <div class="checks">
+          <label><input type="checkbox" value="structured_output" checked> Structured output</label>
+          <label><input type="checkbox" value="tool_calling"> Tool calling</label>
+          <label><input type="checkbox" value="reasoning_control"> Reasoning control</label>
+          <label><input type="checkbox" value="system_messages" checked> System messages</label>
+        </div>
+        <button id="select-btn" type="button">Select techniques</button>
+      </section>
+
+      <section class="panel">
+        <h3>2 — Measure</h3>
+        <label for="dataset">Dataset</label>
+        <select id="dataset"></select>
+        <div class="row">
+          <div>
+            <label for="repeats">Repeats</label>
+            <input id="repeats" type="number" value="1" min="1" max="10">
+          </div>
+          <div>
+            <label for="rounds">Optimizer rounds</label>
+            <input id="rounds" type="number" value="2" min="1" max="6">
+          </div>
+        </div>
+        <label for="backend">Optimizer search</label>
+        <select id="backend"></select>
+        <div class="meta" id="chosen">No technique chosen yet.</div>
+        <button id="bench-btn" type="button" disabled>Benchmark this prompt</button>
+        <button id="compare-btn" class="ghost" type="button" disabled>Compare all recommended</button>
+        <button id="optimize-btn" class="ghost" type="button" disabled>Optimize the prompt</button>
+        <div class="progress" id="progress"></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="panel" id="results" aria-live="polite">
+        <div class="empty">Recommendations will appear here.</div>
+      </section>
+      <section class="panel" id="detail">
+        <div class="empty">Pick a technique to see the prompt it compiles to.</div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = v => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const state = { task:null, recs:[], chosen:null, program:null, tab:'prompt', report:null, comparison:null, optimization:null };
+
+function modelProfile() {
+  return {
+    provider: $('provider').value,
+    model_id: $('model').value,
+    model_class: $('model-class').value,
+    local: $('provider').value === 'ollama',
+    context_window: 8192,
+    capabilities: [...document.querySelectorAll('.checks input:checked')].map(x => x.value)
+  };
+}
+
+async function api(path, body, method) {
+  const res = await fetch(path, body ? {method:method||'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+  if (!res.ok) throw new Error((await res.text()).slice(0, 500));
+  return res.json();
+}
+
+async function loadDatasets() {
+  try {
+    const list = await api('/v1/datasets');
+    $('dataset').innerHTML = list.map(d => `<option value="${esc(d.name)}">${esc(d.name)} — ${d.examples} examples</option>`).join('');
+  } catch { $('dataset').innerHTML = '<option>no datasets</option>'; }
+}
+
+// Backends whose dependency is missing are shown but disabled, so the option
+// list explains what is possible rather than failing at click time.
+async function loadBackends() {
+  const labels = {
+    'native': 'native — greedy reflective loop',
+    'dspy:mipro': 'DSPy MIPROv2 — Bayesian joint search',
+    'dspy:gepa': 'DSPy GEPA — reflective Pareto evolution',
+    'dspy:bootstrap': 'DSPy BootstrapFewShot — demos only'
+  };
+  try {
+    const info = await api('/v1/integrations');
+    $('backend').innerHTML = info.optimizer_backends.map(id => {
+      const needsDspy = id.startsWith('dspy:');
+      const ok = !needsDspy || info.dspy.installed;
+      return `<option value="${esc(id)}"${ok ? '' : ' disabled'}>${esc(labels[id] || id)}${ok ? '' : ' (not installed)'}</option>`;
+    }).join('');
+    if (info.tracing.active && info.tracing.active !== 'none') {
+      $('progress').textContent = `tracing → ${info.tracing.active}`;
+    }
+  } catch { $('backend').innerHTML = '<option value="native">native</option>'; }
+}
+
+// ---- step 1: recommend -----------------------------------------------------
+$('select-btn').addEventListener('click', async () => {
+  const btn = $('select-btn'); btn.disabled = true;
+  $('results').innerHTML = '<div class="empty">Filtering on hard constraints, ranking the rest…</div>';
+  try {
+    const data = await api('/v1/recommend', { description: $('description').value, model: modelProfile() });
+    state.recs = data.recommendations;
+    state.task = data.task;   // reused verbatim by compile, benchmark and optimize
+    state.report = state.comparison = state.optimization = null;
+    renderRecommendations(data);
+  } catch (e) {
+    $('results').innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+});
+
+function renderRecommendations(data) {
+  if (!data.recommendations.length) {
+    $('results').innerHTML = '<div class="empty">No technique satisfies the hard constraints.</div>';
+    return;
+  }
+  const cards = data.recommendations.map((item, i) => `
+    <article class="result" data-technique="${esc(item.technique_id)}">
+      <div class="topline">
+        <div>
+          <div class="rank">#${i + 1}</div>
+          <h2>${esc(item.title)}<span class="pill ${item.evidence_source === 'measured' ? 'measured' : 'prior'}">${item.evidence_source === 'measured' ? 'measured' : 'prior only'}</span></h2>
+          <div class="meta">${esc(item.technique_id)} · ${esc(item.family)}</div>
+        </div>
+        <div class="score"><strong>${Math.round(item.score * 100)}</strong>/100<div class="meta">confidence ${Math.round(item.confidence * 100)}%</div></div>
+      </div>
+      <ul>${item.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+      <button class="ghost use-btn" type="button" data-technique="${esc(item.technique_id)}">Use this technique</button>
+    </article>`).join('');
+  const warnings = data.warnings.map(w => `<div class="warning">${esc(w)}</div>`).join('');
+  $('results').innerHTML = cards + warnings;
+  document.querySelectorAll('.use-btn').forEach(b => b.addEventListener('click', () => chooseTechnique(b.dataset.technique)));
+  $('compare-btn').disabled = data.recommendations.length < 2;
+}
+
+// ---- step 2: compile -------------------------------------------------------
+async function chooseTechnique(id) {
+  state.chosen = id;
+  document.querySelectorAll('.result').forEach(el => el.classList.toggle('selected', el.dataset.technique === id));
+  $('chosen').textContent = `Chosen: ${id}`;
+  $('bench-btn').disabled = false;
+  $('optimize-btn').disabled = false;
+  $('detail').innerHTML = '<div class="empty">Compiling…</div>';
+  try {
+    const example = await firstExample();
+    state.program = await api('/v1/compile', {
+      task: await taskProfile(),
+      user_input: example ? example.input : $('description').value,
+      response_schema: example ? example.response_schema : null,
+      technique_id: id,
+      variables: example ? example.variables : {}
+    });
+    state.tab = 'prompt';
+    renderDetail();
+  } catch (e) {
+    $('detail').innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+// The ranking response carries the exact profile it was computed against, so
+// compile / benchmark / optimize all run on identical inputs.
+async function taskProfile() {
+  if (state.task) return state.task;
+  const data = await api('/v1/recommend', { description: $('description').value, model: modelProfile() });
+  state.task = data.task;
+  return state.task;
+}
+
+const datasetCache = {};
+async function firstExample() {
+  const name = $('dataset').value;
+  if (!name) return null;
+  if (!datasetCache[name]) {
+    try { datasetCache[name] = await api(`/v1/datasets/${encodeURIComponent(name)}`); }
+    catch { return null; }
+  }
+  return datasetCache[name][0] || null;
+}
+
+function renderDetail() {
+  const tabs = [
+    ['prompt', 'Compiled prompt'],
+    ['report', 'Benchmark'],
+    ['comparison', 'Comparison'],
+    ['optimization', 'Optimization']
+  ].map(([key, label]) => `<button class="${state.tab === key ? 'active' : ''}" data-tab="${key}">${label}</button>`).join('');
+  let body = '<div class="empty">Nothing here yet.</div>';
+  if (state.tab === 'prompt' && state.program) body = renderProgram(state.program);
+  if (state.tab === 'report' && state.report) body = renderReport(state.report);
+  if (state.tab === 'comparison' && state.comparison) body = renderComparison(state.comparison);
+  if (state.tab === 'optimization' && state.optimization) body = renderOptimization(state.optimization);
+  $('detail').innerHTML = `<div class="tabs">${tabs}</div>${body}`;
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; renderDetail(); }));
+}
+
+function renderProgram(p) {
+  const stages = p.stages.map(s => `
+    <div class="stage-title">stage: ${esc(s.stage)}${s.deferred_placeholders.length ? ' — runtime slots: ' + s.deferred_placeholders.map(x => '{' + esc(x) + '}').join(', ') : ''}</div>
+    <pre>${esc(s.messages[0].content)}</pre>
+    <pre>${esc(s.messages[1].content)}</pre>`).join('');
+  const notes = p.notes.map(n => `<div class="warning">${esc(n)}</div>`).join('');
+  return `<h2>${esc(p.technique_title)}</h2>
+    <div class="meta">${esc(p.technique_id)} v${esc(p.technique_version)} · strategy <strong>${esc(p.strategy)}</strong> · ${p.expected_calls} model call(s) · validators: ${esc(p.validators.join(', ') || 'none')}</div>
+    ${stages}${notes}`;
+}
+
+// ---- step 3: measure -------------------------------------------------------
+async function pollJob(id, onProgress) {
+  for (;;) {
+    const job = await api(`/v1/jobs/${id}`);
+    if (job.progress && Object.keys(job.progress).length) onProgress(job.progress);
+    if (job.status === 'done') return job.result;
+    if (job.status === 'error') throw new Error(job.error || 'job failed');
+    await new Promise(r => setTimeout(r, 700));
+  }
+}
+
+function showProgress(p) {
+  if (p.completed != null) $('progress').textContent = `${p.completed}/${p.total} runs — ${p.example_id || ''}`;
+  else if (p.phase) $('progress').textContent = `${p.phase} · round ${p.round || '-'} · ${p.candidate || p.generated + ' candidates'}`;
+}
+
+function busy(on) {
+  ['bench-btn', 'compare-btn', 'optimize-btn'].forEach(id => { $(id).disabled = on || (id !== 'compare-btn' && !state.chosen); });
+  if (!on) $('progress').textContent = '';
+}
+
+$('bench-btn').addEventListener('click', async () => {
+  busy(true);
+  try {
+    const job = await api('/v1/benchmark', {
+      task: await taskProfile(), technique_id: state.chosen,
+      dataset: $('dataset').value, repeats: Number($('repeats').value)
+    });
+    state.report = await pollJob(job.id, showProgress);
+    state.tab = 'report'; renderDetail();
+  } catch (e) { $('detail').innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+  finally { busy(false); }
+});
+
+$('compare-btn').addEventListener('click', async () => {
+  busy(true);
+  try {
+    const job = await api('/v1/compare', {
+      task: await taskProfile(), technique_ids: state.recs.map(r => r.technique_id),
+      dataset: $('dataset').value, repeats: Number($('repeats').value)
+    });
+    const result = await pollJob(job.id, showProgress);
+    state.comparison = result.comparison;
+    state.tab = 'comparison'; renderDetail();
+  } catch (e) { $('detail').innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+  finally { busy(false); }
+});
+
+$('optimize-btn').addEventListener('click', async () => {
+  busy(true);
+  try {
+    const job = await api('/v1/optimize', {
+      task: await taskProfile(), technique_id: state.chosen,
+      dataset: $('dataset').value, repeats: Number($('repeats').value),
+      rounds: Number($('rounds').value), backend: $('backend').value
+    });
+    state.optimization = await pollJob(job.id, showProgress);
+    state.tab = 'optimization'; renderDetail();
+  } catch (e) { $('detail').innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+  finally { busy(false); }
+});
+
+function delta(value, betterWhenLower) {
+  if (!value) return '<td>—</td>';
+  const good = betterWhenLower ? value < 0 : value > 0;
+  return `<td class="delta ${good ? 'up' : 'down'}">${value > 0 ? '+' : ''}${value.toFixed(3)}</td>`;
+}
+
+function renderReport(r) {
+  const c = r.scorecard;
+  const rows = [
+    ['quality (' + (c.quality_grader || 'n/a') + ')', c.quality, r.declared.quality],
+    ['reliability', c.reliability, r.declared.reliability],
+    ['contract pass rate', c.contract_pass_rate, null],
+    ['stability across repeats', c.stability, null],
+    ['mean latency (s)', c.mean_latency_seconds, null],
+    ['p95 latency (s)', c.p95_latency_seconds, null],
+    ['mean tokens', c.mean_total_tokens, null],
+    ['mean calls', c.mean_calls, null],
+    ['failures', c.failures, null]
+  ].map(([label, measured, declared]) => `<tr><td>${esc(label)}</td><td>${Number(measured).toFixed(3)}</td><td>${declared == null ? '—' : Number(declared).toFixed(3)}</td></tr>`).join('');
+  const graders = Object.entries(c.grades).map(([k, v]) => `<tr><td>${esc(k)}${k === c.quality_grader ? ' <span class="pill">headline</span>' : ''}</td><td>${v.toFixed(3)}</td><td>—</td></tr>`).join('');
+  const worst = [...r.runs].sort((a, b) => Math.min(...Object.values(a.grades), 1) - Math.min(...Object.values(b.grades), 1)).slice(0, 3)
+    .map(run => `<div class="meta"><strong>${esc(run.example_id)}</strong> ${esc(JSON.stringify(run.grades))} ${esc(run.error || run.schema_errors.join('; '))}</div><pre>${esc(run.output.slice(0, 400))}</pre>`).join('');
+  return `<h2>Measured on ${esc(r.model_id)}</h2>
+    <div class="meta">${esc(r.technique_id)} · ${esc(r.dataset)} · ${r.examples} examples × ${r.repeats} repeats · ${esc(r.strategy)}</div>
+    <table><thead><tr><th>Metric</th><th>Measured</th><th>Declared</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="stage-title">graders</div>
+    <table><tbody>${graders}</tbody></table>
+    ${r.prior != null ? `<div class="warning">Registry prior was ${r.prior.toFixed(2)}; measured quality is ${c.quality.toFixed(2)}. Ranking now uses the measured value.</div>` : ''}
+    <div class="stage-title">weakest examples</div>${worst}`;
+}
+
+function renderComparison(c) {
+  const rows = c.entries.map((e, i) => `<tr>
+    <td>${i === 0 ? '<span class="rank">#1</span> ' : ''}${esc(e.technique_id)}</td>
+    <td>${e.weighted_score.toFixed(3)}</td>
+    <td>${e.scorecard.quality.toFixed(3)}</td>
+    <td>${e.scorecard.reliability.toFixed(3)}</td>
+    <td>${e.scorecard.mean_latency_seconds.toFixed(2)}</td>
+    <td>${e.scorecard.mean_total_tokens.toFixed(0)}</td>
+    <td>${e.scorecard.mean_calls.toFixed(1)}</td></tr>`).join('');
+  return `<h2>Measured comparison</h2>
+    <div class="meta">${esc(c.dataset)} on ${esc(c.model_id)} · priorities q${c.priorities.quality.toFixed(2)} r${c.priorities.reliability.toFixed(2)} l${c.priorities.latency.toFixed(2)} t${c.priorities.token_cost.toFixed(2)}</div>
+    <table><thead><tr><th>Technique</th><th>Weighted</th><th>Quality</th><th>Reliability</th><th>Latency s</th><th>Tokens</th><th>Calls</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="warning">${esc(c.note)}</div>`;
+}
+
+function renderOptimization(o) {
+  const b = o.baseline_validation, w = o.winner_validation;
+  const rows = [
+    ['quality', b.quality, w.quality, false],
+    ['reliability', b.reliability, w.reliability, false],
+    ['mean tokens', b.mean_total_tokens, w.mean_total_tokens, true],
+    ['mean latency (s)', b.mean_latency_seconds, w.mean_latency_seconds, true]
+  ].map(([label, base, best, lower]) => `<tr><td>${esc(label)}</td><td>${base.toFixed(3)}</td><td>${best.toFixed(3)}</td>${delta(best - base, lower)}</tr>`).join('');
+  const rounds = o.rounds.map(r => `<div class="meta">round ${r.round}: ${r.evaluated.map(c => `${esc(c.id)} ${c.score != null ? c.score.toFixed(3) : '—'}`).join(' · ')}</div>`).join('');
+  const stages = (o.compiled_prompt.stages || []).map(s => `<div class="stage-title">optimized — stage ${esc(s.stage)}</div><pre>${esc(s.user)}</pre>`).join('');
+  return `<h2>Optimized against measured results</h2>
+    <div class="meta">backend <strong>${esc(o.backend || 'native')}</strong> · ${o.train_size} train / ${o.validation_size} held out · ${o.total_calls} model calls · ${o.elapsed_seconds}s · winner <strong>${esc(o.winner.id)}</strong> (${esc(o.winner.origin)})</div>
+    ${(o.notes || []).map(n => `<div class="warning">${esc(n)}</div>`).join('')}
+    <table><thead><tr><th>Metric (held-out)</th><th>Baseline</th><th>Optimized</th><th>Delta</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="stage-title">search history</div>${rounds}
+    <div class="meta">Pareto front: ${o.pareto_front.map(c => esc(c.id)).join(', ')}</div>
+    ${stages}`;
+}
+
+loadDatasets();
+loadBackends();
+</script>
+</body>
+</html>

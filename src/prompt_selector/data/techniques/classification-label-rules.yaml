@@ -1,0 +1,104 @@
+id: classification.label-rules
+version: 1.0.0
+title: Label definitions with boundary examples
+family: classification-control
+description: Define labels, decision boundaries, and positive and negative examples.
+strong_tasks:
+- classification
+acceptable_tasks:
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- research
+- agents
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.89
+  reliability: 0.94
+  latency_efficiency: 0.91
+  token_efficiency: 0.88
+  simplicity: 0.88
+recipe:
+  system: Assign only labels from the allowed set. Use the declared decision boundaries.
+  instructions:
+  - Read every label definition.
+  - Use boundary examples to resolve ambiguous cases.
+  - Return only the permitted label representation.
+  validators:
+  - allowed_labels
+  - json_validity
+  fallback: Re-evaluate only items with invalid or conflicting labels.
+  blocks:
+  - name: role
+    body: 'Assign exactly one label to the input.
+
+      '
+    title: OBJECTIVE
+  - name: labels
+    body: '{label_set}
+
+      '
+    title: ALLOWED LABELS
+  - name: boundaries
+    body: '{boundaries}
+
+      '
+    title: DECISION BOUNDARIES
+  - name: examples
+    body: '{exemplars}
+
+      '
+    title: BOUNDARY EXAMPLES
+    when: has_exemplars
+  - name: contract_native
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+    title: OUTPUT CONTRACT
+    when: native_schema
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: rules
+    body: 'Choose the single closest label. Never invent a label, never return more than one, and never
+      explain the choice.
+
+      '
+    title: RULES
+  - name: input
+    body: '{input}
+
+      '
+    title: INPUT
+  variables:
+    label_set: Provide the allowed labels through the label_set variable.
+    boundaries: No boundary rules supplied.
+benchmark_priors:
+  default: 0.83
+  task:classification: 0.97
+  provider:ollama: 0.89
+  class:small: 0.91
+evidence_level: heuristic
+tags:
+- local-friendly
+- small-model-friendly
+execution:
+  strategy: single

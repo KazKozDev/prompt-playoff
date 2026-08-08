@@ -1,0 +1,98 @@
+version: 1.0.0
+acceptable_tasks:
+- research
+- coding
+avoid_tasks:
+- classification
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+evidence_level: documented
+tags:
+- prompt-report
+id: reasoning.skeleton-of-thought
+title: Skeleton of thought
+family: structure-first
+description: Produce a bare skeleton of the answer, then flesh it out. Published for latency via parallel
+  expansion; here the skeleton mainly buys structure.
+strong_tasks:
+- summarization
+- creative_writing
+min_calls: 2
+characteristics:
+  quality: 0.8
+  reliability: 0.76
+  latency_efficiency: 0.52
+  token_efficiency: 0.5
+  simplicity: 0.75
+recipe:
+  system: Outline first, then expand. The outline fixes coverage; the expansion fixes depth.
+  instructions:
+  - 'Write a skeleton: short points, no prose.'
+  - Expand each point in order.
+  blocks:
+  - name: procedure
+    title: SKELETON
+    body: 'Write the skeleton of the answer: 3–7 short points, three to five words each, in order. No
+      prose, no expansion.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: expand_task
+    title: EXPAND
+    body: 'Your skeleton:
+
+
+      {previous}
+
+
+      Expand each point in order into the finished answer. Cover every point, add nothing outside the
+      skeleton.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  validators:
+  - contains_all
+  fallback: Expand only the points that were left thin.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: skeleton
+    blocks:
+    - procedure
+    - input
+    system: Produce the skeleton only.
+    carries_schema: false
+  - name: expand
+    blocks:
+    - input
+    - expand_task
+    - contract_embedded
+benchmark_priors:
+  default: 0.73
+  task:summarization: 0.81
+source:
+  paper: 'Skeleton-of-Thought: Prompting LLMs for Efficient Parallel Generation'
+  authors: Ning et al.
+  url: https://arxiv.org/abs/2307.15337
+  year: 2023

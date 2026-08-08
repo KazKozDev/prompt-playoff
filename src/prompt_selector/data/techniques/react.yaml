@@ -1,0 +1,88 @@
+id: agents.react
+version: 1.0.0
+title: ReAct tool loop
+family: tool-use
+description: Alternate bounded reasoning with tool calls and observations until the goal is satisfied.
+strong_tasks:
+- agents
+- research
+acceptable_tasks:
+- coding
+avoid_tasks:
+- translation
+- creative_writing
+- classification
+required_capabilities:
+- tool_calling
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: true
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.93
+  reliability: 0.8
+  latency_efficiency: 0.28
+  token_efficiency: 0.25
+  simplicity: 0.31
+recipe:
+  system: Use tools only when they are needed. Base every conclusion on tool observations or provided
+    input.
+  instructions:
+  - Decide whether a tool call is necessary.
+  - Call one suitable tool with valid arguments.
+  - Inspect the observation before continuing.
+  - Stop when the answer is supported.
+  validators:
+  - tool_success
+  - grounding_overlap
+  fallback: Retry the failed tool call once with corrected arguments.
+  blocks:
+  - name: role
+    body: 'Reach the goal using the registered tools. Every conclusion must rest on a tool observation
+      or on the provided input.
+
+      '
+    title: OBJECTIVE
+  - name: protocol
+    body: 'Call a tool only when it changes the answer. Call one tool at a time with valid arguments,
+      read the observation, and stop as soon as the answer is supported. Never state a tool result you
+      did not observe.
+
+      '
+    title: PROTOCOL
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: input
+    body: '{input}
+
+      '
+    title: GOAL
+benchmark_priors:
+  default: 0.7
+  task:agents: 0.94
+  task:research: 0.9
+  class:reasoning: 0.9
+evidence_level: benchmarked
+tags: []
+execution:
+  strategy: tool_loop
+  params:
+    max_iterations: 4
+source:
+  paper: 'ReAct: Synergizing Reasoning and Acting in Language Models'
+  authors: Yao et al.
+  url: https://arxiv.org/abs/2210.03629
+  year: 2022

@@ -1,0 +1,106 @@
+id: verification.critique-revise
+version: 1.0.0
+title: Critique and revise
+family: self-review
+description: Generate a draft, critique it against a rubric, and revise only identified defects.
+strong_tasks:
+- coding
+- translation
+- summarization
+- creative_writing
+acceptable_tasks:
+- research
+- structured_extraction
+avoid_tasks:
+- classification
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.91
+  reliability: 0.88
+  latency_efficiency: 0.38
+  token_efficiency: 0.34
+  simplicity: 0.48
+recipe:
+  system: Evaluate the draft against explicit criteria and revise only substantiated defects.
+  instructions:
+  - Create a complete first draft.
+  - Check it against every acceptance criterion.
+  - List concrete defects internally.
+  - Return a revised final answer without critique commentary.
+  validators:
+  - contains_all
+  fallback: Escalate unresolved defects for human review.
+  blocks:
+  - name: role
+    body: 'Produce a complete first answer to the task.
+
+      '
+    title: OBJECTIVE
+  - name: criteria
+    body: '{instructions}
+
+      '
+    title: ACCEPTANCE CRITERIA
+  - name: contract_embedded
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+  - name: input
+    body: '{input}
+
+      '
+    title: TASK
+  - name: revision_task
+    body: 'Draft under review:
+
+
+      {previous}
+
+
+      Check the draft against each acceptance criterion. For every criterion it fails, fix the specific
+      defect. Return only the revised final answer — no critique, no change log, no preamble.
+
+      '
+    title: REVISION
+benchmark_priors:
+  default: 0.78
+  task:translation: 0.9
+  task:coding: 0.89
+  task:creative_writing: 0.88
+evidence_level: benchmarked
+tags: []
+execution:
+  strategy: multi_stage
+  stages:
+  - name: draft
+    blocks:
+    - role
+    - criteria
+    - contract_embedded
+    - input
+  - name: revise
+    blocks:
+    - criteria
+    - contract_embedded
+    - revision_task
+    system: Evaluate against the criteria and revise only substantiated defects.
+source:
+  paper: 'Self-Refine: Iterative Refinement with Self-Feedback'
+  authors: Madaan et al.
+  url: https://arxiv.org/abs/2303.17651
+  year: 2023
