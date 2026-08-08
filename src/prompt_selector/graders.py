@@ -322,12 +322,15 @@ def grounding_overlap(ctx: GradeContext) -> float | None:
 
 @grader("tool_success")
 def tool_success(ctx: GradeContext) -> float | None:
-    """Share of tool calls that returned an observation instead of an error."""
+    """Share of required tool calls that returned an observation instead of an error."""
     if ctx.trace is None:
         return None
     observations = ctx.trace.aggregation.get("observations")
     if not observations:
-        return None
+        # A dataset opting into this grader is a tool-use task. Treating a
+        # technique that bypassed the tool as "not applicable" would let it
+        # receive perfect reliability without satisfying the task contract.
+        return 0.0
     failures = sum(
         1 for item in observations if str(item.get("observation", "")).startswith("error:")
     )

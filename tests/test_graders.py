@@ -87,6 +87,12 @@ def test_tool_success_reads_the_execution_trace():
     assert run_graders(["tool_success"], ctx("", trace=ok))["tool_success"] == 0.5
 
 
+def test_tool_success_rejects_a_tool_task_with_no_tool_call():
+    skipped = ExecutionTrace(technique_id="t", strategy="single", output="42")
+
+    assert run_graders(["tool_success"], ctx("42", trace=skipped))["tool_success"] == 0.0
+
+
 def test_python_syntax_only_scores_fenced_code():
     assert "python_syntax" not in run_graders(["python_syntax"], ctx("no code here"))
     good = run_graders(["python_syntax"], ctx("```python\nx = 1\n```"))
