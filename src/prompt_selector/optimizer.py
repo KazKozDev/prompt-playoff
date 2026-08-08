@@ -45,6 +45,7 @@ class TechniqueOverlay(BaseModel):
 
     system: str | None = None
     block_bodies: dict[str, str] = Field(default_factory=dict)
+    block_appends: dict[str, str] = Field(default_factory=dict)
     exemplars: list[Exemplar] = Field(default_factory=list)
 
     def apply(self, technique: TechniqueSpec) -> TechniqueSpec:
@@ -54,6 +55,9 @@ class TechniqueOverlay(BaseModel):
         for block in patched.recipe.blocks:
             if block.name in self.block_bodies:
                 block.body = self.block_bodies[block.name]
+            if rule := self.block_appends.get(block.name):
+                separator = "" if block.body.endswith("\n") else "\n"
+                block.body = f"{block.body}{separator}{rule.strip()}\n"
         if self.exemplars:
             patched.recipe.exemplars = list(self.exemplars)
         return patched
@@ -178,7 +182,10 @@ class PromptOptimizer:
         baseline = Candidate(id="baseline", technique_id=technique.id, origin="baseline")
         population: list[Candidate] = [baseline]
 
-        bootstrapped = await self._bootstrap(task, technique, train, timeout_seconds, dataset_name)
+        bootstrapped, bootstrap_calls = await self._bootstrap(
+            task, technique, train, timeout_seconds, dataset_name
+        )
+        call_count += bootstrap_calls
         if bootstrapped is not None:
             population.append(bootstrapped)
 
@@ -223,6 +230,7 @@ class PromptOptimizer:
 
             parents = select_parents(ranked, beam_width)
             before = len(self.proposal_failures)
+            proposal_seq_before = self._proposal_seq
             proposals: list[Candidate] = []
             # Budget is per round, spread round-robin over the beam, so widening
             # the search costs breadth rather than extra model calls.
@@ -243,7 +251,9 @@ class PromptOptimizer:
                     train=train,
                     evaluated=list(evaluated.values()),
                 )
-            call_count += len(proposals)
+            # Count attempted proposer calls too: an empty, repeated, or malformed
+            # answer still consumed a real model request.
+            call_count += self._proposal_seq - proposal_seq_before
             population = list(evaluated.values()) + proposals
             if progress:
                 progress(
@@ -259,20 +269,19 @@ class PromptOptimizer:
         ranked = sorted(evaluated.values(), key=lambda item: item.score or 0.0, reverse=True)
         winner = ranked[0]
 
-        baseline_validation = (
-            await self._evaluate(
-                baseline, task, technique, validation, repeats, timeout_seconds, dataset_name
-            )
-        ).scorecard
-        winner_validation = (
-            baseline_validation
-            if winner.id == baseline.id
-            else (
-                await self._evaluate(
-                    winner, task, technique, validation, repeats, timeout_seconds, dataset_name
-                )
-            ).scorecard
+        baseline_validation_report = await self._evaluate(
+            baseline, task, technique, validation, repeats, timeout_seconds, dataset_name
         )
+        baseline_validation = baseline_validation_report.scorecard
+        call_count += _report_calls(baseline_validation_report)
+        if winner.id == baseline.id:
+            winner_validation = baseline_validation
+        else:
+            winner_validation_report = await self._evaluate(
+                winner, task, technique, validation, repeats, timeout_seconds, dataset_name
+            )
+            winner_validation = winner_validation_report.scorecard
+            call_count += _report_calls(winner_validation_report)
 
         winning_technique = winner.overlay.apply(technique)
         preview = self.compiler.compile(
@@ -364,11 +373,11 @@ class PromptOptimizer:
         train: list[BenchmarkExample],
         timeout_seconds: float,
         dataset_name: str,
-    ) -> Candidate | None:
+    ) -> tuple[Candidate | None, int]:
         """DSPy-style bootstrap: keep the train items the baseline already nails as demos."""
         graded = [item for item in train if item.expected is not None]
         if not graded:
-            return None
+            return None, 0
         report = await self.runner.run(
             dataset=graded,
             task=task,
@@ -380,7 +389,7 @@ class PromptOptimizer:
         by_id = {item.id: item for item in graded}
         wins = [run for run in report.runs if _primary(run.grades) >= 0.999]
         if not wins:
-            return None
+            return None, _report_calls(report)
         # Auto-CoT's point: demonstrations that are similar to each other teach
         # the model one case three times. Picking cheap-first did exactly that,
         # because short inputs resemble short inputs. Spread them instead.
@@ -394,11 +403,14 @@ class PromptOptimizer:
             for run in wins
             if run.example_id in by_id
         ]
-        return Candidate(
-            id="bootstrap-demos",
-            technique_id=technique.id,
-            origin="bootstrap",
-            overlay=TechniqueOverlay(exemplars=exemplars),
+        return (
+            Candidate(
+                id="bootstrap-demos",
+                technique_id=technique.id,
+                origin="bootstrap",
+                overlay=TechniqueOverlay(exemplars=exemplars),
+            ),
+            _report_calls(report),
         )
 
     @staticmethod
@@ -415,7 +427,8 @@ class PromptOptimizer:
         )
         seen = {" ".join(original.split())}
         for candidate in candidates:
-            body = candidate.overlay.block_bodies.get(target)
+            patched = candidate.overlay.apply(technique)
+            body = next((block.body for block in patched.recipe.blocks if block.name == target), "")
             if body:
                 seen.add(" ".join(body.split()))
         return seen
@@ -448,6 +461,7 @@ class PromptOptimizer:
             # The bias rotates across the whole run, not within one parent, so a
             # wider beam explores different rewrite directions instead of
             # repeating the same request once per parent.
+            mutation = ("rewrite", "append")[self._proposal_seq % 2]
             bias = biases[self._proposal_seq % len(biases)]
             self._proposal_seq += 1
             try:
@@ -461,6 +475,7 @@ class PromptOptimizer:
                     skeleton=skeleton,
                     tags=tags,
                     history=history,
+                    mutation=mutation,
                 )
             except ProviderError as exc:
                 # A silent skip here looks identical to "the model had no better
@@ -468,24 +483,38 @@ class PromptOptimizer:
                 self.proposal_failures.append(f"proposer call failed: {exc}")
                 continue
             if not rewritten:
-                self.proposal_failures.append("proposer returned an empty rewrite")
+                self.proposal_failures.append(f"proposer returned an empty {mutation}")
                 continue
-            if rewritten.strip() == target.body.strip():
+            if mutation == "rewrite" and rewritten.strip() == target.body.strip():
                 self.proposal_failures.append("proposer returned the original instruction")
                 continue
-            normalized = " ".join(rewritten.split())
+            overlay = parent.overlay.model_copy(deep=True)
+            if mutation == "rewrite":
+                # The rewritten text already includes the parent's rendered append rules.
+                # Keeping them separately would append them a second time.
+                overlay.block_appends.pop(target.name, None)
+                overlay.block_bodies[target.name] = rewritten.strip() + "\n"
+            else:
+                previous = overlay.block_appends.get(target.name, "")
+                separator = "\n" if previous.strip() else ""
+                overlay.block_appends[target.name] = (
+                    f"{previous.rstrip()}{separator}{rewritten.strip()}\n"
+                )
+            rendered = overlay.apply(technique)
+            rendered_body = next(
+                block.body for block in rendered.recipe.blocks if block.name == target.name
+            )
+            normalized = " ".join(rendered_body.split())
             if normalized in seen:
                 self.proposal_failures.append("proposer repeated an instruction already measured")
                 continue
             seen.add(normalized)
-            overlay = parent.overlay.model_copy(deep=True)
-            overlay.block_bodies[target.name] = rewritten.strip() + "\n"
             self.proposals_accepted += 1
             proposals.append(
                 Candidate(
                     id=f"{parent.id}+p{self._proposal_seq}",
                     technique_id=technique.id,
-                    origin=f"reflection:{parent.id}",
+                    origin=f"reflection:{mutation}:{parent.id}",
                     overlay=overlay,
                 )
             )
@@ -502,9 +531,11 @@ class PromptOptimizer:
         skeleton: str = "",
         tags: str = "",
         history: str = "",
+        mutation: str = "rewrite",
     ) -> str:
+        action = "adding ONE new rule to" if mutation == "append" else "rewriting"
         sections = [
-            "You are rewriting ONE block inside a larger prompt used for a "
+            f"You are {action} ONE block inside a larger prompt used for a "
             f"{task.task_type.value} task. The other blocks are fixed."
         ]
         if skeleton:
@@ -513,7 +544,7 @@ class PromptOptimizer:
                 f"{skeleton}\n"
                 "Never restate what a fixed block already says."
             )
-        sections.append(f"CURRENT TEXT OF THE BLOCK YOU ARE REWRITING\n{current.strip()}")
+        sections.append(f"CURRENT TEXT OF THE BLOCK\n{current.strip()}")
         if scorecard:
             sections.append(
                 f"MEASURED PERFORMANCE\nquality {scorecard.quality:.2f}, "
@@ -536,11 +567,19 @@ class PromptOptimizer:
                 "ALREADY TRIED, WITH MEASURED QUALITY — do not repeat these, beat them:\n" + history
             )
         sections.append(f"REVISION GOAL\n{bias}")
-        sections.append(
-            "Return only the rewritten block. No preamble, no explanation, no markdown "
-            "fences. Do not mention the output format or the schema — a fixed block owns "
-            "that. Write rules that decide the failing cases above, not encouragement."
-        )
+        if mutation == "append":
+            sections.append(
+                "Return only ONE new rule to append after the current text. Do not repeat, "
+                "summarize, or rewrite the current text. No preamble, no explanation, no "
+                "markdown fences. Do not mention the output format or the schema — a fixed "
+                "block owns that. The rule must decide one measured failure above."
+            )
+        else:
+            sections.append(
+                "Return only the rewritten block. No preamble, no explanation, no markdown "
+                "fences. Do not mention the output format or the schema — a fixed block owns "
+                "that. Write rules that decide the failing cases above, not encouragement."
+            )
         user = "\n\n".join(sections)
         prompt = CompiledPrompt(
             technique_id="optimizer.meta",
@@ -615,6 +654,11 @@ def _rescore(candidates: list[Candidate], priorities) -> None:
             + priorities.token_cost * token_efficiency,
             4,
         )
+
+
+def _report_calls(report: BenchmarkReport) -> int:
+    """Count actual strategy calls represented by a benchmark report."""
+    return sum(run.calls for run in report.runs)
 
 
 def select_parents(ranked: list[Candidate], beam_width: int) -> list[Candidate]:
@@ -814,11 +858,15 @@ def tag_digest(report: BenchmarkReport | None, dataset: list[BenchmarkExample]) 
 def history_digest(candidates, target: str, limit: int = 4) -> str:
     """Instructions already measured, with their scores, so the proposer can
     climb rather than rediscover. This is the OPRO signal MIPRO also uses."""
-    scored = [
-        (item.train.quality, item.overlay.block_bodies.get(target, ""))
-        for item in candidates
-        if item.train is not None and item.overlay.block_bodies.get(target)
-    ]
+    scored = []
+    for item in candidates:
+        if item.train is None:
+            continue
+        body = item.overlay.block_bodies.get(target, "")
+        appended = item.overlay.block_appends.get(target, "")
+        mutation = "\n".join(part for part in (body.rstrip(), appended.rstrip()) if part)
+        if mutation:
+            scored.append((item.train.quality, mutation))
     if not scored:
         return ""
     scored.sort(key=lambda pair: pair[0], reverse=True)

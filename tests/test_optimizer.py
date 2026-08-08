@@ -75,6 +75,8 @@ async def test_optimizer_finds_and_verifies_a_better_prompt(
     assert result.winner_validation.quality > result.baseline_validation.quality
     assert result.improvement["quality"] > 0
     assert "SHARPER RULE" in result.compiled_prompt["stages"][0]["user"]
+    # 3 bootstrap + 3 round-1 + 1 proposal + 3 round-2 + 2 validation calls.
+    assert result.total_calls == 12
 
 
 @pytest.mark.asyncio
@@ -116,6 +118,24 @@ def test_overlay_never_mutates_the_registry_technique(registry):
     patched = TechniqueOverlay(system="replaced").apply(technique)
     assert patched.recipe.system == "replaced"
     assert technique.recipe.system == original
+
+
+def test_append_overlay_preserves_original_block_text(registry):
+    technique = registry.technique("structured.schema-first")
+    original = next(block.body for block in technique.recipe.blocks if block.name == "procedure")
+    overlay = TechniqueOverlay(
+        block_appends={"procedure": "Keep a title attached to the person's name."}
+    )
+
+    patched = overlay.apply(technique)
+    body = next(block.body for block in patched.recipe.blocks if block.name == "procedure")
+
+    assert body.startswith(original)
+    assert body == original + "Keep a title attached to the person's name.\n"
+    assert (
+        next(block.body for block in technique.recipe.blocks if block.name == "procedure")
+        == original
+    )
 
 
 def card(quality, reliability, tokens, latency):
@@ -235,9 +255,10 @@ async def test_a_repeated_rewrite_is_discarded_instead_of_re_measured(
     technique = registry.technique("structured.schema-first")
 
     first = await optimizer._propose(
-        extraction_task, technique, Candidate(id="p", technique_id="t", origin="x"), None, 2, 30
+        extraction_task, technique, Candidate(id="p", technique_id="t", origin="x"), None, 4, 30
     )
-    assert len(first) == 1  # the second attempt repeats the same text
+    assert len(first) == 2  # one rewrite and one append; each duplicate is discarded
+    assert {item.origin.split(":")[1] for item in first} == {"rewrite", "append"}
     assert any(
         "already measured" in item or "original" in item for item in optimizer.proposal_failures
     )

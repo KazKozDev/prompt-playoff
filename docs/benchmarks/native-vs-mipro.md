@@ -144,6 +144,55 @@ the program structure and a summary of the data, and optuna searches
 combinations of instruction × demonstrations — not in how many candidates it
 tries.
 
+## Appending a rule preserves the working prompt
+
+The rewrite-only mutation had a structural failure mode: a proposer could add a
+useful rule while deleting instructions that already worked. The native search
+now tries both mutation types within the same candidate budget:
+
+- `rewrite` replaces the mutable block, as before;
+- `append` preserves the rendered block byte-for-byte and adds one rule justified
+  by the measured failures.
+
+Measured on 2026-08-08 with the full 200-example `entity-extraction-hard`
+dataset, `qwen2.5:7b`, a deterministic 132 train / 68 held-out split, two rounds,
+two candidates, beam width one, and quality-only weights:
+
+| Candidate | Mutation | Train field_f1 | Train tokens |
+|---|---|---:|---:|
+| baseline | none | 0.817 | 173 |
+| `baseline+p1` | rewrite | 0.806 | 188 |
+| `baseline+p2` | append | **0.830** | 192 |
+
+The append candidate won, and its gain survived held-out validation:
+
+| Metric | Baseline | Append winner | Delta |
+|---|---:|---:|---:|
+| field_f1 | 0.806 | **0.817** | **+0.011** |
+| reliability | 1.000 | 1.000 | +0.000 |
+| mean tokens | 172.35 | 190.74 | +18.39 |
+| mean latency (s) | 0.805 | 0.794 | -0.011 |
+
+The winning addition was generic — "Do not infer or add evidence for any field;
+use only what is explicitly given" — rather than one of the dataset's annotation
+rules. The result is positive but small, so it does not overturn the stronger
+MIPROv2 result above. It does show the intended mechanism: the original four-step
+procedure remains intact, the append is measured as a separate candidate, and
+the held-out delta is no longer negative.
+
+The run made 798 real model calls and took 655.98 seconds. The CLI originally
+reported 530 because it omitted bootstrap and held-out validation calls; the
+counter was corrected as part of this change, without changing candidate scores
+or the winner.
+
+```bash
+prompt-selector optimize --model qwen2.5:7b --model-class medium \
+  --dataset entity-extraction-hard --task structured_extraction \
+  --technique structured.schema-first --backend native --rounds 2 \
+  --candidates 2 --beam-width 1 --quality 1 --reliability 0 \
+  --latency 0 --token-cost 0 --timeout-seconds 120
+```
+
 What the beam change did buy: the search history is now legible, wasted brevity
 proposals are gone when tokens are not weighted, repeated rewrites are discarded
 instead of re-measured, and a winner that is the baseline under another name
