@@ -53,6 +53,7 @@ QUALITY_PREFERENCE = (
     "numeric_close",
     "coverage",
     "grounding_overlap",
+    "glossary_consistency",
     "contains_all",
     "regex_match",
     "json_schema",

@@ -5,6 +5,7 @@ from prompt_selector.domain import Priorities
 from prompt_selector.evals import (
     BenchmarkExample,
     BenchmarkRunner,
+    ExampleRun,
     build_scorecard,
     compare_techniques,
 )
@@ -150,6 +151,27 @@ async def test_report_converts_to_evidence_and_survives_a_round_trip(
 def test_scorecard_needs_runs():
     with pytest.raises(ValueError):
         build_scorecard([], 1)
+
+
+def test_translation_glossary_score_is_a_headline_quality_metric():
+    card = build_scorecard(
+        [
+            ExampleRun(
+                example_id="translation-1",
+                repeat=0,
+                output="",
+                grades={"glossary_consistency": 1.0, "omission_check": 1.0},
+                latency_seconds=0.1,
+                prompt_tokens=1,
+                completion_tokens=1,
+                calls=1,
+            )
+        ],
+        repeats=1,
+    )
+
+    assert card.quality_grader == "glossary_consistency"
+    assert card.quality == 1.0
 
 
 def test_a_measurement_from_another_model_is_not_evidence(tmp_path):
