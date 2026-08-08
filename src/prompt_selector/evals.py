@@ -452,8 +452,13 @@ def _now() -> str:
 
 
 def load_jsonl(path: Path) -> list[BenchmarkExample]:
+    return load_jsonl_text(path.read_text(encoding="utf-8"))
+
+
+def load_jsonl_text(text: str) -> list[BenchmarkExample]:
+    """Validate JSONL text and preserve the first failing physical line number."""
     examples: list[BenchmarkExample] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line_number, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
         try:

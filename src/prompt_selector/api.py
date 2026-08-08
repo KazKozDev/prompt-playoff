@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 from contextlib import asynccontextmanager
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -22,7 +23,7 @@ from prompt_selector.domain import (
     TaskProfile,
     TechniqueSpec,
 )
-from prompt_selector.evals import BenchmarkExample
+from prompt_selector.evals import BenchmarkExample, load_jsonl_text
 from prompt_selector.graders import grader_names
 from prompt_selector.jobs import Job, JobStore
 from prompt_selector.lint import lint_registry, registry_summary
@@ -48,6 +49,8 @@ app = FastAPI(
     description="Select a prompt technique, compile the prompt it implies, and measure it.",
     lifespan=lifespan,
 )
+
+MAX_DATASET_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 def _service(request: Request) -> PromptSelectorService:
@@ -162,7 +165,7 @@ def models(request: Request) -> list[ModelProfile]:
 def datasets(request: Request) -> list[dict[str, Any]]:
     service = _service(request)
     entries: list[dict[str, Any]] = []
-    for name in sorted(service.registry.datasets):
+    for name in service.dataset_names:
         try:
             examples = service.dataset(name)
         except Exception as exc:
@@ -178,6 +181,36 @@ def datasets(request: Request) -> list[dict[str, Any]]:
             }
         )
     return entries
+
+
+@app.post("/v1/datasets/upload", status_code=status.HTTP_201_CREATED)
+async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    """Validate a JSONL file and keep it available for this server session."""
+    content = await file.read(MAX_DATASET_UPLOAD_BYTES + 1)
+    if len(content) > MAX_DATASET_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Dataset exceeds the 10 MiB upload limit")
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail="Dataset must be UTF-8 text") from exc
+    try:
+        examples = load_jsonl_text(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not examples:
+        raise HTTPException(status_code=422, detail="Dataset contains no BenchmarkExample rows")
+
+    stem = Path(file.filename or "dataset").stem
+    slug = re.sub(r"[^a-z0-9._-]+", "-", stem.lower()).strip("-._") or "dataset"
+    name = f"uploaded:{slug}"
+    _service(request).add_session_dataset(name, examples)
+    return {
+        "name": name,
+        "filename": file.filename,
+        "examples": len(examples),
+        "has_expected": sum(1 for item in examples if item.expected is not None),
+        "has_schema": sum(1 for item in examples if item.response_schema is not None),
+    }
 
 
 @app.get("/v1/datasets/{name}", response_model=list[BenchmarkExample])

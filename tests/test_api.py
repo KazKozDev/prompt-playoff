@@ -77,6 +77,66 @@ def test_datasets_are_listed_and_readable(client):
     assert client.get("/v1/datasets/does-not-exist").status_code == 404
 
 
+def test_dataset_upload_reports_the_first_bad_line(client):
+    response = client.post(
+        "/v1/datasets/upload",
+        files={
+            "file": (
+                "broken.jsonl",
+                '{"id":"ok","input":"valid"}\n{"id":"bad"}\n',
+                "application/x-ndjson",
+            )
+        },
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "Invalid JSONL at line 2" in detail
+    assert "input" in detail
+
+
+def test_uploaded_dataset_is_session_selectable_and_benchmarkable(client):
+    uploaded = client.post(
+        "/v1/datasets/upload",
+        files={
+            "file": (
+                "my cases.jsonl",
+                '{"id":"mine-1","input":"Mara entered Veyr.",'
+                '"expected":{"people":["Mara"],"places":["Veyr"]}}\n',
+                "application/x-ndjson",
+            )
+        },
+    )
+    assert uploaded.status_code == 201
+    name = uploaded.json()["name"]
+    assert name == "uploaded:my-cases"
+    assert uploaded.json()["examples"] == 1
+    assert name in {item["name"] for item in client.get("/v1/datasets").json()}
+    assert client.get(f"/v1/datasets/{name}").json()[0]["id"] == "mine-1"
+
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    started = client.post(
+        "/v1/benchmark",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "dataset": name,
+            "record": False,
+        },
+    )
+    assert started.status_code == 200
+    job_id = started.json()["id"]
+    for _ in range(200):
+        job = client.get(f"/v1/jobs/{job_id}").json()
+        if job["status"] in {"done", "error"}:
+            break
+    assert job["status"] == "done"
+    assert job["result"]["dataset"] == name
+    assert job["result"]["examples"] == 1
+
+
 def test_capabilities_documents_the_extension_contract(client):
     body = client.get("/v1/capabilities").json()
     assert "single" in body["strategies"]

@@ -48,6 +48,7 @@ class PromptSelectorService:
         self.selector = Selector(registry, self.measurements)
         self.compiler = PromptCompiler()
         self.tracer = tracer if tracer is not None else tracer_from_env()
+        self.session_datasets: dict[str, list[BenchmarkExample]] = {}
 
     def provider(self, task: TaskProfile, **metadata) -> ModelProvider:
         """Every provider goes through here, so tracing is never bypassed."""
@@ -99,7 +100,17 @@ class PromptSelectorService:
     # -- measurement -------------------------------------------------------- #
 
     def dataset(self, name: str) -> list[BenchmarkExample]:
+        if name in self.session_datasets:
+            return list(self.session_datasets[name])
         return load_jsonl(self.registry.dataset_path(name))
+
+    def add_session_dataset(self, name: str, examples: list[BenchmarkExample]) -> None:
+        """Register validated examples for this server process without writing user data."""
+        self.session_datasets[name] = list(examples)
+
+    @property
+    def dataset_names(self) -> list[str]:
+        return sorted({*self.registry.datasets, *self.session_datasets})
 
     def resolve_dataset(
         self,
