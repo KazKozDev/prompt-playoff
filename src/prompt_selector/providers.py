@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
 import httpx
@@ -132,4 +133,5 @@ def provider_for(model: ModelProfile) -> ModelProvider:
         return OllamaProvider(base_url)
     if not base_url:
         raise ProviderError("OpenAI-compatible models require model.base_url")
-    return OpenAICompatibleProvider(base_url=base_url)
+    api_key = os.environ.get("OPENAI_API_KEY") if model.provider == "openai" else None
+    return OpenAICompatibleProvider(base_url=base_url, api_key=api_key)
