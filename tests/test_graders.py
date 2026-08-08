@@ -141,7 +141,6 @@ def test_sandbox_refuses_every_way_out():
         "import os\nanswer = os.listdir('/')",
         "answer = ().__class__.__bases__",
         "answer = open('/etc/passwd').read()",
-        "def f():\n    return 1\nanswer = f()",
         "answer = eval('1+1')",
         "answer = __import__('os')",
         "answer = [].__len__()",
@@ -150,6 +149,15 @@ def test_sandbox_refuses_every_way_out():
         result = run_program(source)
         assert not result.ok, source
         assert result.value is None
+
+
+def test_sandbox_allows_local_pure_functions():
+    """Function definitions are required by MBPP and are not an escape vector."""
+    from prompt_selector.sandbox import run_program
+
+    result = run_program("def f():\n    return 1\nanswer = f()")
+    assert result.ok
+    assert result.value == 1
 
 
 def test_sandbox_stops_a_runaway_program():
