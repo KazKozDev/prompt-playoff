@@ -344,6 +344,9 @@ def benchmark_command(
         int, typer.Option(min=1, max=10, help="Repeats per example; >1 measures stability.")
     ] = 1,
     strict_json: Annotated[bool, typer.Option()] = True,
+    tools_allowed: Annotated[
+        bool, typer.Option(help="Expose registered deterministic tools to tool-using techniques.")
+    ] = False,
     base_url: Annotated[str | None, typer.Option()] = None,
     timeout_seconds: Annotated[float, typer.Option(min=1)] = 120,
     save: Annotated[bool, typer.Option(help="Write the full report to benchmark-results/.")] = True,
@@ -355,6 +358,7 @@ def benchmark_command(
         task,
         _model(provider, model, model_class, capabilities, provider == "ollama", base_url),
         strict_json,
+        tools_allowed=tools_allowed,
     )
     inline = load_jsonl(dataset_file) if dataset_file else None
     name = dataset_file.stem if dataset_file else dataset
@@ -399,6 +403,9 @@ def compare_command(
     capabilities: Annotated[str, typer.Option()] = "structured_output,system_messages",
     repeats: Annotated[int, typer.Option(min=1, max=10)] = 1,
     strict_json: Annotated[bool, typer.Option()] = True,
+    tools_allowed: Annotated[
+        bool, typer.Option(help="Expose registered deterministic tools to tool-using techniques.")
+    ] = False,
     quality: Annotated[float, typer.Option(min=0)] = 0.35,
     reliability: Annotated[float, typer.Option(min=0)] = 0.35,
     latency: Annotated[float, typer.Option(min=0)] = 0.15,
@@ -415,6 +422,7 @@ def compare_command(
         Priorities(
             quality=quality, reliability=reliability, latency=latency, token_cost=token_cost
         ),
+        tools_allowed=tools_allowed,
     )
     inline = load_jsonl(dataset_file) if dataset_file else None
     ids = [item.strip() for item in techniques.split(",") if item.strip()]
@@ -481,6 +489,9 @@ def optimize_command(
     max_metric_calls: Annotated[int | None, typer.Option(help="DSPy rollout budget.")] = None,
     repeats: Annotated[int, typer.Option(min=1, max=5)] = 1,
     strict_json: Annotated[bool, typer.Option()] = True,
+    tools_allowed: Annotated[
+        bool, typer.Option(help="Expose registered deterministic tools to tool-using techniques.")
+    ] = False,
     quality: Annotated[float, typer.Option(min=0)] = 0.4,
     reliability: Annotated[float, typer.Option(min=0)] = 0.3,
     latency: Annotated[float, typer.Option(min=0)] = 0.1,
@@ -512,6 +523,7 @@ def optimize_command(
         Priorities(
             quality=quality, reliability=reliability, latency=latency, token_cost=token_cost
         ),
+        tools_allowed=tools_allowed,
     )
     inline = load_jsonl(dataset_file) if dataset_file else None
     if inline is None and not dataset:

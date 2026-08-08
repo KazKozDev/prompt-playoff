@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import json
 import operator
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -122,5 +123,33 @@ DEFAULT_REGISTRY.register(
             "required": ["expression"],
         },
         handler=calculate,
+    )
+)
+
+
+def count_words(arguments: dict[str, Any]) -> str:
+    """Count alphanumeric word tokens without model- or locale-dependent state."""
+    text = arguments.get("text")
+    if not isinstance(text, str):
+        raise ToolError("text must be a string")
+    words = re.findall(r"[^\W_]+(?:['’-][^\W_]+)*", text, flags=re.UNICODE)
+    return json.dumps({"count": len(words)})
+
+
+DEFAULT_REGISTRY.register(
+    Tool(
+        name="word_count",
+        description="Count the words in a supplied text deterministically.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The exact text whose words should be counted.",
+                }
+            },
+            "required": ["text"],
+        },
+        handler=count_words,
     )
 )

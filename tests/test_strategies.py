@@ -10,6 +10,7 @@ from prompt_selector.strategies import (
     split_chunks,
     strategy_names,
 )
+from prompt_selector.tools import DEFAULT_REGISTRY
 
 
 @pytest.mark.asyncio
@@ -92,6 +93,16 @@ async def test_tool_loop_executes_the_requested_tool(extraction_task, registry):
     observation = trace.aggregation["observations"][0]["observation"]
     assert '"result": 42.0' in observation
     assert trace.output == "42"
+
+
+def test_default_tool_registry_word_count_is_deterministic():
+    assert "word_count" in DEFAULT_REGISTRY.names()
+    assert DEFAULT_REGISTRY.call("word_count", {"text": "red fox crosses quiet field."}) == (
+        '{"count": 5}'
+    )
+    assert DEFAULT_REGISTRY.call("word_count", {"text": "don't split hyphen-like words"}) == (
+        '{"count": 4}'
+    )
 
 
 def test_majority_vote_normalizes_equivalent_json():

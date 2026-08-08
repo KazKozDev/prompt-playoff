@@ -1,6 +1,7 @@
 import pytest
 from conftest import FakeProvider
 
+from prompt_selector.domain import Priorities
 from prompt_selector.evals import (
     BenchmarkExample,
     BenchmarkRunner,
@@ -100,9 +101,11 @@ async def test_multi_call_techniques_report_their_real_cost(
 @pytest.mark.asyncio
 async def test_comparison_ranks_on_measured_numbers(extraction_task, entity_schema, registry):
     provider = FakeProvider(responses=['{"people": ["Mara"], "places": ["Veyr"]}'])
+    task = extraction_task.model_copy(deep=True)
+    task.priorities = Priorities(quality=1, reliability=1, latency=0, token_cost=1)
     comparison, reports = await compare_techniques(
         dataset=dataset(entity_schema)[:1],
-        task=extraction_task,
+        task=task,
         techniques=[
             registry.technique("structured.schema-first"),
             registry.technique("structured.few-shot-repair"),
