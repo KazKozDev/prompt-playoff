@@ -218,13 +218,16 @@
     .technique-identity { margin-top:7px; color:var(--muted); font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
     .technique-description { margin:13px 0 0; color:#d1d5db; font-size:14px; line-height:1.55; }
     .technique-facts { margin-top:9px; color:var(--muted); font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
-    .technique-source { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 8px; margin-top:9px; color:var(--muted); font-size:12.5px; line-height:1.5; }
+    /* Sits in the gap between the compiled prompt and the blueprint disclosure.
+       Block, not flex: as a flex item the long title cannot share a line with the
+       id, so the chip was stranded on a line of its own. */
+    .technique-source { margin:16px 0 12px; color:var(--muted); font-size:12.5px; line-height:1.7; }
     .technique-source a { color:var(--text); text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-source a:hover { color:var(--accent); text-decoration-color:var(--accent); }
     .technique-source a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); }
-    .technique-source-id { flex:none; padding:1px 7px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .technique-source-id { display:inline-block; margin-right:8px; padding:1px 7px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
     .technique-source-credit { color:var(--muted); }
-    .technique-source-note { flex-basis:100%; color:var(--muted); }
+    .technique-source-note { display:block; color:var(--muted); }
     .technique-source.none { color:var(--muted); }
     .technique-source.none code { padding:1px 5px; border:1px solid var(--border); border-radius:5px; background:var(--panel2); color:#d1d5db; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
     .technique-example { margin-top:24px; }
@@ -244,8 +247,10 @@
     .compiled-example-stage pre { max-height:360px; margin:6px 0 0; padding:13px 14px; background:var(--panel2); color:var(--text); font-size:12.5px; line-height:1.6; }
     .compiled-example-role { display:block; margin-top:14px; color:var(--muted); font:700 10.5px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em; }
     .compiled-example-schema { margin-top:10px; color:var(--muted); font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
-    .technique-blueprint { margin-top:16px; border:0; border-radius:0; background:transparent; }
-    .technique-blueprint > summary { padding:5px 2px; color:var(--muted); font-size:12.5px; font-weight:600; text-transform:none; letter-spacing:0; }
+    /* Peer of .technique-prompt: two disclosures in one card, same treatment. */
+    .technique-blueprint { margin-top:0; border:0; border-top:0; border-bottom:1px solid var(--border); border-radius:0; background:transparent; }
+    .technique-blueprint > summary { padding:14px 2px; color:var(--text); font-size:13.5px; font-weight:700; text-transform:none; letter-spacing:0; }
+    .technique-blueprint[open] > summary { border-bottom:1px solid var(--border); }
     .technique-blueprint > summary::before { display:none; }
     .technique-blueprint > summary::marker { color:var(--muted); }
     .technique-blueprint > summary:hover { background:transparent; color:var(--text); }
@@ -706,8 +711,8 @@ function renderTechniqueCatalog() {
       <div class="technique-identity">${esc(technique.id)} · ${esc(technique.family)}</div>
       <p class="technique-description">${esc(technique.description)}</p>
       <div class="technique-facts">Best for: ${esc((technique.strong_tasks || []).join(', ') || 'general tasks')} · strategy: ${esc(strategy)} · minimum calls: ${esc(technique.min_calls)}</div>
-      ${techniqueSource(technique.source)}
       ${renderCompiledExample(example)}
+      ${techniqueSource(technique.source)}
       ${methodDisclosure(technique.id, true)}
       <a class="technique-index-return" href="#technique-index">Back to technique index</a>
     </article>`;
