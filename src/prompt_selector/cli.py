@@ -258,6 +258,7 @@ def recommend(
         bool, typer.Option("--json", help="Print machine-readable JSON.")
     ] = False,
 ) -> None:
+    """Rank techniques for a task described in plain language, with the reasons for each."""
     service = PromptSelectorService(Registry.load())
     result, normalization = asyncio.run(
         service.recommend(
@@ -303,6 +304,7 @@ def select_command(
     base_url: Annotated[str | None, typer.Option()] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Rank techniques from a task profile given as options, skipping description parsing."""
     model_profile = _model(
         provider, model, model_class, capabilities, local_only or provider == "ollama", base_url
     )
@@ -330,6 +332,7 @@ def select_command(
 def select_file(
     path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
 ) -> None:
+    """Rank techniques from a TaskProfile saved as JSON."""
     profile = TaskProfile.model_validate_json(path.read_text(encoding="utf-8"))
     _print_selection(PromptSelectorService(Registry.load()).select(profile))
 
@@ -360,6 +363,7 @@ def compile_command(
     base_url: Annotated[str | None, typer.Option()] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Build the prompt a technique implies, stage by stage, without calling a model."""
     schema = json.loads(schema_file.read_text(encoding="utf-8")) if schema_file else None
     profile = _task(
         task,
@@ -397,6 +401,7 @@ def run_command(
     base_url: Annotated[str | None, typer.Option()] = None,
     timeout_seconds: Annotated[float, typer.Option(min=1)] = 120,
 ) -> None:
+    """Compile and execute once against a live model, reporting calls, latency and tokens."""
     schema = json.loads(schema_file.read_text(encoding="utf-8")) if schema_file else None
     profile = _task(
         task,
@@ -444,6 +449,7 @@ def benchmark_command(
     record: Annotated[bool, typer.Option(help="Feed the result back into ranking.")] = True,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Measure one technique on a dataset: quality, reliability, stability, latency, tokens."""
     service = PromptSelectorService(Registry.load())
     profile = _task(
         task,
@@ -554,6 +560,7 @@ def compare_command(
     timeout_seconds: Annotated[float, typer.Option(min=1)] = 120,
     save: Annotated[bool, typer.Option()] = True,
 ) -> None:
+    """Measure several techniques on one dataset and rank them by your priorities."""
     service = PromptSelectorService(Registry.load())
     profile = _task(
         task,
@@ -980,6 +987,7 @@ def tracing_status() -> None:
 
 @app.command("list-techniques")
 def list_techniques() -> None:
+    """List every technique with its strategy, call count and evidence level."""
     table = Table(title="Technique registry")
     table.add_column("ID")
     table.add_column("Family")
@@ -1001,6 +1009,7 @@ def list_techniques() -> None:
 
 @app.command("list-datasets")
 def list_datasets() -> None:
+    """List benchmark datasets: how many examples, and how many carry gold answers."""
     service = PromptSelectorService(Registry.load())
     table = Table(title="Benchmark datasets")
     table.add_column("Name")
@@ -1033,6 +1042,7 @@ def capabilities_command() -> None:
 def validate_registry(
     strict: Annotated[bool, typer.Option(help="Fail on warnings too.")] = False,
 ) -> None:
+    """Check every technique file: placeholders, strategies, graders, render probe."""
     registry = Registry.load()
     issues = lint_registry(registry)
     console.print(
@@ -1128,6 +1138,7 @@ def _placeholder_help() -> set[str]:
 
 @app.command("show-technique")
 def show_technique(technique_id: Annotated[str, typer.Argument()]) -> None:
+    """Print one technique's full specification as YAML."""
     spec = Registry.load().technique(technique_id)
     console.print(
         Syntax(
@@ -1143,6 +1154,7 @@ def serve(
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
     reload: Annotated[bool, typer.Option()] = False,
 ) -> None:
+    """Start the HTTP API and the web interface."""
     try:
         import fastapi  # noqa: F401
         import multipart  # noqa: F401
