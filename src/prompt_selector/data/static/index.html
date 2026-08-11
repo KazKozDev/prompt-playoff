@@ -165,7 +165,9 @@
     .tab-panel[hidden] { display:none; }
     .settings-intro { margin:6px 0 16px; max-width:680px; color:#d1d5db; font-size:13.5px; line-height:1.55; }
     .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start; }
-    .settings-card { min-width:0; padding:15px; border:1px solid var(--border); border-top:3px solid var(--accent); border-radius:10px; background:var(--panel2); }
+    /* 12px horizontal is what every inner box uses; 15px put this card's text
+       three pixels to the right of the same text on the Logs tab. */
+    .settings-card { min-width:0; padding:14px 12px; border:1px solid var(--border); border-top:3px solid var(--accent); border-radius:10px; background:var(--panel2); }
     .settings-role { color:var(--accent); font:700 10.5px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em; text-transform:uppercase; }
     /* 700 is the app's heading weight; 600 belongs to the uppercase section headers. */
     .settings-card h3 { margin:5px 0 5px; color:var(--text); font-size:17px; font-weight:700; text-transform:none; letter-spacing:0; }
