@@ -897,7 +897,13 @@ def import_traces_command(
 
 @app.command("import-hf")
 def import_hf_command(
-    preset: Annotated[str, typer.Argument(help="Dataset preset: multiconer-en, few-nerd.")],
+    preset: Annotated[
+        str,
+        typer.Argument(
+            help="Dataset preset: multiconer-en, few-nerd, gsm8k, mbpp. "
+            "Run list-hf-presets for their shape and licence."
+        ),
+    ],
     output: Annotated[Path, typer.Option(help="JSONL dataset to write.")],
     limit: Annotated[int, typer.Option(min=2, max=5000)] = 200,
     empty_ratio: Annotated[
@@ -905,7 +911,7 @@ def import_hf_command(
     ] = 0.1,
     scan: Annotated[int, typer.Option(min=10, help="Rows to read before sampling.")] = 4000,
 ) -> None:
-    """Convert a Hugging Face NER corpus into a benchmark dataset."""
+    """Convert a Hugging Face corpus — entities, questions or code — into a benchmark dataset."""
     from prompt_selector.integrations.huggingface import (
         CODE_PRESETS,
         PRESETS,

@@ -297,11 +297,15 @@ prompt-selector list-hf-presets
 prompt-selector import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
 ```
 
-Converts Hugging Face NER corpora — [MultiCoNER v2](https://hf.co/datasets/MultiCoNER/multiconer_v2)
-(SemEval-2023, complex/ambiguous entities) and [Few-NERD](https://hf.co/datasets/DFKI-SLT/few-nerd) —
-into benchmark examples, keeping gold values verbatim in the input and a
-deliberate slice of empty cases so precision errors still show. Licence and
-citation are printed on every import. Needs `pip install -e '.[huggingface]'`.
+Four presets convert Hugging Face corpora into benchmark examples:
+[MultiCoNER v2](https://hf.co/datasets/MultiCoNER/multiconer_v2) (SemEval-2023,
+complex/ambiguous entities) and [Few-NERD](https://hf.co/datasets/DFKI-SLT/few-nerd)
+for extraction, [GSM8K](https://hf.co/datasets/openai/gsm8k) for reasoning graded
+on the number, and [MBPP](https://hf.co/datasets/google-research-datasets/mbpp)
+for code graded by running its own tests. The NER conversions keep gold values
+verbatim in the input and a deliberate slice of empty cases so precision errors
+still show. Licence and citation are printed on every import. Needs
+`pip install -e '.[huggingface]'`.
 
 Imported rows arrive with `expected: null` and tagged `unreviewed` — a trace has
 no gold answer, and pretending otherwise would benchmark a model against its own

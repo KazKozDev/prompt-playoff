@@ -199,11 +199,11 @@ into an existing observability stack does not require either backend.
 
 ---
 
-## 4. Hugging Face — datasets from public NER corpora
+## 4. Hugging Face — datasets from public corpora
 
 The shipped datasets are small and synthetic. `import-hf` converts public
-token-classification corpora into benchmark examples, so the optimizer can be
-measured on data somebody else built:
+corpora into benchmark examples, so the optimizer can be measured on data
+somebody else built:
 
 ```bash
 prompt-selector list-hf-presets
@@ -211,13 +211,21 @@ prompt-selector import-hf multiconer-en --output datasets/multiconer.jsonl --lim
 prompt-selector benchmark --model qwen2.5:7b --dataset-file datasets/multiconer.jsonl
 ```
 
-| Preset | Corpus | Fields | Licence |
+| Preset | Corpus | Shape | Licence |
 |---|---|---|---|
 | `multiconer-en` | [MultiCoNER v2](https://hf.co/datasets/MultiCoNER/multiconer_v2), SemEval-2023 Task 2 | people, places | CC-BY-4.0 |
 | `few-nerd` | [Few-NERD](https://hf.co/datasets/DFKI-SLT/few-nerd) | people, places, organizations | CC-BY-SA-4.0 |
+| `gsm8k` | [GSM8K](https://hf.co/datasets/openai/gsm8k) | question → number, graded numerically | MIT |
+| `mbpp` | [MBPP](https://hf.co/datasets/google-research-datasets/mbpp), sanitized | task → code, graded by running its tests | CC-BY-4.0 |
 
 MultiCoNER is the closest public analogue of `entity-extraction-hard`: its whole
 premise is entities that are syntactically ambiguous.
+
+The other two exist because every shipped dataset is a reading task, and no
+reading task can show a reasoning technique working. GSM8K is where
+chain-of-thought was first shown to matter; MBPP is graded by executing the
+task's own asserts, so the score is the share of tests that pass rather than a
+text comparison.
 
 ### How the conversion keeps the numbers honest
 
