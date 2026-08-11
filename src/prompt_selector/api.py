@@ -128,9 +128,9 @@ def help_page() -> str:
     return files("prompt_selector").joinpath("data/static/help.html").read_text(encoding="utf-8")
 
 
-@app.get("/help/en", response_class=HTMLResponse, include_in_schema=False)
-def help_page_en() -> str:
-    return files("prompt_selector").joinpath("data/static/help.en.html").read_text(encoding="utf-8")
+@app.get("/help/ru", response_class=HTMLResponse, include_in_schema=False)
+def help_page_ru() -> str:
+    return files("prompt_selector").joinpath("data/static/help.ru.html").read_text(encoding="utf-8")
 
 
 @app.get("/benchmarks", response_class=HTMLResponse, include_in_schema=False)
@@ -140,11 +140,11 @@ def benchmarks_page() -> str:
     )
 
 
-@app.get("/benchmarks/en", response_class=HTMLResponse, include_in_schema=False)
-def benchmarks_page_en() -> str:
+@app.get("/benchmarks/ru", response_class=HTMLResponse, include_in_schema=False)
+def benchmarks_page_ru() -> str:
     return (
         files("prompt_selector")
-        .joinpath("data/static/benchmarks.en.html")
+        .joinpath("data/static/benchmarks.ru.html")
         .read_text(encoding="utf-8")
     )
 

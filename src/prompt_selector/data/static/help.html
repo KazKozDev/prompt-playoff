@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prompt Selector — справка</title>
+  <title>Prompt Selector — help</title>
   <style>
     :root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --panel2:#10131a; --border:#2a2f3a; --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344; --good:#4ade80; --bad:#f87171; }
     * { box-sizing:border-box; }
@@ -62,149 +62,149 @@
 <main>
   <div class="topbar">
     <div>
-      <h1>Справка</h1>
-      <p class="lede">Что тут происходит и как читать цифры.</p>
+      <h1>Help</h1>
+      <p class="lede">What happens here, and how to read the numbers.</p>
     </div>
-    <a href="/help/en">English</a>
+    <a href="/help/ru">Русский</a>
   </div>
 
-  <h2>Шпаргалка: что куда вписывать</h2>
+  <h2>Cheat sheet: what goes where</h2>
   <table class="cheat">
-    <tr><th>Поле</th><th>Что ставить</th><th>Зачем</th></tr>
-    <tr><td><b>Task and constraints</b></td><td>Опиши задачу своими словами, по-английски</td><td>По ключевым словам определяется тип задачи. По-русски распознаётся хуже.</td></tr>
-    <tr><td><b>Model</b></td><td><code>qwen2.5:7b</code></td><td>Точное имя модели в Ollama. Быстрая, не думающая.</td></tr>
-    <tr><td><b>Model class</b></td><td><code>medium</code></td><td>Размер модели. 3B → small, 7–13B → medium, больше → large. Часть техник не годится для мелких.</td></tr>
-    <tr><td><b>Provider</b></td><td><code>ollama</code></td><td>Откуда брать модель. Второй вариант — свой OpenAI-совместимый сервер.</td></tr>
-    <tr><td><b>Structured output</b></td><td>✅</td><td>Модель умеет выдавать JSON по схеме принудительно. Для извлечения обязательно.</td></tr>
-    <tr><td><b>System messages</b></td><td>✅</td><td>Понимает системную инструкцию. Есть почти у всех.</td></tr>
-    <tr><td><b>Tool calling</b></td><td>❌</td><td>Только для агентских задач с инструментами.</td></tr>
-    <tr><td><b>Reasoning control</b></td><td>❌</td><td>Только если модель «думающая» и хочешь ускорить её, отключив размышления.</td></tr>
-    <tr><td><b>Dataset</b></td><td><code>multiconer-en</code></td><td>На чём проверять. Бери от 100 примеров, иначе цифры ничего не значат.</td></tr>
-    <tr><td><b>Repeats</b></td><td><code>3</code></td><td>Сколько раз прогнать каждый пример. При 1 стабильность показывает фальшивую единицу.</td></tr>
-    <tr><td><b>Optimizer rounds</b></td><td><code>2</code></td><td>Работает только для кнопки Optimize. На Benchmark и Compare не влияет.</td></tr>
-    <tr><td><b>Optimizer search</b></td><td><code>DSPy MIPROv2</code></td><td>Тоже только для Optimize. Из четырёх вариантов только он давал прирост.</td></tr>
+    <tr><th>Field</th><th>Put this</th><th>Why</th></tr>
+    <tr><td><b>Task and constraints</b></td><td>Describe the task in your own words</td><td>The task type is detected from keywords, so plain English works best.</td></tr>
+    <tr><td><b>Model</b></td><td><code>qwen2.5:7b</code></td><td>The exact model name in Ollama. Fast, not a thinking model.</td></tr>
+    <tr><td><b>Model class</b></td><td><code>medium</code></td><td>Rough size. 3B → small, 7–13B → medium, bigger → large. Some techniques are ruled out for small ones.</td></tr>
+    <tr><td><b>Provider</b></td><td><code>ollama</code></td><td>Where the model runs. The other option is your own OpenAI-compatible endpoint.</td></tr>
+    <tr><td><b>Structured output</b></td><td>✅</td><td>The model can be forced to emit JSON matching a schema. Required for extraction.</td></tr>
+    <tr><td><b>System messages</b></td><td>✅</td><td>It understands a system instruction. Almost everything does.</td></tr>
+    <tr><td><b>Tool calling</b></td><td>❌</td><td>Only for agent tasks that call tools.</td></tr>
+    <tr><td><b>Reasoning control</b></td><td>❌</td><td>Only if the model is a thinking one and you want to speed it up by turning that off.</td></tr>
+    <tr><td><b>Dataset</b></td><td><code>multiconer-en</code></td><td>What to measure against. Use 100+ examples or the numbers mean nothing.</td></tr>
+    <tr><td><b>Repeats</b></td><td><code>3</code></td><td>How many times each example runs. At 1, stability reports a fake 1.000.</td></tr>
+    <tr><td><b>Optimizer rounds</b></td><td><code>2</code></td><td>Only used by the Optimize button. Ignored by Benchmark and Compare.</td></tr>
+    <tr><td><b>Optimizer search</b></td><td><code>DSPy MIPROv2</code></td><td>Also Optimize only. Of the four, this is the one that actually improved anything.</td></tr>
   </table>
-  <p><b>Порядок кнопок:</b> Select techniques → Use this technique → Benchmark this prompt → Compare all recommended. Optimize — в последнюю очередь, если захочешь выжимать дальше.</p>
+  <p><b>Button order:</b> Select techniques → Use this technique → Benchmark this prompt → Compare all recommended. Optimize last, if you want to push further.</p>
 
-  <h2>Что это делает</h2>
-  <p>Обычно промпт пишут наугад и правят, пока не покажется, что стало лучше. Проверить это нечем.</p>
-  <p>Здесь по-другому: инструмент подбирает способ составить промпт, показывает готовый текст и прогоняет его на настоящей модели по десяткам примеров. В конце ты видишь цифры вместо ощущений.</p>
+  <h2>What this does</h2>
+  <p>The usual way to write a prompt is to guess, then keep changing it until it feels better. There is nothing to check that feeling against.</p>
+  <p>This works differently: the tool picks a way to build the prompt, shows you the finished text, and runs it on a real model across dozens of examples. At the end you get numbers instead of impressions.</p>
 
-  <h2>Четыре кнопки, по порядку</h2>
+  <h2>Four buttons, in order</h2>
 
   <div class="step">
     <b>1. Select techniques</b>
-    <p>Описываешь задачу своими словами. Получаешь три способа её решить, с объяснением, почему именно эти.</p>
+    <p>Describe your task in your own words. You get three ways to solve it, with the reasoning for each.</p>
   </div>
   <div class="step">
     <b>2. Use this technique</b>
-    <p>Выбираешь один. Показывает готовый промпт — ровно тот текст, который уйдёт в модель.</p>
+    <p>Pick one. Shows the finished prompt — the exact text that will be sent to the model.</p>
   </div>
   <div class="step">
     <b>3. Benchmark this prompt</b>
-    <p>Проверяет этот промпт на живой модели по всем примерам датасета. Это главная кнопка.</p>
+    <p>Runs that prompt on a live model across every example in the dataset. This is the button that matters.</p>
   </div>
   <div class="step">
     <b>4. Compare all recommended</b>
-    <p>То же самое, но сразу для всех трёх способов, чтобы выбрать лучший.</p>
+    <p>The same thing for all three techniques at once, so you can pick the best.</p>
   </div>
 
-  <h2>Две главные цифры</h2>
+  <h2>The two numbers that matter</h2>
 
-  <span class="num"><code>quality</code> — насколько ответы правильные</span>
+  <span class="num"><code>quality</code> — how correct the answers are</span>
   <div class="scale">
-    <div class="s-bad">ниже 0.5 — плохо</div>
-    <div class="s-mid">0.5–0.8 — терпимо</div>
-    <div class="s-good">выше 0.8 — хорошо</div>
+    <div class="s-bad">below 0.5 — bad</div>
+    <div class="s-mid">0.5–0.8 — passable</div>
+    <div class="s-good">above 0.8 — good</div>
   </div>
-  <p>Считается с частичным зачётом. Если из четырёх нужных вещей модель нашла три — это примерно 0.85, а не ноль. Поэтому 0.78 значит «в основном справляется, но регулярно теряет по одной штуке».</p>
+  <p>It gives partial credit. If the model found three of the four things it should have, that is roughly 0.85, not zero. So 0.78 means "mostly copes, but regularly drops one".</p>
 
-  <span class="num"><code>reliability</code> — насколько ответ правильно оформлен</span>
-  <p>Это про форму, а не про смысл. Ответ пришёл как надо: правильный JSON, все нужные поля, ничего лишнего вокруг.</p>
+  <span class="num"><code>reliability</code> — whether the answer is shaped correctly</span>
+  <p>This is about form, not meaning. The answer came back the way it should: valid JSON, all required fields, nothing extra around it.</p>
 
   <div class="box warn">
-    <p><b>Не путай эти две.</b> Бывает reliability 1.00 при quality 0.4. Это значит: модель аккуратно и в правильном формате выдаёт неправильные ответы.</p>
+    <p><b>Do not confuse the two.</b> You will see reliability 1.00 next to quality 0.4. That means the model is neatly and correctly formatting the wrong answers.</p>
   </div>
 
-  <h2>Остальные цифры</h2>
+  <h2>The other numbers</h2>
   <table>
-    <tr><td><code>mean latency</code></td><td>Сколько секунд уходит на один пример.</td></tr>
-    <tr><td><code>mean tokens</code></td><td>Сколько токенов тратится на один пример. Это прямо деньги, если модель платная.</td></tr>
-    <tr><td><code>mean calls</code></td><td>Сколько раз дёргается модель на один пример. Больше вызовов — дороже и медленнее.</td></tr>
-    <tr><td><code>failures</code></td><td>Сколько примеров вообще не отработало. Должно быть 0.</td></tr>
-    <tr><td><code>stability</code></td><td>Даёт ли модель один и тот же ответ на один и тот же вопрос.</td></tr>
+    <tr><td><code>mean latency</code></td><td>Seconds spent on one example.</td></tr>
+    <tr><td><code>mean tokens</code></td><td>Tokens spent on one example. That is money, if the model is paid.</td></tr>
+    <tr><td><code>mean calls</code></td><td>How many times the model is called per example. More calls means slower and pricier.</td></tr>
+    <tr><td><code>failures</code></td><td>Examples that did not run at all. Should be 0.</td></tr>
+    <tr><td><code>stability</code></td><td>Whether the model gives the same answer to the same question.</td></tr>
   </table>
 
-  <h2>Три вещи, на которых легко обжечься</h2>
+  <h2>Three ways to get burned</h2>
 
   <div class="box warn">
-    <p><b>1. Поставь Repeats = 3.</b> При Repeats = 1 стабильность всегда показывает 1.000. Это не значит «стабильно» — это значит «никто не проверял». Модель может выдавать разное на один и тот же вход, и ты этого не увидишь.</p>
+    <p><b>1. Set Repeats to 3.</b> At Repeats = 1 stability always reads 1.000. That does not mean "stable", it means "nobody checked". The model can answer differently every time and you would never see it.</p>
   </div>
 
   <div class="box warn">
-    <p><b>2. Мало примеров — цифрам верить нельзя.</b> На 6 примерах разница в 5% ничего не значит. Бери датасет от сотни примеров, если собираешься что-то решать по результату.</p>
+    <p><b>2. Few examples, worthless numbers.</b> On 6 examples a 5% difference means nothing. Use a dataset of a hundred or more if you intend to decide anything from the result.</p>
   </div>
 
   <div class="box warn">
-    <p><b>3. Цифры привязаны к модели.</b> Померил на одной модели — для другой это снова догадка. Инструмент честно пишет <span style="color:var(--good)">measured</span>, если мерил, и <span style="color:var(--muted)">prior only</span>, если только предполагает.</p>
+    <p><b>3. Numbers belong to one model.</b> Measure on one model and it is a guess again for another. The tool says <span style="color:var(--good)">measured</span> when it measured, and <span style="color:var(--muted)">prior only</span> when it is guessing.</p>
   </div>
 
-  <h2>Что делать по результату</h2>
+  <h2>What to do about it</h2>
   <table>
-    <tr><th>Что видишь</th><th>Что делать</th></tr>
-    <tr><td>quality низкое, reliability высокое</td><td>Форма в порядке, смысл нет. Смотри блок <b>Weakest examples</b> внизу — там три худших примера. Обычно за низким качеством стоит одна повторяющаяся ошибка.</td></tr>
-    <tr><td>reliability низкое</td><td>Модель болтает лишнее вокруг ответа. Поставь галочку <b>Structured output</b> — формат начнёт применяться движком, а не просьбой.</td></tr>
-    <tr><td>failures больше нуля</td><td>Модель не успевает отвечать. Возьми модель побыстрее — «думающие» модели тратят по 40 секунд на пример.</td></tr>
-    <tr><td>Всё хорошо, но дорого</td><td>Сравни с более простым способом. Часто три вызова модели не окупаются качеством.</td></tr>
-    <tr><td>Цифры скачут между запусками</td><td>Мало примеров или Repeats = 1. Увеличь и то и другое.</td></tr>
+    <tr><th>What you see</th><th>What to do</th></tr>
+    <tr><td>Low quality, high reliability</td><td>The shape is fine, the meaning is not. Look at <b>Weakest examples</b> at the bottom — the three worst cases. Low quality usually hides one repeated mistake.</td></tr>
+    <tr><td>Low reliability</td><td>The model is padding the answer with chatter. Tick <b>Structured output</b> — then the format is enforced by the runtime instead of politely requested.</td></tr>
+    <tr><td>failures above zero</td><td>The model is too slow to answer in time. Use a faster one — "thinking" models can spend 40 seconds per example.</td></tr>
+    <tr><td>Good but expensive</td><td>Compare against a simpler technique. Three model calls often do not pay for themselves in quality.</td></tr>
+    <tr><td>Numbers jump between runs</td><td>Too few examples, or Repeats = 1. Raise both.</td></tr>
   </table>
 
-  <h2>Кнопка Optimize</h2>
-  <p>Пробует переписать промпт сама и проверяет, стало ли лучше.</p>
-  <p>Смотри только на таблицу <b>Held-out validation</b> — это проверка на примерах, которых оптимизатор не видел. Если там нули или минус, улучшения не было, что бы ни показывала таблица выше.</p>
+  <h2>The Optimize button</h2>
+  <p>It tries rewriting the prompt itself and checks whether that helped.</p>
+  <p>Look only at the <b>Held-out validation</b> table — that is the check on examples the optimizer never saw. If it shows zeros or a minus, nothing improved, whatever the table above it says.</p>
   <div class="box">
-    <p><b>Так бывает часто.</b> Оптимизатор легко подгоняется под те примеры, на которых учился, и на новых работает не лучше. Это нормально, просто не верь цифрам «сверху».</p>
+    <p><b>This happens often.</b> The optimizer easily fits itself to the examples it trained on and does no better on new ones. That is normal — just do not trust the numbers from the upper table.</p>
   </div>
 
-  <h2>Свои данные</h2>
-  <p>Встроенные примеры — чтобы разобраться. Выводы делай на своих. Файл — по одной задаче на строку:</p>
-  <pre><code>{"id": "1", "input": "Мара вошла в Вейр с Капитаном Орином.",
- "expected": {"people": ["Мара", "Капитан Орин"], "places": ["Вейр"]}}</code></pre>
-  <p>Обязательны только <code>id</code> и <code>input</code>. Остальное подберётся само.</p>
+  <h2>Your own data</h2>
+  <p>The bundled examples are for finding your way around. Draw conclusions from your own. One task per line:</p>
+  <pre><code>{"id": "1", "input": "Mara entered Veyr with Captain Orin.",
+ "expected": {"people": ["Mara", "Captain Orin"], "places": ["Veyr"]}}</code></pre>
+  <p>Only <code>id</code> and <code>input</code> are required. The rest is worked out for you.</p>
   <div class="box">
-    <p><b>Одно правило.</b> Правильный ответ должен встречаться в тексте <em>слово в слово</em>. Если в тексте «Капитаном Орином», а в ответе «Капитан Орин» — модель получит незачёт за то, что не угадала твою форму записи.</p>
+    <p><b>One rule.</b> The correct answer has to appear in the text <em>word for word</em>. If the text says "Captain Orin" and your answer says "Orin, captain", the model is marked wrong for not guessing your way of writing it.</p>
   </div>
 
   <details>
-    <summary>Подробности — если нужно копать глубже</summary>
+    <summary>Details — if you need to dig deeper</summary>
 
-    <h3>Откуда берётся quality</h3>
-    <p>Это метрика <code>field_f1</code>: считает и то, что модель пропустила, и то, что она придумала лишнего. В таблице <b>Graders</b> она помечена как headline. Рядом лежит <code>exact_match</code> — совпало ли всё целиком, без поблажек. Он почти всегда сильно ниже, это нормально.</p>
-    <p>Проверки формата там же: <code>json_validity</code> (распарсился ли ответ), <code>json_schema</code> (совпал ли со схемой полностью), <code>no_prose</code> (нет ли болтовни вокруг). Если <code>json_validity</code> = 1.00, а <code>field_f1</code> низкий — проблема в понимании задачи, а не в формате.</p>
+    <h3>Where quality comes from</h3>
+    <p>It is the <code>field_f1</code> metric: it counts both what the model missed and what it invented. In the <b>Graders</b> table it is marked headline. Next to it sits <code>exact_match</code> — did everything match outright, with no allowances. It is almost always far lower, and that is expected.</p>
+    <p>The format checks live there too: <code>json_validity</code> (did it parse), <code>json_schema</code> (did it match the schema fully), <code>no_prose</code> (no chatter around it). If <code>json_validity</code> is 1.00 while <code>field_f1</code> is low, the problem is comprehension, not format.</p>
 
-    <h3>Откуда берётся reliability</h3>
-    <p>Это доля ответов с правильным форматом, умноженная на стабильность. Отсюда и подвох с Repeats: при одном прогоне стабильность равна единице по определению, и reliability выглядит завышенной.</p>
+    <h3>Where reliability comes from</h3>
+    <p>It is the share of correctly formatted answers multiplied by stability. Hence the catch with Repeats: on a single run stability is 1 by definition, so reliability looks inflated.</p>
 
     <h3>p95 latency</h3>
-    <p>Время, в которое укладываются 95% примеров. Если оно намного выше среднего — бывают редкие очень долгие ответы. Для интерактивных сценариев это важнее среднего.</p>
+    <p>The time 95% of examples fit inside. If it is far above the mean, there are occasional very slow answers. For interactive use that matters more than the mean.</p>
 
-    <h3>Measured против Declared</h3>
-    <p>Declared — оценка из конфига техники, поставленная до всяких замеров. Measured — что получилось на самом деле. Расхождение — это польза, а не ошибка: после замера конфиг перестаёт учитываться.</p>
+    <h3>Measured versus Declared</h3>
+    <p>Declared is the estimate written into the technique's config before anything was measured. Measured is what actually happened. A gap between them is the point, not a mistake — once measured, the config stops being used.</p>
 
-    <h3>Сравнение техник</h3>
-    <p>Колонка <b>Weighted</b> — сводная оценка с твоими весами. Но если у стоимости токенов ненулевой вес, техника может выиграть за счёт дешевизны, будучи хуже по сути. Сверяйся с колонкой Quality.</p>
-    <p>Колонки latency и tokens в сравнении относительные — считаются от лучшей техники в этом же прогоне, и с другими прогонами не сопоставимы.</p>
+    <h3>Comparing techniques</h3>
+    <p>The <b>Weighted</b> column is the combined score under your weights. But if token cost carries any weight, a technique can win by being cheap while being worse at the job. Check the Quality column too.</p>
+    <p>The latency and token columns in a comparison are relative — computed against the best technique in that same run, so they do not transfer to other runs.</p>
 
-    <h3>Pareto front в оптимизации</h3>
-    <p>Список вариантов, которые никто не превзошёл сразу по всем признакам. Среди них иногда есть вариант и точнее, и дешевле того, что объявлен победителем.</p>
+    <h3>Pareto front in optimization</h3>
+    <p>The variants that nothing beat on every measure at once. One of them is sometimes both more accurate and cheaper than the declared winner.</p>
 
-    <h3>Стадии промпта</h3>
-    <p>У некоторых техник промпт разбит на несколько стадий — это несколько вызовов модели подряд. Надписи вида <code>{previous}</code> — места, куда во время работы подставится результат предыдущей стадии.</p>
+    <h3>Prompt stages</h3>
+    <p>Some techniques split the prompt into several stages, which means several model calls in a row. Labels like <code>{previous}</code> mark where the previous stage's output gets inserted at run time.</p>
 
-    <h3>Пустые примеры в датасете</h3>
-    <p>Оставляй в данных случаи, где правильный ответ — пустой. Без них промпт, который угадывает наугад, будет выглядеть хорошо: ошибкам не на чем проявиться.</p>
+    <h3>Empty examples in a dataset</h3>
+    <p>Keep cases where the correct answer is empty. Without them, a prompt that guesses looks good, because there is nothing for its mistakes to show up on.</p>
 
-    <p style="color:var(--muted);margin-top:24px">Ещё подробнее — в <code>README.md</code> и папке <code>docs/</code>.</p>
+    <p style="color:var(--muted);margin-top:24px">More depth in <code>README.md</code> and the <code>docs/</code> folder.</p>
   </details>
 </main>
 </body>

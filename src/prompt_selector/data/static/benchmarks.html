@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prompt Selector — бенчмарки</title>
+  <title>Prompt Selector — benchmarks</title>
   <style>
     :root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --panel2:#10131a; --border:#2a2f3a; --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344; --good:#4ade80; --bad:#f87171; }
     * { box-sizing:border-box; }
@@ -62,193 +62,193 @@
 <main>
   <div class="topbar">
     <div>
-      <h1>Бенчмарки</h1>
-      <p class="lede">Откуда берутся цифры: какие данные, какие проверки, какие инструменты — и когда цифрам верить нельзя.</p>
+      <h1>Benchmarks</h1>
+      <p class="lede">Where the numbers come from: the data, the checks, the tools — and when not to believe the result.</p>
     </div>
-    <a href="/benchmarks/en">English</a>
+    <a href="/benchmarks/ru">Русский</a>
   </div>
 
-  <h2>Что такое бенчмарк</h2>
-  <p>Бенчмарк — это экзамен для промпта.</p>
-  <p>Берём пачку задач, к каждой заранее известен правильный ответ. Прогоняем твой промпт на живой модели по всем задачам подряд. Сравниваем то, что ответила модель, с правильным ответом, и считаем долю попаданий. В конце получается число.</p>
-  <p>Смысл в том, чтобы вместо «мне кажется, так промпт работает лучше» иметь «на двухстах примерах стало 0.83 против 0.71».</p>
+  <h2>What a benchmark is</h2>
+  <p>A benchmark is an exam for a prompt.</p>
+  <p>Take a pile of tasks with known correct answers. Run your prompt on a live model across all of them. Compare what the model said against the correct answer, and count the hits. Out comes a number.</p>
+  <p>The point is to replace "I think the prompt is better this way" with "0.83 against 0.71 on two hundred examples".</p>
 
-  <p>Экзамен состоит из трёх частей:</p>
+  <p>The exam has three parts:</p>
   <div class="step">
-    <b>Датасет</b>
-    <p>Сами задачи и эталонные ответы к ним. Одна задача — одна строка файла.</p>
+    <b>The dataset</b>
+    <p>The tasks themselves and their correct answers. One task per line of a file.</p>
   </div>
   <div class="step">
-    <b>Проверяльщики (graders)</b>
-    <p>Небольшие куски кода, которые сравнивают ответ модели с эталоном и ставят оценку от 0 до 1. У каждой задачи свои — арифметику и перевод нельзя проверять одинаково.</p>
+    <b>The graders</b>
+    <p>Small pieces of code that compare the model's answer to the correct one and score it from 0 to 1. Each task type has its own — arithmetic and translation cannot be checked the same way.</p>
   </div>
   <div class="step">
-    <b>Прогон</b>
-    <p>На какой модели, сколько раз, с какими настройками. От этого зависит, повторяемая получилась цифра или случайная.</p>
+    <b>The run</b>
+    <p>Which model, how many repeats, which settings. This is what decides whether the number is repeatable or accidental.</p>
   </div>
 
-  <h2>Какие датасеты здесь есть</h2>
-  <p>В комплекте одиннадцать наборов. Четыре взяты из публичных научных корпусов, остальные собраны здесь: часть написана руками, часть сгенерирована по фиксированным правилам с зафиксированным зерном случайности (то есть пересобирается байт в байт).</p>
+  <h2>The datasets that ship here</h2>
+  <p>Eleven sets are included. Four come from public research corpora; the rest were built here — partly hand-written, partly generated from fixed rules with a fixed random seed, so they rebuild byte for byte.</p>
 
   <div class="wrap">
   <table class="nums">
-    <tr><th>Датасет</th><th>Примеров</th><th>Что проверяет</th><th>Откуда</th></tr>
-    <tr><td><code>entity-extraction</code></td><td>6</td><td>Вытащить людей и места из фразы в JSON.</td><td>Демо, чтобы пощёлкать кнопки</td></tr>
-    <tr><td><code>entity-extraction-hard</code></td><td>200</td><td>То же, но с ловушками: титулы, отрицания, страна как прилагательное, повторы, случаи с пустым ответом.</td><td>40 руками, 160 сгенерировано</td></tr>
-    <tr><td><code>multiconer-en</code></td><td>200</td><td>Люди и места в предложениях, специально подобранных как неоднозначные.</td><td><span class="tag pub">публичный</span> MultiCoNER v2</td></tr>
-    <tr><td><code>few-nerd</code></td><td>200</td><td>Люди, места, организации.</td><td><span class="tag pub">публичный</span> Few-NERD</td></tr>
-    <tr><td><code>gsm8k</code></td><td>120</td><td>Школьные текстовые задачи по арифметике в несколько действий.</td><td><span class="tag pub">публичный</span> GSM8K</td></tr>
-    <tr><td><code>mbpp</code></td><td>80</td><td>Написать функцию на Python по описанию.</td><td><span class="tag pub">публичный</span> MBPP</td></tr>
-    <tr><td><code>support-classification</code></td><td>150</td><td>Разложить обращения в поддержку по четырём категориям. 54 примера намеренно пограничные.</td><td>Сгенерировано</td></tr>
-    <tr><td><code>summarization</code></td><td>120</td><td>Сжать документ до 170 символов, не потеряв ни одного имени, числа и даты.</td><td>Сгенерировано</td></tr>
-    <tr><td><code>translation</code></td><td>120</td><td>Перевести с английского на испанский, обязательно применив заданный глоссарий.</td><td>Сгенерировано</td></tr>
-    <tr><td><code>grounded-qa</code></td><td>120</td><td>Ответить строго по приложенным источникам. В 30 примерах ответа в источниках нет — надо честно сказать <code>INSUFFICIENT_EVIDENCE</code>, а не додумать.</td><td>Сгенерировано</td></tr>
-    <tr><td><code>agents</code></td><td>120</td><td>Задачи, где нужно вызвать инструмент: калькулятор или счётчик слов.</td><td>Сгенерировано</td></tr>
+    <tr><th>Dataset</th><th>Examples</th><th>What it checks</th><th>Where from</th></tr>
+    <tr><td><code>entity-extraction</code></td><td>6</td><td>Pull people and places out of a sentence into JSON.</td><td>A demo for clicking around</td></tr>
+    <tr><td><code>entity-extraction-hard</code></td><td>200</td><td>The same, with traps: titles, negation, countries used as adjectives, duplicates, cases where the answer is empty.</td><td>40 by hand, 160 generated</td></tr>
+    <tr><td><code>multiconer-en</code></td><td>200</td><td>People and places in sentences picked for being ambiguous.</td><td><span class="tag pub">public</span> MultiCoNER v2</td></tr>
+    <tr><td><code>few-nerd</code></td><td>200</td><td>People, places, organizations.</td><td><span class="tag pub">public</span> Few-NERD</td></tr>
+    <tr><td><code>gsm8k</code></td><td>120</td><td>Grade-school word problems needing several arithmetic steps.</td><td><span class="tag pub">public</span> GSM8K</td></tr>
+    <tr><td><code>mbpp</code></td><td>80</td><td>Write a Python function from a description.</td><td><span class="tag pub">public</span> MBPP</td></tr>
+    <tr><td><code>support-classification</code></td><td>150</td><td>Sort support tickets into four categories. 54 examples are deliberately borderline.</td><td>Generated</td></tr>
+    <tr><td><code>summarization</code></td><td>120</td><td>Compress a document to 170 characters without losing a single name, number or date.</td><td>Generated</td></tr>
+    <tr><td><code>translation</code></td><td>120</td><td>Translate English to Spanish while applying a binding glossary.</td><td>Generated</td></tr>
+    <tr><td><code>grounded-qa</code></td><td>120</td><td>Answer strictly from the attached sources. In 30 examples the answer is not there — the model must say <code>INSUFFICIENT_EVIDENCE</code> instead of inventing one.</td><td>Generated</td></tr>
+    <tr><td><code>agents</code></td><td>120</td><td>Tasks that require calling a tool: a calculator or a word counter.</td><td>Generated</td></tr>
   </table>
   </div>
 
   <div class="box warn">
-    <p><b>Не бери <code>entity-extraction</code> для выводов.</b> Шесть примеров, и на них базовый промпт уже выдаёт 1.0 — расти некуда, любая техника выглядит одинаково хорошо. Это набор «посмотреть, как работает интерфейс». Реальный запас для улучшений есть у <code>entity-extraction-hard</code>, <code>multiconer-en</code> и <code>few-nerd</code>.</p>
+    <p><b>Do not draw conclusions from <code>entity-extraction</code>.</b> Six examples, and the baseline prompt already scores 1.0 on them — there is no headroom, so every technique looks equally good. It exists to show you the interface. The sets with real headroom are <code>entity-extraction-hard</code>, <code>multiconer-en</code> and <code>few-nerd</code>.</p>
   </div>
 
-  <h2>Что за публичные корпуса</h2>
-  <p>Публичный корпус — это набор задач, который собрала и разметила чужая исследовательская группа и выложила открыто. Ценность в том, что данные никто здесь не подгонял под удобный результат.</p>
+  <h2>What those public corpora are</h2>
+  <p>A public corpus is a set of tasks that somebody else's research group collected and annotated, then released openly. The value is that nobody here tuned the data to produce a convenient result.</p>
 
   <div class="wrap">
   <table>
-    <tr><th>Корпус</th><th>Что это простыми словами</th><th>Лицензия</th></tr>
-    <tr><td><b>MultiCoNER v2</b><br><span style="color:var(--muted);font-size:14px">SemEval-2023, задача 2</span></td><td>Соревнование по распознаванию имён, собранное специально из сложных случаев: названия, которые выглядят как обычные слова, редкие имена, неоднозначные фразы. Самый близкий публичный аналог нашего <code>entity-extraction-hard</code>.</td><td>CC-BY-4.0</td></tr>
-    <tr><td><b>Few-NERD</b></td><td>Крупный размеченный набор предложений с людьми, местами и организациями.</td><td>CC-BY-SA-4.0</td></tr>
-    <tr><td><b>GSM8K</b><br><span style="color:var(--muted);font-size:14px">OpenAI</span></td><td>Школьные задачки «в лавке было столько-то, продали столько-то». Именно на нём в своё время показали, что просьба «рассуждай по шагам» даёт прирост. Здесь он нужен как противовес: все остальные наши задачи — чтение, а не счёт, и на чтении рассуждения обычно только мешают.</td><td>MIT</td></tr>
-    <tr><td><b>MBPP</b><br><span style="color:var(--muted);font-size:14px">Google Research</span></td><td>Простые задачи на программирование, к каждой приложены свои тесты. Оценка ставится не сравнением текста, а запуском кода.</td><td>CC-BY-4.0</td></tr>
+    <tr><th>Corpus</th><th>What it is, plainly</th><th>Licence</th></tr>
+    <tr><td><b>MultiCoNER v2</b><br><span style="color:var(--muted);font-size:14px">SemEval-2023, task 2</span></td><td>A name-recognition competition assembled specifically from hard cases: names that look like ordinary words, rare names, ambiguous phrases. The closest public analogue of our <code>entity-extraction-hard</code>.</td><td>CC-BY-4.0</td></tr>
+    <tr><td><b>Few-NERD</b></td><td>A large annotated set of sentences with people, places and organizations.</td><td>CC-BY-SA-4.0</td></tr>
+    <tr><td><b>GSM8K</b><br><span style="color:var(--muted);font-size:14px">OpenAI</span></td><td>Grade-school "the shop had this many, sold that many" problems. This is the set where "think step by step" was shown to help. It is here as a counterweight: every other dataset we ship is reading rather than counting, and on reading, reasoning usually gets in the way.</td><td>MIT</td></tr>
+    <tr><td><b>MBPP</b><br><span style="color:var(--muted);font-size:14px">Google Research</span></td><td>Simple programming tasks, each shipping its own tests. Scored by running the code, not by comparing text.</td><td>CC-BY-4.0</td></tr>
   </table>
   </div>
 
-  <p>Импорт делается командой <code>prompt-selector import-hf</code>, лицензия и ссылка на статью печатаются при каждом импорте.</p>
+  <p>Importing is done with <code>prompt-selector import-hf</code>; the licence and the paper citation are printed on every import.</p>
 
-  <h3>Как импорт не портит данные</h3>
+  <h3>How the import keeps the data honest</h3>
   <ul>
-    <li><b>Эталон вырезается прямо из готового предложения.</b> Иначе имя в ответе и имя в тексте могли бы разойтись на пробел, и модель получала бы незачёт за чужую опечатку.</li>
-    <li><b>Ненужный тип сущности превращается в пустой пример, а не в ошибку.</b> Если в предложении из всех имён только название фильма, а схема просит людей и места — правильный ответ пустой, а не «незачёт».</li>
-    <li><b>Часть пустых примеров оставляется намеренно.</b> Если выкинуть все случаи, где отвечать нечего, промпт, который просто угадывает наугад, начнёт выглядеть отлично: лишним ответам негде проявиться.</li>
-    <li><b>Ограничения корпуса записываются, а не прячутся.</b> У Few-NERD, например, две соседние сущности одного типа слипаются в одну — это свойство самого корпуса, и оно указано в примечаниях к пресету.</li>
+    <li><b>The gold answer is sliced out of the finished sentence.</b> Otherwise the name in the answer and the name in the text could differ by a space, and the model would be marked wrong for somebody else's spacing.</li>
+    <li><b>An entity type the schema does not ask for becomes an empty example, not a wrong one.</b> If the only name in a sentence is a film title while the schema asks for people and places, the correct answer is empty rather than a penalty.</li>
+    <li><b>A share of empty examples is kept on purpose.</b> Drop every case where there is nothing to answer, and a prompt that simply guesses starts looking excellent: its extra answers have nowhere to show up.</li>
+    <li><b>Corpus limitations are recorded, not hidden.</b> In Few-NERD, for instance, two adjacent entities of the same type merge into one — that is the corpus's own property, and it is stated in the preset's notes.</li>
   </ul>
 
-  <h2>Как проверяется ответ</h2>
-  <p>Проверяльщик получает ответ модели и эталон, а возвращает число от 0 до 1. Их два семейства.</p>
+  <h2>How an answer gets checked</h2>
+  <p>A grader takes the model's answer and the correct one and returns a number from 0 to 1. They come in two families.</p>
 
-  <h3>Проверки смысла — правильный ли ответ</h3>
+  <h3>Meaning — is the answer right</h3>
   <div class="wrap">
   <table>
-    <tr><td><code>field_f1</code></td><td>Частичный зачёт по списку. Нашла три сущности из четырёх — примерно 0.86, а не ноль. Лишнее, чего в эталоне не было, тоже штрафуется. Это главная оценка для извлечения.</td></tr>
-    <tr><td><code>exact_match</code></td><td>Совпало ли всё целиком, без поблажек. Почти всегда сильно ниже <code>field_f1</code> — это нормально.</td></tr>
-    <tr><td><code>label_accuracy</code></td><td>Угадана ли категория. Для классификации.</td></tr>
-    <tr><td><code>numeric_close</code></td><td>Совпало ли число с эталоном. Оформление не учитывается — важен сам ответ.</td></tr>
-    <tr><td><code>unit_tests</code></td><td>Код из ответа реально запускается и прогоняется через тесты задачи. Оценка — доля пройденных тестов. Запуск идёт в песочнице с ограниченным набором модулей.</td></tr>
-    <tr><td><code>glossary_consistency</code></td><td>Доля обязательных терминов, переведённых так, как велел глоссарий.</td></tr>
-    <tr><td><code>grounding_overlap</code></td><td>Какая доля слов ответа вообще встречается в приложенных источниках. Грубая, но рабочая проверка на выдумывание.</td></tr>
-    <tr><td><code>contains_all</code></td><td>Все ли обязательные факты попали в ответ.</td></tr>
-    <tr><td><code>coverage</code></td><td>Только полнота: сколько нужного нашлось. Лишнее не штрафуется.</td></tr>
-    <tr><td><code>tool_success</code></td><td>Все ли вызовы инструментов вернули результат, а не ошибку.</td></tr>
-    <tr><td><code>agreement</code></td><td>Насколько сходятся между собой несколько ответов, если техника генерирует их пачкой.</td></tr>
+    <tr><td><code>field_f1</code></td><td>Partial credit over a list. Three entities out of four is roughly 0.86, not zero. Extras that were not in the gold answer are penalised too. This is the headline score for extraction.</td></tr>
+    <tr><td><code>exact_match</code></td><td>Did the whole thing match, with no leniency. Almost always far below <code>field_f1</code>, which is normal.</td></tr>
+    <tr><td><code>label_accuracy</code></td><td>Was the category right. For classification.</td></tr>
+    <tr><td><code>numeric_close</code></td><td>Did the number match. Formatting is ignored — only the value counts.</td></tr>
+    <tr><td><code>unit_tests</code></td><td>The code from the answer is actually run against the task's own tests. The score is the share that pass. Execution happens in a sandbox with a restricted set of modules.</td></tr>
+    <tr><td><code>glossary_consistency</code></td><td>The share of required terms translated the way the glossary demanded.</td></tr>
+    <tr><td><code>grounding_overlap</code></td><td>How much of the answer's wording actually occurs in the supplied sources. A blunt but working check against invention.</td></tr>
+    <tr><td><code>contains_all</code></td><td>Did every required fact make it into the answer.</td></tr>
+    <tr><td><code>coverage</code></td><td>Recall only: how much of what was wanted showed up. Extras are not penalised.</td></tr>
+    <tr><td><code>tool_success</code></td><td>Did every tool call return a result rather than an error.</td></tr>
+    <tr><td><code>agreement</code></td><td>How much several answers agree with each other, when the technique generates a batch.</td></tr>
   </table>
   </div>
 
-  <h3>Проверки формы — правильно ли оформлен</h3>
+  <h3>Form — is the answer shaped right</h3>
   <div class="wrap">
   <table>
-    <tr><td><code>json_validity</code></td><td>Распарсился ли ответ как JSON.</td></tr>
-    <tr><td><code>json_schema</code></td><td>Совпал ли со схемой полностью.</td></tr>
-    <tr><td><code>schema_shape</code></td><td>Доля обязательных полей, которые на месте. Частичный зачёт по форме.</td></tr>
-    <tr><td><code>no_prose</code></td><td>Нет ли болтовни вокруг ответа.</td></tr>
-    <tr><td><code>allowed_labels</code></td><td>Метка взята из разрешённого списка, а не придумана.</td></tr>
-    <tr><td><code>length_limit</code></td><td>Уложился ли ответ в лимит символов.</td></tr>
-    <tr><td><code>omission_check</code></td><td>Не обрезан ли ответ и не раздут ли — длина сравнивается с длиной исходника.</td></tr>
-    <tr><td><code>deduplication</code></td><td>Нет ли повторов внутри списков.</td></tr>
-    <tr><td><code>python_syntax</code></td><td>Парсится ли код, который выдала модель.</td></tr>
-    <tr><td><code>regex_match</code></td><td>Совпал ли ответ с заданным шаблоном.</td></tr>
+    <tr><td><code>json_validity</code></td><td>Did the answer parse as JSON.</td></tr>
+    <tr><td><code>json_schema</code></td><td>Did it match the schema completely.</td></tr>
+    <tr><td><code>schema_shape</code></td><td>The share of required fields that are present. Partial credit on form.</td></tr>
+    <tr><td><code>no_prose</code></td><td>Is there chatter wrapped around the answer.</td></tr>
+    <tr><td><code>allowed_labels</code></td><td>Is the label from the allowed list rather than invented.</td></tr>
+    <tr><td><code>length_limit</code></td><td>Did the answer fit the character limit.</td></tr>
+    <tr><td><code>omission_check</code></td><td>Is the answer truncated or bloated — its length is compared against the source.</td></tr>
+    <tr><td><code>deduplication</code></td><td>Are there repeats inside the lists.</td></tr>
+    <tr><td><code>python_syntax</code></td><td>Does the code the model produced parse.</td></tr>
+    <tr><td><code>regex_match</code></td><td>Did the answer match the required pattern.</td></tr>
   </table>
   </div>
 
   <div class="box">
-    <p><b>Судьи-модели здесь нет.</b> Все проверки — обычный код. Один и тот же ответ всегда получает одну и ту же оценку, проверка ничего не стоит и не занимает времени, и её решение можно прочитать глазами.</p>
-    <p>Плата за это — нельзя оценить «красиво ли написано». Поэтому пересказ меряется через «все ли факты на месте и влез ли в лимит», а перевод — через «применён ли глоссарий и не потерялась ли половина текста». Про стиль бенчмарк ничего не скажет.</p>
+    <p><b>There is no LLM judge here.</b> Every grader is ordinary code. The same answer always gets the same score, checking costs nothing and takes no time, and you can read the rule yourself.</p>
+    <p>The price is that "is it well written" cannot be scored. So summarization is measured as "are all the facts there and did it fit the limit", and translation as "was the glossary applied and did half the text go missing". About style, the benchmark says nothing.</p>
   </div>
 
-  <h2>Как из проверок получаются две главные цифры</h2>
-  <p><code>quality</code> — это одна выбранная проверка смысла, та, что подходит задаче: <code>field_f1</code> для извлечения, <code>label_accuracy</code> для классификации, <code>numeric_close</code> для арифметики, <code>unit_tests</code> для кода. В таблице <b>Graders</b> она помечена как headline, остальные показываются рядом для справки.</p>
-  <p><code>reliability</code> — это доля правильно оформленных ответов, умноженная на стабильность (даёт ли модель один и тот же ответ на один и тот же вход).</p>
-  <p>Что с этими числами делать дальше — на странице <a href="/help">Справка</a>.</p>
+  <h2>How the graders become the two headline numbers</h2>
+  <p><code>quality</code> is one chosen meaning-grader, whichever fits the task: <code>field_f1</code> for extraction, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic, <code>unit_tests</code> for code. In the <b>Graders</b> table it is marked headline; the others are shown beside it for reference.</p>
+  <p><code>reliability</code> is the share of correctly shaped answers multiplied by stability (whether the model gives the same answer to the same input).</p>
+  <p>What to do with those numbers is on the <a href="/help">Help</a> page.</p>
 
-  <h2>Пять правил, без которых цифра ничего не значит</h2>
+  <h2>Five rules, without which the number means nothing</h2>
 
   <div class="box warn">
-    <p><b>1. Сто примеров минимум.</b> На шести примерах разница в 5% — это один пример туда-сюда. На сорока примерах порог, ниже которого разница неотличима от шума, — примерно 0.04. Меньше этого не считается результатом.</p>
+    <p><b>1. A hundred examples, minimum.</b> On six examples, a 5% difference is one example moving. On forty examples the threshold below which a difference is indistinguishable from noise is roughly 0.04. Anything smaller is not a result.</p>
   </div>
   <div class="box warn">
-    <p><b>2. Repeats = 3.</b> При одном прогоне стабильность равна 1.000 по определению — не потому что стабильно, а потому что сравнивать не с чем.</p>
+    <p><b>2. Repeats = 3.</b> With a single pass, stability is 1.000 by definition — not because it is stable, but because there is nothing to compare against.</p>
   </div>
   <div class="box warn">
-    <p><b>3. Пустые примеры обязательны.</b> Случаи, где правильный ответ — «ничего», держат промпт честным. Без них выигрывает тот, кто угадывает.</p>
+    <p><b>3. Empty examples are mandatory.</b> Cases where the right answer is "nothing" keep a prompt honest. Without them, the guesser wins.</p>
   </div>
   <div class="box warn">
-    <p><b>4. Оптимизацию смотри только на held-out.</b> Оптимизатор подгоняется под примеры, которые видел. Прирост считается только на отложенной части, которую он не видел.</p>
+    <p><b>4. For optimization, read the held-out split only.</b> The optimizer fits itself to the examples it saw. The gain only counts on the part it never saw.</p>
   </div>
   <div class="box warn">
-    <p><b>5. Цифра принадлежит паре «модель + датасет».</b> Перенеси её на другую модель — и это снова догадка. Инструмент честно пишет <span style="color:var(--good)">measured</span> там, где мерил, и <span style="color:var(--muted)">prior only</span> там, где предполагает.</p>
+    <p><b>5. A number belongs to one model-plus-dataset pair.</b> Carry it to another model and it is a guess again. The tool says <span style="color:var(--good)">measured</span> where it measured and <span style="color:var(--muted)">prior only</span> where it is assuming.</p>
   </div>
 
-  <h2>Какие инструменты задействованы</h2>
+  <h2>Which tools are involved</h2>
   <div class="wrap">
   <table>
-    <tr><th>Что</th><th>Зачем</th><th>Нужно ставить?</th></tr>
-    <tr><td><b>Собственный движок</b></td><td>Прогон примеров, проверки, подсчёт качества, надёжности, стабильности, времени и токенов. Внешних зависимостей не требует.</td><td>Встроен</td></tr>
-    <tr><td><b>Ollama</b></td><td>Локальные модели на своей машине. Вариант по умолчанию: бесплатно и без ключей.</td><td>Отдельная программа</td></tr>
-    <tr><td><b>OpenAI-совместимые API</b></td><td>Облачные модели: OpenAI, Anthropic, DeepSeek, Together, OpenRouter, Groq, Fireworks. Годятся, когда локальная модель слишком слабая.</td><td>Нужен ключ в переменной окружения</td></tr>
-    <tr><td><b>Hugging Face datasets</b></td><td>Импорт публичных корпусов (<code>import-hf</code>). Hugging Face — главный публичный склад датасетов и моделей.</td><td>Дополнительно</td></tr>
-    <tr><td><b>DSPy</b></td><td>Библиотека автоматического подбора промптов. Даёт три алгоритма поиска для кнопки Optimize.</td><td>Дополнительно</td></tr>
-    <tr><td><b>promptfoo</b></td><td>Экспорт промпта в чужой прогонщик тестов, если у команды он уже используется. Выгружается только первая стадия техники.</td><td>Дополнительно</td></tr>
-    <tr><td><b>Langfuse / Phoenix</b></td><td>Трейсинг: складывают каждый вызов модели в общий журнал, чтобы потом посмотреть, что именно уходило и приходило.</td><td>Дополнительно</td></tr>
+    <tr><th>What</th><th>What for</th><th>Install?</th></tr>
+    <tr><td><b>The built-in engine</b></td><td>Running examples, grading them, computing quality, reliability, stability, latency and tokens. No external dependencies.</td><td>Built in</td></tr>
+    <tr><td><b>Ollama</b></td><td>Local models on your own machine. The default route: free and no keys.</td><td>A separate program</td></tr>
+    <tr><td><b>OpenAI-compatible APIs</b></td><td>Cloud models: OpenAI, Anthropic, DeepSeek, Together, OpenRouter, Groq, Fireworks. Useful when the local model is too weak.</td><td>Needs a key in an environment variable</td></tr>
+    <tr><td><b>Hugging Face datasets</b></td><td>Importing public corpora (<code>import-hf</code>). Hugging Face is the main public warehouse of datasets and models.</td><td>Optional extra</td></tr>
+    <tr><td><b>DSPy</b></td><td>A library for automatic prompt search. Supplies three of the search algorithms behind the Optimize button.</td><td>Optional extra</td></tr>
+    <tr><td><b>promptfoo</b></td><td>Exports the prompt into another test runner, if your team already uses one. Only a technique's first stage is exported.</td><td>Optional extra</td></tr>
+    <tr><td><b>Langfuse / Phoenix</b></td><td>Tracing: they log every model call so you can look at exactly what went out and came back.</td><td>Optional extra</td></tr>
   </table>
   </div>
 
-  <h3>Четыре алгоритма в Optimize</h3>
+  <h3>The four search algorithms in Optimize</h3>
   <div class="wrap">
   <table>
-    <tr><td><code>native</code></td><td>Встроенный жадный цикл: модель критикует свой же промпт и переписывает его, лучший вариант остаётся. Ничего доставлять не нужно.</td></tr>
-    <tr><td><code>DSPy MIPROv2</code></td><td>Байесовский подбор: предлагает варианты инструкции и примеров и учится на том, какие оценки они получили. На наших замерах это единственный, который дал прирост.</td></tr>
-    <tr><td><code>DSPy GEPA</code></td><td>Эволюция: держит набор непобеждённых вариантов и скрещивает их дальше.</td></tr>
-    <tr><td><code>DSPy BootstrapFewShot</code></td><td>Инструкцию не трогает, подбирает только примеры для промпта.</td></tr>
+    <tr><td><code>native</code></td><td>The built-in greedy loop: the model critiques its own prompt and rewrites it, and the best variant survives. Nothing to install.</td></tr>
+    <tr><td><code>DSPy MIPROv2</code></td><td>Bayesian search: it proposes instructions and example sets, and learns from the scores they got. In our measurements this is the only one that produced a gain.</td></tr>
+    <tr><td><code>DSPy GEPA</code></td><td>Evolution: keeps a set of variants nothing has beaten outright and breeds from those.</td></tr>
+    <tr><td><code>DSPy BootstrapFewShot</code></td><td>Leaves the instruction alone and only picks the examples that go into the prompt.</td></tr>
   </table>
   </div>
 
-  <h2>Что уже намеряно</h2>
-  <p>Готовые отчёты лежат в <code>docs/benchmarks/</code>. Коротко, что из них вышло:</p>
+  <h2>What has already been measured</h2>
+  <p>The finished reports live in <code>docs/benchmarks/</code>. In short:</p>
   <ul>
-    <li><b>Тринадцать техник из научных статей на <code>few-nerd</code>:</b> одиннадцать из двенадцати проиграли простому базовому промпту. Порядок мест почти точно совпал с расходом токенов, только наоборот: чем больше техника «рассуждает», тем хуже читает. Извлечение сущностей — это чтение, а не рассуждение, и промежуточный пересказ уводит модель от исходного текста.</li>
-    <li><b>Свой оптимизатор против MIPROv2</b> на <code>entity-extraction-hard</code>, одна и та же разбивка данных: встроенный жадный цикл дал ровно +0.000, MIPROv2 — +0.090, потратив вдвое меньше вызовов модели.</li>
-    <li><b>Облачная модель большого размера</b> повела себя так же на чтении: отдельная стадия рассуждения ухудшила результат на 0.028 при 2.9× токенов и 4.4× времени. На арифметике обе техники упёрлись в потолок 1.000 — там разницу уже не видно.</li>
+    <li><b>Thirteen techniques from the literature, on <code>few-nerd</code>:</b> eleven out of twelve lost to the plain baseline prompt. The ranking tracked token spend almost exactly, in the wrong direction: the more a technique "reasons", the worse it reads. Entity extraction is reading, not reasoning, and an intermediate restatement pulls the model away from the original text.</li>
+    <li><b>The built-in optimizer against MIPROv2</b> on <code>entity-extraction-hard</code>, same data split for both: the greedy loop delivered exactly +0.000, MIPROv2 delivered +0.090 while using half as many model calls.</li>
+    <li><b>A large cloud model</b> behaved the same way on reading: a separate reasoning stage cost 0.028 quality at 2.9× the tokens and 4.4× the time. On arithmetic both techniques hit the 1.000 ceiling, where no difference can show.</li>
   </ul>
 
-  <h2>Свои данные</h2>
-  <p>Встроенные наборы — чтобы разобраться. Выводы про свою задачу можно делать только на своих данных. Файл <code>.jsonl</code>, по одной задаче на строку, загружается прямо в интерфейсе:</p>
-  <pre><code>{"id": "1", "input": "Мара вошла в Вейр с Капитаном Орином.",
- "expected": {"people": ["Мара", "Капитан Орин"], "places": ["Вейр"]}}</code></pre>
-  <p>Обязательны только <code>id</code> и <code>input</code>. Проверяльщики подберутся сами по виду эталона; можно задать их вручную полем <code>graders</code>.</p>
+  <h2>Your own data</h2>
+  <p>The bundled sets are for finding your way around. Conclusions about your task can only come from your data. A <code>.jsonl</code> file, one task per line, uploaded straight from the interface:</p>
+  <pre><code>{"id": "1", "input": "Mara entered Veyr with Captain Orin.",
+ "expected": {"people": ["Mara", "Captain Orin"], "places": ["Veyr"]}}</code></pre>
+  <p>Only <code>id</code> and <code>input</code> are required. Graders are picked from the shape of the expected answer; you can name them yourself in a <code>graders</code> field.</p>
   <div class="box">
-    <p><b>Главное правило.</b> Эталонный ответ должен встречаться в тексте <em>слово в слово</em>. Если в тексте «Капитаном Орином», а в эталоне «Капитан Орин» — модель получит незачёт за то, что не угадала твою форму записи. И оставь примеры, где правильный ответ пустой.</p>
+    <p><b>The one rule.</b> The correct answer has to appear in the text <em>word for word</em>. If the text says "Captain Orin" and your gold says "Orin, captain", the model is marked wrong for not guessing your way of writing it. And keep the examples where the right answer is empty.</p>
   </div>
 
-  <h2>Чего бенчмарк не умеет</h2>
+  <h2>What the benchmark cannot do</h2>
   <ul>
-    <li>Оценить качество прозы. Судьи-модели нет — только проверяемые правила.</li>
-    <li>Сказать что-то осмысленное на маленьком наборе. Шесть примеров — это не измерение.</li>
-    <li>Дёргать любые инструменты в агентских задачах: работают только зарегистрированные, в комплекте идёт калькулятор.</li>
-    <li>Выгрузить в promptfoo многостадийную технику — уезжает только первая стадия.</li>
-    <li>Перенести результат на другую модель.</li>
+    <li>Score the quality of prose. There is no LLM judge — only checkable rules.</li>
+    <li>Say anything meaningful on a tiny set. Six examples is not a measurement.</li>
+    <li>Call arbitrary tools in agent tasks: only registered ones work, and a calculator is what ships.</li>
+    <li>Export a multi-stage technique to promptfoo — only the first stage goes out.</li>
+    <li>Carry a result over to a different model.</li>
   </ul>
 
-  <p style="color:var(--muted);margin-top:34px">Подробности по каждому набору — в <code>docs/datasets/</code>, отчёты о прогонах — в <code>docs/benchmarks/</code>.</p>
+  <p style="color:var(--muted);margin-top:34px">Per-dataset detail is in <code>docs/datasets/</code>; run reports are in <code>docs/benchmarks/</code>.</p>
 </main>
 </body>
 </html>

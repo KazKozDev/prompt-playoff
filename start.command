@@ -18,7 +18,7 @@ warn() { printf '%s\n' "${YELLOW}!${RESET} $1"; }
 
 fail() {
     printf '%s\n' "${RED}✗ $1${RESET}"
-    printf '\n%s' "Нажмите Enter, чтобы закрыть окно… "
+    printf '\n%s' "Press Enter to close this window… "
     read -r _
     exit 1
 }
@@ -32,19 +32,19 @@ printf '\n'
 # 1. Python and the virtual environment
 # --------------------------------------------------------------------------- #
 
-command -v python3 >/dev/null 2>&1 || fail "Не найден python3. Установите его: https://www.python.org/downloads/"
+command -v python3 >/dev/null 2>&1 || fail "python3 not found. Install it: https://www.python.org/downloads/"
 
 if [ ! -x .venv/bin/python ]; then
-    say "Создаю окружение (это делается один раз)…"
-    python3 -m venv .venv || fail "Не удалось создать .venv"
+    say "Creating the environment (once only)…"
+    python3 -m venv .venv || fail "Could not create .venv"
 fi
 
 if [ ! -x .venv/bin/prompt-selector ]; then
-    say "Устанавливаю зависимости (пара минут)…"
+    say "Installing dependencies (a couple of minutes)…"
     .venv/bin/python -m pip install --quiet --upgrade pip
-    .venv/bin/python -m pip install --quiet -e '.[dev]' || fail "Установка не удалась"
+    .venv/bin/python -m pip install --quiet -e '.[dev]' || fail "Installation failed"
 fi
-ok "Окружение готово"
+ok "Environment ready"
 
 # --------------------------------------------------------------------------- #
 # 2. Ollama — the local model runtime
@@ -54,7 +54,7 @@ ollama_up() { curl -s --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>
 
 if ! ollama_up; then
     if [ -d /Applications/Ollama.app ]; then
-        say "Запускаю Ollama…"
+        say "Starting Ollama…"
         open -a Ollama
         for _ in $(seq 1 30); do ollama_up && break; sleep 1; done
     fi
@@ -64,14 +64,14 @@ if ollama_up; then
     MODELS=$(curl -s --max-time 5 http://127.0.0.1:11434/api/tags \
         | .venv/bin/python -c 'import json,sys; print(len(json.load(sys.stdin).get("models",[])))' 2>/dev/null || echo 0)
     if [ "${MODELS:-0}" -gt 0 ]; then
-        ok "Ollama работает, моделей: $MODELS"
+        ok "Ollama is up, models: $MODELS"
     else
-        warn "Ollama работает, но моделей нет. Скачайте одну: ollama pull qwen2.5:7b"
+        warn "Ollama is up but has no models. Pull one: ollama pull qwen2.5:7b"
     fi
 else
     # Selection and compilation work without a model; only measurement needs one.
-    warn "Ollama не отвечает — подбор техник и сборка промпта будут работать,"
-    warn "а бенчмарк и оптимизация нет. Установка: https://ollama.com/download"
+    warn "Ollama is not answering. Selection and compilation still work,"
+    warn "benchmarking and optimization do not. Install: https://ollama.com/download"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -81,23 +81,23 @@ fi
 PORT=8000
 while lsof -ti tcp:"$PORT" >/dev/null 2>&1; do
     PORT=$((PORT + 1))
-    [ "$PORT" -gt 8020 ] && fail "Не нашёл свободный порт в диапазоне 8000-8020"
+    [ "$PORT" -gt 8020 ] && fail "No free port in the range 8000-8020"
 done
-[ "$PORT" -ne 8000 ] && note "Порт 8000 занят, использую $PORT"
+[ "$PORT" -ne 8000 ] && note "Port 8000 is taken, using $PORT"
 
 # --------------------------------------------------------------------------- #
 # 4. Serve, open the browser, wait
 # --------------------------------------------------------------------------- #
 
 URL="http://127.0.0.1:$PORT"
-say "Запускаю интерфейс…"
+say "Starting the interface…"
 
 .venv/bin/prompt-selector serve --port "$PORT" >/tmp/prompt-selector-$PORT.log 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
     printf '\n'
-    note "Останавливаю…"
+    note "Stopping…"
     kill "$SERVER_PID" 2>/dev/null
     wait "$SERVER_PID" 2>/dev/null
     exit 0
@@ -107,29 +107,29 @@ trap cleanup INT TERM
 for _ in $(seq 1 40); do
     curl -s --max-time 2 "$URL/health" >/dev/null 2>&1 && break
     kill -0 "$SERVER_PID" 2>/dev/null || {
-        printf '%s\n' "${RED}Сервер не стартовал. Лог:${RESET}"
+        printf '%s\n' "${RED}The server did not start. Log:${RESET}"
         tail -20 "/tmp/prompt-selector-$PORT.log"
-        fail "Запуск не удался"
+        fail "Startup failed"
     }
     sleep 0.5
 done
 
 if ! curl -s --max-time 2 "$URL/health" >/dev/null 2>&1; then
     tail -20 "/tmp/prompt-selector-$PORT.log"
-    fail "Сервер не ответил за 20 секунд"
+    fail "The server did not answer within 20 seconds"
 fi
 
-ok "Открываю $URL"
+ok "Opening $URL"
 open "$URL"
 
 printf '\n'
-say "Работает. Что делать дальше:"
-printf '  %s\n' "1. Опишите задачу и нажмите «Select techniques»"
-printf '  %s\n' "2. Выберите технику — увидите готовый промпт"
-printf '  %s\n' "3. «Benchmark this prompt» — измерит его на живой модели"
+say "Running. What to do next:"
+printf '  %s\n' "1. Describe your task and press \"Create my prompt\""
+printf '  %s\n' "2. Pick a technique to see the prompt it compiles to"
+printf '  %s\n' "3. \"Benchmark this prompt\" measures it on a live model"
 printf '\n'
-note "Лог: /tmp/prompt-selector-$PORT.log"
-note "Остановить: Ctrl-C или закройте это окно"
+note "Log: /tmp/prompt-selector-$PORT.log"
+note "Stop with Ctrl-C, or just close this window"
 printf '\n'
 
 wait "$SERVER_PID"

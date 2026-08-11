@@ -27,7 +27,7 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
 
 
-@pytest.mark.parametrize("path", ["/", "/help", "/help/en", "/benchmarks", "/benchmarks/en"])
+@pytest.mark.parametrize("path", ["/", "/help", "/help/ru", "/benchmarks", "/benchmarks/ru"])
 def test_static_pages_are_served(client, path):
     response = client.get(path)
     assert response.status_code == 200
@@ -36,13 +36,16 @@ def test_static_pages_are_served(client, path):
 
 def test_documentation_pages_are_reachable(client):
     # The app opens both documents in its own panel, so each page only carries its translation link.
+    # English is what an unqualified path serves; Russian is the translation hanging off it.
     home = client.get("/").text
-    assert "/help/en" in home
-    assert "/benchmarks/en" in home
-    assert "/help/en" in client.get("/help").text
-    assert "/help" in client.get("/help/en").text
-    assert "/benchmarks/en" in client.get("/benchmarks").text
-    assert "/benchmarks" in client.get("/benchmarks/en").text
+    assert "/help" in home
+    assert "/benchmarks" in home
+    assert 'lang="en"' in client.get("/help").text
+    assert 'lang="ru"' in client.get("/help/ru").text
+    assert "/help/ru" in client.get("/help").text
+    assert "/help" in client.get("/help/ru").text
+    assert "/benchmarks/ru" in client.get("/benchmarks").text
+    assert "/benchmarks" in client.get("/benchmarks/ru").text
 
 
 def test_home_exposes_the_complete_technique_catalog(client):
