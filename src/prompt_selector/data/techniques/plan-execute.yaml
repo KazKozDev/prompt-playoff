@@ -12,6 +12,9 @@ acceptable_tasks:
 - summarization
 avoid_tasks:
 - classification
+suits:
+- multi_step
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:

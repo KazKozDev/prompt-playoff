@@ -5,6 +5,9 @@ acceptable_tasks:
 - summarization
 avoid_tasks:
 - creative_writing
+suits:
+- verifiable
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:

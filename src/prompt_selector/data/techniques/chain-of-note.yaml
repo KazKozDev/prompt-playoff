@@ -5,6 +5,9 @@ acceptable_tasks:
 avoid_tasks:
 - creative_writing
 - translation
+suits:
+- long_input
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:
@@ -13,6 +16,7 @@ model_classes:
 - large
 - reasoning
 tools_required: false
+requires_supplied_evidence: true
 strict_json_fit: false
 validation_fit: true
 evidence_level: documented
@@ -26,12 +30,12 @@ description: Write a reading note for each supplied source before answering, so 
   rejected explicitly rather than quietly absorbed (arXiv 2311.09210).
 strong_tasks:
 - research
-min_calls: 2
+min_calls: 1
 characteristics:
   quality: 0.87
   reliability: 0.88
-  latency_efficiency: 0.48
-  token_efficiency: 0.44
+  latency_efficiency: 0.68
+  token_efficiency: 0.64
   simplicity: 0.65
 recipe:
   system: Judge each source before using it. An irrelevant source is worse than none.
@@ -57,14 +61,8 @@ recipe:
       '
   - name: answer_task
     title: ANSWER
-    body: 'Your reading notes:
-
-
-      {previous}
-
-
-      Answer using only the notes marked relevant. If none of them settle the question, say so directly
-      instead of guessing.
+    body: 'After the notes, answer using only the ones you marked relevant. If none of them settle
+      the question, say so directly instead of guessing.
 
       '
   - name: contract_embedded
@@ -82,18 +80,7 @@ recipe:
   - contains_all
   fallback: State the evidence gap rather than answering from an irrelevant source.
 execution:
-  strategy: multi_stage
-  stages:
-  - name: notes
-    blocks:
-    - procedure
-    - input
-    system: Write one note per source. Do not answer.
-    carries_schema: false
-  - name: answer
-    blocks:
-    - answer_task
-    - contract_embedded
+  strategy: single
 benchmark_priors:
   default: 0.79
   task:research: 0.89

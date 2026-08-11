@@ -10,6 +10,9 @@ acceptable_tasks:
 - translation
 avoid_tasks:
 - creative_writing
+suits:
+- has_examples
+- exact_format
 required_capabilities:
 - system_messages
 model_classes:

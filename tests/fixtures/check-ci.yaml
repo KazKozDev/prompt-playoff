@@ -1,0 +1,18 @@
+version: 1
+model:
+  provider: ci-fake
+  model_id: deterministic
+  model_class: small
+  base_url: http://127.0.0.1:18765
+  capabilities: [structured_output, system_messages]
+checks:
+  - name: ci-gate
+    technique: structured.schema-first
+    task: structured_extraction
+    dataset_file: ./check-ci.jsonl
+    repeats: 1
+    strict_json: true
+    require:
+      quality_min: 1.0
+      reliability_min: 1.0
+      mean_total_tokens_max: 50

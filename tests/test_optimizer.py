@@ -379,3 +379,68 @@ def test_history_digest_ranks_measured_attempts(registry):
     assert digest.index("[0.90]") < digest.index("[0.40]")
     # The baseline has no overlay body, so it cannot be "already tried".
     assert digest.count("[") == 2
+
+
+class SeparateEngineProvider:
+    """Records which model each call was made against."""
+
+    def __init__(self, rewrite: str) -> None:
+        self.rewrite = rewrite
+        self.proposals: list[str] = []
+        self.executions: list[str] = []
+
+    async def generate(
+        self, prompt: CompiledPrompt, model: ModelProfile, timeout_seconds: float = 120
+    ) -> ModelResult:
+        if prompt.technique_id == "optimizer.meta":
+            self.proposals.append(model.model_id)
+            return ModelResult(content=self.rewrite, usage={"prompt_eval_count": 40})
+        self.executions.append(model.model_id)
+        return ModelResult(content='{"people": [], "places": []}', usage={"eval_count": 5})
+
+
+@pytest.mark.asyncio
+async def test_the_engine_proposes_while_the_target_is_measured(
+    extraction_task, entity_schema, registry
+):
+    target = SeparateEngineProvider(rewrite="RULE: copy names verbatim.")
+    engine = SeparateEngineProvider(rewrite="RULE: copy names verbatim.")
+    engine_model = ModelProfile(provider="openai", model_id="big-engine", local=False)
+
+    result = await PromptOptimizer(
+        provider=target,
+        engine_provider=engine,
+        engine_model=engine_model,
+    ).optimize(
+        task=extraction_task,
+        technique=registry.technique("structured.schema-first"),
+        dataset=dataset(entity_schema),
+        rounds=2,
+        candidates_per_round=1,
+        dataset_name="unit",
+    )
+
+    # Proposals went to the engine model only; every measured call used the target.
+    assert engine.proposals and set(engine.proposals) == {"big-engine"}
+    assert target.proposals == []
+    assert set(target.executions) == {"test-model"}
+    assert result.engine_model_id == "big-engine"
+    assert result.engine_is_target is False
+    assert not any("same model the numbers describe" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_self_optimization_is_reported_not_hidden(extraction_task, entity_schema, registry):
+    provider = ScriptedProvider(rewrite="SHARPER RULE: copy names verbatim.")
+    result = await PromptOptimizer(provider).optimize(
+        task=extraction_task,
+        technique=registry.technique("structured.schema-first"),
+        dataset=dataset(entity_schema),
+        rounds=2,
+        candidates_per_round=1,
+        dataset_name="unit",
+    )
+
+    assert result.engine_is_target is True
+    assert result.engine_model_id == "test-model"
+    assert any("same model the numbers describe" in note for note in result.notes)

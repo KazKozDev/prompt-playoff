@@ -114,6 +114,62 @@ def lint_technique(technique: TechniqueSpec) -> list[LintIssue]:
         )
     if technique.strict_json_fit and not technique.recipe.validators:
         warn("declares strict_json_fit but lists no validators")
+
+    # 8. `suits` is what makes selection about the request rather than its task
+    # type. A recipe that claims nothing never wins on shape; one that claims
+    # everything wins every request, which is the same as claiming nothing.
+    if not technique.suits:
+        warn("declares no `suits`: it can never win on what a request looks like")
+    elif len(technique.suits) > 4:
+        error(
+            f"declares {len(technique.suits)} shapes in `suits`; keep it to four, "
+            "so the claim still separates this recipe from the others"
+        )
+
+    # 9. An extra model call has to be earned. Several recipes were written from a
+    # two-stage mould and spent a second call on a method the paper runs in one
+    # prompt, which doubles the user's cost and re-sends the whole input.
+    issues.extend(_extra_call_issues(technique))
+    return issues
+
+
+def _extra_call_issues(technique: TechniqueSpec) -> list[LintIssue]:
+    """Check that a second call does work a second call is needed for."""
+    issues: list[LintIssue] = []
+    bodies = {block.name: block.body for block in technique.recipe.blocks}
+    if technique.execution.strategy == "multi_stage":
+        for stage in technique.execution.stages[1:]:
+            used: set[str] = set()
+            for name in stage.blocks:
+                used |= placeholders_in(bodies.get(name, ""))
+            if "previous" not in used:
+                issues.append(
+                    LintIssue(
+                        technique.id,
+                        "error",
+                        f"stage {stage.name!r} is a separate model call but reads nothing from "
+                        "the stage before it ({previous}); make it a block of the previous "
+                        "stage instead of a second call",
+                    )
+                )
+    characteristics = technique.characteristics
+    claims_thrift = (
+        characteristics.token_efficiency >= 0.7
+        or characteristics.latency_efficiency >= 0.7
+        or "token-efficient" in technique.tags
+    )
+    if technique.min_calls >= 2 and claims_thrift:
+        issues.append(
+            LintIssue(
+                technique.id,
+                "warning",
+                f"declares {technique.min_calls} calls while claiming to be cheap or fast "
+                "(token_efficiency "
+                f"{characteristics.token_efficiency:.2f}, latency_efficiency "
+                f"{characteristics.latency_efficiency:.2f}) — an extra round trip spends "
+                "exactly what the recipe claims to save",
+            )
+        )
     return issues
 
 

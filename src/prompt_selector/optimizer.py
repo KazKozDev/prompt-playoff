@@ -37,7 +37,7 @@ from prompt_selector.evals import (
     BenchmarkRunner,
     Scorecard,
 )
-from prompt_selector.providers import ModelProvider, ProviderError, provider_for
+from prompt_selector.providers import ModelProvider, ProviderError
 
 
 class TechniqueOverlay(BaseModel):
@@ -100,6 +100,10 @@ class OptimizationResult(BaseModel):
     priorities: dict[str, float] = Field(default_factory=dict)
     #: Which search algorithm produced this: "native", "dspy:mipro", "dspy:gepa"…
     backend: str = "native"
+    #: Which model wrote the candidate prompts, and whether that is the model the
+    #: numbers describe. A result that cannot answer this is not interpretable.
+    engine_model_id: str = ""
+    engine_is_target: bool = True
     notes: list[str] = Field(default_factory=list)
 
 
@@ -144,13 +148,15 @@ class PromptOptimizer:
     def __init__(
         self,
         provider: ModelProvider,
-        optimizer_provider: ModelProvider | None = None,
-        optimizer_model: ModelProfile | None = None,
+        engine_provider: ModelProvider | None = None,
+        engine_model: ModelProfile | None = None,
         compiler: PromptCompiler | None = None,
     ) -> None:
         self.provider = provider
-        self.optimizer_provider = optimizer_provider or provider
-        self.optimizer_model = optimizer_model
+        #: Falls back to the model under test, which means the model grades a prompt
+        #: it wrote for itself. Legal, but the result says so out loud.
+        self.engine_provider = engine_provider or provider
+        self.engine_model = engine_model
         self.compiler = compiler or PromptCompiler()
         self.runner = BenchmarkRunner(provider, self.compiler)
         #: Why proposals were discarded, surfaced in the result rather than swallowed.
@@ -335,8 +341,20 @@ class PromptOptimizer:
             total_calls=call_count,
             elapsed_seconds=round(time.perf_counter() - started, 2),
             priorities=priorities.model_dump(),
-            notes=self._diagnosis(technique, winner),
+            engine_model_id=(self.engine_model or task.model).model_id,
+            engine_is_target=self.engine_model is None,
+            notes=[*self._engine_note(task), *self._diagnosis(technique, winner)],
         )
+
+    def _engine_note(self, task: TaskProfile) -> list[str]:
+        """Self-optimization is allowed, but it is never left implicit."""
+        if self.engine_model is not None:
+            return []
+        return [
+            f"Candidate prompts were written by {task.model.model_id}, the same model the "
+            "numbers describe. Part of the gain may be that model's own phrasing rather "
+            "than a better prompt; set --engine-model to have a different model propose."
+        ]
 
     def _diagnosis(self, technique: TechniqueSpec, winner: Candidate) -> list[str]:
         from collections import Counter
@@ -351,7 +369,7 @@ class PromptOptimizer:
         if self.proposal_failures and not self.proposals_accepted:
             notes.append(
                 "No proposal survived, so the search never left the baseline. That is a "
-                "proposer problem, not a result: try a stronger --optimizer-model."
+                "proposer problem, not a result: try a stronger --engine-model."
             )
         renders_demos = any(
             block.when is BlockCondition.has_exemplars for block in technique.recipe.blocks
@@ -596,8 +614,8 @@ class PromptOptimizer:
             ],
             generation_options={"temperature": 0.9},
         )
-        model = self.optimizer_model or task.model
-        result = await self.optimizer_provider.generate(prompt, model, timeout_seconds)
+        model = self.engine_model or task.model
+        result = await self.engine_provider.generate(prompt, model, timeout_seconds)
         return _strip_fences(result.content)
 
     async def _evaluate(
@@ -886,10 +904,6 @@ def _strip_fences(text: str) -> str:
             body = body.rstrip()[:-3]
         return body.strip()
     return stripped
-
-
-def optimizer_provider_for(model: ModelProfile | None) -> ModelProvider | None:
-    return provider_for(model) if model else None
 
 
 def dumps(result: OptimizationResult) -> str:

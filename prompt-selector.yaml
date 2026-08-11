@@ -1,0 +1,18 @@
+version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+  model_class: small
+  capabilities: [structured_output, system_messages]
+checks:
+  - name: entities-schema-first
+    technique: structured.schema-first
+    task: structured_extraction
+    dataset: entity-extraction
+    repeats: 3
+    strict_json: true
+    require:
+      quality_min: 0.85
+      reliability_min: 0.95
+      mean_total_tokens_max: 300
+      p95_latency_seconds_max: 2.0

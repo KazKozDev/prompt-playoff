@@ -4,6 +4,9 @@ acceptable_tasks:
 - structured_extraction
 - summarization
 avoid_tasks: []
+suits:
+- underspecified
+- computational
 required_capabilities:
 - system_messages
 model_classes:

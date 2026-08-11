@@ -5,6 +5,40 @@ on:
   pull_request:
 
 jobs:
+  core-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install .
+      - name: Assert the core has no CLI or server stack
+        run: |
+          python - <<'PY'
+          import importlib.util
+          for package in ("fastapi", "uvicorn", "typer", "rich"):
+              assert importlib.util.find_spec(package) is None, package
+          PY
+      - name: Import, select, and compile with the core only
+        run: |
+          python - <<'PY'
+          from prompt_selector import PromptCompiler, Registry, Selector, normalize_description
+          from prompt_selector.domain import ModelProfile, TaskProfile, TaskType
+
+          registry = Registry.load()
+          task = TaskProfile(task_type=TaskType.structured_extraction, model=ModelProfile())
+          technique = registry.technique("direct.explicit-constraints")
+          Selector(registry).select(task)
+          normalize_description("Extract entities.", task.model)
+          PromptCompiler().compile(task, technique, "Mara entered Veyr.")
+          PY
+      - name: Console command explains how to install the CLI
+        run: |
+          if prompt-selector >message.txt 2>&1; then exit 1; fi
+          grep -F "pip install 'prompt-selector[cli]'" message.txt
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -19,9 +53,33 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: ruff format --check .
-      # The core suite must pass without any optional extra installed.
+      # API and CLI tests run with their declared extras; core-only is isolated above.
       - run: pytest
       - run: prompt-selector validate-registry --strict
+
+  check-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e '.[cli]'
+      - name: Exercise the gate against a deterministic provider
+        env:
+          PROMPT_SELECTOR_API_KEY: ci-only-not-a-secret
+        run: |
+          python tests/fake_provider_server.py &
+          provider_pid=$!
+          trap 'kill "$provider_pid"' EXIT
+          for attempt in {1..50}; do
+            if python -c "import socket; socket.create_connection(('127.0.0.1', 18765), 0.2).close()"; then
+              break
+            fi
+            sleep 0.1
+          done
+          prompt-selector check --config tests/fixtures/check-ci.yaml --no-record
 
   integrations:
     runs-on: ubuntu-latest

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from prompt_selector.compiler import PromptCompiler
 from prompt_selector.domain import (
+    AuthorRequest,
     CompiledProgram,
     CompileRequest,
     ExecutionTrace,
@@ -11,8 +13,10 @@ from prompt_selector.domain import (
     RunRequest,
     SelectionResult,
     TaskProfile,
+    TaskType,
     TechniqueSpec,
 )
+from prompt_selector.engine import TaskEngine, TaskNormalization, resolve_engine_profile
 from prompt_selector.evals import (
     BenchmarkExample,
     BenchmarkReport,
@@ -61,10 +65,52 @@ class PromptSelectorService:
             metadata={"task_type": task.task_type.value, **metadata},
         )
 
+    # -- the engine model ---------------------------------------------------- #
+
+    def engine(self, engine_model: ModelProfile | None = None) -> TaskEngine:
+        """Resolve the engine once, here, so no caller invents its own fallback."""
+        profile = resolve_engine_profile(engine_model)
+        provider = None
+        if profile is not None:
+            provider = self.provider(
+                TaskProfile(task_type=TaskType.summarization, model=profile),
+                phase="engine",
+            )
+        return TaskEngine(profile, provider=provider)
+
+    async def normalize(
+        self,
+        description: str,
+        model: ModelProfile,
+        overrides: dict[str, Any] | None = None,
+        engine_model: ModelProfile | None = None,
+        timeout_seconds: float = 120,
+    ) -> TaskNormalization:
+        return await self.engine(engine_model).normalize(
+            description, model, overrides, timeout_seconds=timeout_seconds
+        )
+
     # -- selection ---------------------------------------------------------- #
 
     def select(self, task: TaskProfile, limit: int = 3) -> SelectionResult:
         return self.selector.select(task, limit=limit)
+
+    async def recommend(
+        self,
+        description: str,
+        model: ModelProfile,
+        overrides: dict[str, Any] | None = None,
+        engine_model: ModelProfile | None = None,
+        limit: int = 3,
+    ) -> tuple[SelectionResult, TaskNormalization]:
+        """Read the description, then rank. How the profile was read is part of the answer."""
+        normalization = await self.normalize(description, model, overrides, engine_model)
+        result = self.select(normalization.profile, limit=limit)
+        if normalization.notes:
+            result = result.model_copy(
+                update={"warnings": [*normalization.notes, *result.warnings]}
+            )
+        return result, normalization
 
     def resolve_technique(self, task: TaskProfile, technique_id: str | None) -> TechniqueSpec:
         if technique_id is None:
@@ -84,6 +130,28 @@ class PromptSelectorService:
             user_input=request.user_input,
             response_schema=request.response_schema,
             variables=request.variables,
+            exemplars=request.exemplars,
+        )
+
+    async def author(self, request: AuthorRequest) -> CompiledProgram:
+        """Compile the contract, then have the engine author its actual message text."""
+        task = _with_runtime_material(request.task) if request.reusable else request.task
+        technique = self.resolve_technique(task, request.technique_id)
+        user_input = "{input}" if request.reusable else request.description
+        scaffold = self.compiler.compile(
+            task=task,
+            technique=technique,
+            user_input=user_input,
+            response_schema=request.response_schema,
+            variables=request.variables,
+            exemplars=request.exemplars,
+        )
+        return await self.engine(request.engine_model).author(
+            description=request.description,
+            technique=technique,
+            scaffold=scaffold,
+            reusable=request.reusable,
+            timeout_seconds=request.timeout_seconds,
         )
 
     async def run(self, request: RunRequest) -> ExecutionTrace:
@@ -193,7 +261,7 @@ class PromptSelectorService:
         repeats: int = 1,
         validation_ratio: float = 0.34,
         timeout_seconds: float = 120,
-        optimizer_model: ModelProfile | None = None,
+        engine_model: ModelProfile | None = None,
         max_metric_calls: int | None = None,
         auto: str = "light",
         progress: ProgressCallback | None = None,
@@ -203,16 +271,23 @@ class PromptSelectorService:
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
         provider = self.provider(task, technique_id=technique.id, phase="optimize")
+        #: A full profile of its own: the proposer may be a remote model while the
+        #: target is local, so nothing here may be inherited from the target.
+        engine_profile = resolve_engine_profile(engine_model)
 
         if backend == "native":
             optimizer = PromptOptimizer(
                 provider=provider,
-                optimizer_provider=(
-                    self.provider(task.model_copy(update={"model": optimizer_model}))
-                    if optimizer_model
+                engine_provider=(
+                    self.provider(
+                        task.model_copy(update={"model": engine_profile}),
+                        technique_id=technique.id,
+                        phase="propose",
+                    )
+                    if engine_profile
                     else None
                 ),
-                optimizer_model=optimizer_model,
+                engine_model=engine_profile,
                 compiler=self.compiler,
             )
             return await optimizer.optimize(
@@ -246,7 +321,7 @@ class PromptSelectorService:
             validation_ratio=validation_ratio,
             timeout_seconds=timeout_seconds,
             dataset_name=name,
-            proposer_model=optimizer_model,
+            proposer_model=engine_profile,
             compiler=self.compiler,
             progress=progress,
         )
@@ -283,3 +358,14 @@ class PromptSelectorService:
         )
         path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
         return path
+
+
+def _with_runtime_material(task: TaskProfile) -> TaskProfile:
+    """A reusable template's `{input}` is the material, whatever the request said.
+
+    Selection otherwise reads "this request supplies nothing to work on" and rules
+    out every recipe that reads an input — which is exactly what a template is for.
+    """
+    return task.model_copy(
+        update={"constraints": task.constraints.model_copy(update={"supplied_material": True})}
+    )

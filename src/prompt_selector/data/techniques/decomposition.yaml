@@ -12,6 +12,8 @@ acceptable_tasks:
 - summarization
 - translation
 avoid_tasks: []
+suits:
+- multi_step
 required_capabilities:
 - system_messages
 model_classes:

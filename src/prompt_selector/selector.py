@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from prompt_selector.domain import (
@@ -11,6 +13,8 @@ from prompt_selector.domain import (
     ScoreBreakdown,
     SelectionResult,
     TaskProfile,
+    TaskShape,
+    TaskType,
     TechniqueSpec,
 )
 from prompt_selector.measurements import MeasurementStore
@@ -22,6 +26,47 @@ EVIDENCE_SCORES = {
     EvidenceLevel.benchmarked: 0.78,
     EvidenceLevel.replicated: 0.95,
 }
+
+#: Task types that transform something the prompt has to carry. Asked without it,
+#: the request is a topic, and the best any recipe can do is say so.
+_NEEDS_MATERIAL = {TaskType.summarization, TaskType.translation, TaskType.structured_extraction}
+
+#: What one extra model call costs a technique, by how much work the task is.
+CALL_COST = {"low": 0.09, "medium": 0.065, "high": 0.03}
+
+#: What it costs once the request is genuinely made of steps: little.
+STEPPED_CALL_COST = 0.015
+
+
+def _call_cost(task: TaskProfile) -> float:
+    if TaskShape.multi_step in task.shape:
+        return STEPPED_CALL_COST
+    return CALL_COST.get(task.complexity, CALL_COST["medium"])
+
+
+def _shape_weights(techniques: Iterable[TechniqueSpec]) -> dict[TaskShape, float]:
+    """How much one trait is worth: the rarer the claim, the more it separates.
+
+    Eight of the recipes call themselves good for verifiable work and two for work
+    that comes with examples. Counting matches alone would make the common claim
+    worth as much as the rare one, and every request that mentions correctness
+    would end in a tie broken by static priors — which is how one technique came
+    to win a whole task type.
+    """
+    counts = Counter(trait for technique in techniques for trait in technique.suits)
+    return {trait: 1.0 / max(counts.get(trait, 0), 1) for trait in TaskShape}
+
+
+def _shape_fit(
+    shape: set[TaskShape], suits: set[TaskShape], weights: dict[TaskShape, float]
+) -> float:
+    """The share of this request's traits, by weight, that the recipe is built for."""
+    if not shape:
+        return 0.5
+    total = sum(weights[trait] for trait in shape)
+    if not total:
+        return 0.5
+    return sum(weights[trait] for trait in shape & suits) / total
 
 
 @dataclass(frozen=True)
@@ -62,9 +107,19 @@ class Selector:
 
         measured = {technique.id: self._measurement(task, technique) for technique in eligible}
         reference = _reference_costs(measured.values())
+        weights = _shape_weights(self.registry.techniques.values())
 
         candidates = [
-            _Scored(technique, self._score(task, technique, measured.get(technique.id), reference))
+            _Scored(
+                technique,
+                self._score(
+                    task,
+                    technique,
+                    measured.get(technique.id),
+                    reference,
+                    _shape_fit(task.shape, technique.suits, weights),
+                ),
+            )
             for technique in eligible
         ]
         candidates.sort(key=lambda item: item.recommendation.score, reverse=True)
@@ -88,6 +143,20 @@ class Selector:
             warnings.append(
                 "The model has no declared native structured-output capability; "
                 "use parser validation and repair."
+            )
+        if not task.constraints.supplied_material and task.task_type in _NEEDS_MATERIAL:
+            warnings.append(
+                f"A {task.task_type.value} task works on something, and this request names a "
+                "topic without supplying it. Paste the text into the request, or build a "
+                "reusable template so the material arrives through {input}."
+            )
+        if task.constraints.retrieval_required and not any(
+            item.technique.tools_required for item in selected
+        ):
+            warnings.append(
+                "This task needs material the prompt does not contain, but no recommended "
+                "technique can retrieve it. Give the model tool access (a tool_calling "
+                "capability makes agents.react eligible), or paste the sources into the input."
             )
 
         return SelectionResult(
@@ -116,6 +185,16 @@ class Selector:
             )
         if technique.tools_required and not task.constraints.tools_allowed:
             reasons.append("The technique requires tools, but tools are disabled.")
+        if technique.requires_supplied_evidence and task.constraints.retrieval_required:
+            reasons.append(
+                "The technique answers only from evidence pasted into the prompt, but this "
+                "task has to gather the material first."
+            )
+        elif technique.requires_supplied_evidence and not task.constraints.supplied_material:
+            reasons.append(
+                "The technique works on material carried by the prompt — quoting, filtering or "
+                "translating it — and this request states a topic rather than supplying any."
+            )
         if task.constraints.local_only and not task.model.local:
             reasons.append("The task requires local execution, but the model profile is remote.")
         if task.constraints.max_calls < technique.min_calls:
@@ -138,6 +217,7 @@ class Selector:
         technique: TechniqueSpec,
         measured: MeasuredEvidence | None,
         reference: _Reference,
+        shape_fit: float = 0.5,
     ) -> Recommendation:
         priorities = task.priorities.normalized()
 
@@ -196,23 +276,46 @@ class Selector:
             evidence_source = "prior"
 
         penalty = (1 - c.simplicity) * 0.045
-        penalty += max(0, technique.min_calls - 1) * 0.018
+        # An extra model call is cheap on work that genuinely has steps and dear on
+        # work that does not: this is what stops a two-stage recipe from winning a
+        # one-line request on a hundredth of a point.
+        penalty += max(0, technique.min_calls - 1) * _call_cost(task)
         if task.constraints.strict_json and not technique.strict_json_fit:
             penalty += 0.07
         if task.constraints.requires_validation and not technique.validation_fit:
             penalty += 0.035
 
+        # A task that has to fetch its own material is not merely served better by a
+        # tool loop: nothing else can finish it. That outranks the latency and token
+        # cost the loop is otherwise penalised for.
+        retrieval_fit = (
+            1.0 if task.constraints.retrieval_required and technique.tools_required else 0.0
+        )
+
+        # Shape decides within a task type, never across it: a label-rules recipe
+        # that happens to match "exact format" must not win an extraction task from
+        # the recipes built for it. Multiplying gates the shape bonus behind fit.
         raw_score = (
-            0.30 * task_fit
-            + 0.15 * model_fit
-            + 0.35 * priority_fit
-            + 0.15 * benchmark_prior
-            + 0.05 * evidence_quality
+            task_fit * (0.26 + 0.21 * shape_fit)
+            + 0.10 * model_fit
+            + 0.26 * priority_fit
+            + 0.13 * benchmark_prior
+            + 0.04 * evidence_quality
+            + 0.12 * retrieval_fit
             - penalty
         )
         score = max(0.0, min(1.0, raw_score))
 
         reasons = [self._task_reason(task, technique)]
+        covered = sorted(item.value for item in task.shape & technique.suits)
+        if covered:
+            reasons.append(f"Built for this request being {', '.join(covered).replace('_', ' ')}.")
+        elif task.shape:
+            reasons.append(
+                "Declares no fit for what this request looks like ("
+                + ", ".join(sorted(item.value.replace("_", " ") for item in task.shape))
+                + ")."
+            )
         source_label = (
             f"measured on {', '.join(measured_axes)}"
             if measured_axes
@@ -227,6 +330,8 @@ class Selector:
             reasons.append("Designed for strict structured output.")
         if task.constraints.requires_validation and technique.validation_fit:
             reasons.append("Includes an explicit validation path.")
+        if retrieval_fit:
+            reasons.append("Can fetch the material this task is missing, through tool calls.")
         reasons.append(benchmark_reason)
         reasons.append(
             f"Executes as {technique.execution.strategy} ({technique.min_calls} call minimum)."
@@ -241,11 +346,13 @@ class Selector:
             reasons=reasons,
             breakdown=ScoreBreakdown(
                 task_fit=round(task_fit, 4),
+                shape_fit=round(shape_fit, 4),
                 model_fit=round(model_fit, 4),
                 priority_fit=round(priority_fit, 4),
                 benchmark_prior=round(benchmark_prior, 4),
                 evidence_quality=round(evidence_quality, 4),
                 penalties=round(penalty, 4),
+                retrieval_fit=retrieval_fit,
             ),
             evidence_source=evidence_source,
             measured=measured,

@@ -45,9 +45,9 @@ prompt-selector optimize --model llama3.2:3b --model-class small \
 | `dspy:bootstrap` | demos only | no — runs fully offline |
 
 `--auto light|medium|heavy` sets MIPRO's and GEPA's budget; `--max-metric-calls`
-caps GEPA's rollouts precisely. `--optimizer-model` picks a different (usually
+caps GEPA's rollouts precisely. `--engine-model` picks a different (usually
 stronger) model to write the proposals; the task itself still runs on the target
-model.
+model. (`--optimizer-model` is the former name and still works.)
 
 **Per-example metric.** DSPy needs one scalar per example, so
 `example_score` collapses the graders using the task's own priorities over

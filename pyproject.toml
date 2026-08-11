@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prompt-selector"
-version = "0.1.0"
+version = "0.2.0"
 description = "Explainable prompt-technique selection, compilation, and benchmarking for local and cloud LLMs."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
 authors = [{ name = "Artem Kazakov Kozlov" }]
 keywords = [
   "prompt-engineering",
@@ -16,19 +17,34 @@ keywords = [
   "structured-output",
   "local-llm",
 ]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+]
 dependencies = [
-  "fastapi>=0.128,<1",
   "httpx>=0.28,<1",
-  "python-multipart>=0.0.20,<1",
   "pydantic>=2.13,<3",
   "pyyaml>=6.0,<7",
-  "rich>=14,<15",
-  "typer>=0.26,<1",
-  "uvicorn[standard]>=0.40,<1",
 ]
 
 [project.optional-dependencies]
+cli = [
+  "rich>=14,<15",
+  "typer>=0.26,<1",
+]
+serve = [
+  "fastapi>=0.128,<1",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.40,<1",
+]
 dev = [
+  "prompt-selector[cli,serve]",
   "pytest>=9,<10",
   "pytest-asyncio>=1.2,<2",
   "ruff>=0.14,<1",
@@ -54,11 +70,17 @@ huggingface = [
   "datasets>=3,<6",
 ]
 all = [
-  "prompt-selector[dspy,tracing,huggingface]",
+  "prompt-selector[cli,serve,dspy,tracing,huggingface]",
 ]
 
 [project.scripts]
-prompt-selector = "prompt_selector.cli:app"
+prompt-selector = "prompt_selector.entrypoint:main"
+
+[project.urls]
+Homepage = "https://github.com/KazKozDev/prompt-selector"
+Repository = "https://github.com/KazKozDev/prompt-selector"
+Issues = "https://github.com/KazKozDev/prompt-selector/issues"
+Changelog = "https://github.com/KazKozDev/prompt-selector/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

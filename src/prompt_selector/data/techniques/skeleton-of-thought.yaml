@@ -4,6 +4,9 @@ acceptable_tasks:
 - coding
 avoid_tasks:
 - classification
+suits:
+- multi_step
+- open_ended
 required_capabilities:
 - system_messages
 model_classes:

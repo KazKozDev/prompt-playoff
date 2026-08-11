@@ -11,6 +11,9 @@ avoid_tasks:
 - creative_writing
 - research
 - agents
+suits:
+- exact_format
+- verifiable
 required_capabilities:
 - system_messages
 model_classes:

@@ -4,6 +4,9 @@ acceptable_tasks:
 - translation
 - research
 avoid_tasks: []
+suits:
+- underspecified
+- long_input
 required_capabilities:
 - system_messages
 model_classes:
@@ -12,6 +15,7 @@ model_classes:
 - large
 - reasoning
 tools_required: false
+requires_supplied_evidence: true
 strict_json_fit: true
 validation_fit: true
 evidence_level: documented

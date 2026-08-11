@@ -4,6 +4,8 @@ acceptable_tasks:
 - summarization
 - coding
 avoid_tasks: []
+suits:
+- underspecified
 required_capabilities:
 - system_messages
 model_classes:
@@ -25,12 +27,12 @@ description: Restate the task in the model's own words, expanding what is implic
 strong_tasks:
 - classification
 - research
-min_calls: 2
+min_calls: 1
 characteristics:
   quality: 0.81
   reliability: 0.83
-  latency_efficiency: 0.52
-  token_efficiency: 0.5
+  latency_efficiency: 0.72
+  token_efficiency: 0.7
   simplicity: 0.78
 recipe:
   system: Make the task explicit before solving it.
@@ -51,13 +53,8 @@ recipe:
       '
   - name: respond_task
     title: RESPOND
-    body: 'Your restatement:
-
-
-      {previous}
-
-
-      Now answer the task as you restated it. Answer alone.
+    body: 'After the restatement, answer the task as you restated it. Give the answer alone, without
+      restating anything again.
 
       '
   - name: contract_native
@@ -88,21 +85,7 @@ recipe:
   - json_schema
   fallback: Answer the original task directly if the restatement drifted.
 execution:
-  strategy: multi_stage
-  stages:
-  - name: rephrase
-    blocks:
-    - procedure
-    - input
-    system: Restate the task. Do not solve it.
-    carries_schema: false
-  - name: respond
-    blocks:
-    - input
-    - respond_task
-    - contract_native
-    - contract_embedded
-    - fields
+  strategy: single
 benchmark_priors:
   default: 0.74
   task:classification: 0.81

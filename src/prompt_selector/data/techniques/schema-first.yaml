@@ -11,6 +11,9 @@ acceptable_tasks:
 - summarization
 avoid_tasks:
 - creative_writing
+suits:
+- exact_format
+- verifiable
 required_capabilities:
 - structured_output
 model_classes:

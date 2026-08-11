@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-import uvicorn
 import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
+from prompt_selector.checks import CheckConfigError, CheckRun, run_checks
 from prompt_selector.domain import (
     CompileRequest,
     Constraints,
@@ -21,12 +21,13 @@ from prompt_selector.domain import (
     Priorities,
     RunRequest,
     TaskProfile,
+    TaskShape,
     TaskType,
 )
 from prompt_selector.evals import BenchmarkReport, load_jsonl
 from prompt_selector.graders import grader_names
 from prompt_selector.lint import format_issues, has_errors, lint_registry, registry_summary
-from prompt_selector.normalizer import normalize_description, parse_capabilities
+from prompt_selector.normalizer import parse_capabilities
 from prompt_selector.optimizer import BACKENDS
 from prompt_selector.registry import Registry
 from prompt_selector.service import PromptSelectorService
@@ -56,6 +57,31 @@ def _model(
     )
 
 
+def _engine_model(
+    model: str | None,
+    provider: str | None,
+    base_url: str | None,
+) -> ModelProfile | None:
+    """A profile of its own — the engine may be remote while the target is local."""
+    if not model:
+        return None
+    resolved = provider or "ollama"
+    return ModelProfile(
+        provider=resolved,
+        model_id=model,
+        local=resolved == "ollama",
+        base_url=base_url,
+    )
+
+
+def _shape(value: str) -> set[TaskShape]:
+    try:
+        return {TaskShape(item.strip()) for item in value.split(",") if item.strip()}
+    except ValueError as exc:
+        known = ", ".join(item.value for item in TaskShape)
+        raise typer.BadParameter(f"{exc}. Known shapes: {known}") from None
+
+
 def _task(
     task: TaskType,
     model: ModelProfile,
@@ -63,15 +89,19 @@ def _task(
     priorities: Priorities | None = None,
     tools_allowed: bool = False,
     max_calls: int = 3,
+    retrieval_required: bool = False,
+    shape: str = "",
 ) -> TaskProfile:
     return TaskProfile(
         task_type=task,
+        shape=_shape(shape),
         output_contract="json_schema" if strict_json else "free_text",
         priorities=priorities or Priorities(),
         constraints=Constraints(
             strict_json=strict_json,
             requires_validation=True,
-            tools_allowed=tools_allowed,
+            tools_allowed=tools_allowed or retrieval_required,
+            retrieval_required=retrieval_required,
             max_calls=max_calls,
         ),
         model=model,
@@ -178,6 +208,33 @@ def _print_report(report: BenchmarkReport) -> None:
             )
 
 
+def _print_check_run(run: CheckRun) -> None:
+    for check in run.checks:
+        table = Table(title=f"Check: {check.name} [{check.status}]")
+        table.add_column("Metric")
+        table.add_column("Measured", justify="right")
+        table.add_column("Required", justify="right")
+        table.add_column("Verdict")
+        if check.error:
+            table.add_row("setup", "—", "—", check.error)
+        for threshold in check.thresholds:
+            operator = ">=" if threshold.bound == "min" else "<="
+            if threshold.passed:
+                verdict = "PASS"
+            else:
+                breach = abs(threshold.difference)
+                verdict = f"FAIL by {breach:.6g}"
+            table.add_row(
+                threshold.field,
+                f"{threshold.measured:.6g}",
+                f"{operator} {threshold.required:.6g}",
+                verdict,
+            )
+        console.print(table)
+    if run.updated:
+        console.print(f"[green]Updated requirements in {run.config}.[/green]")
+
+
 @app.command()
 def recommend(
     description: Annotated[str, typer.Argument(help="Describe the LLM task and constraints.")],
@@ -191,21 +248,29 @@ def recommend(
     ] = "system_messages",
     local: Annotated[bool, typer.Option(help="Whether execution is local.")] = True,
     base_url: Annotated[str | None, typer.Option(help="Custom provider base URL.")] = None,
+    engine_model: Annotated[
+        str | None,
+        typer.Option(help="Model that reads the description. Never the model under test."),
+    ] = None,
+    engine_provider: Annotated[str | None, typer.Option(help="Engine provider id.")] = None,
+    engine_base_url: Annotated[str | None, typer.Option(help="Engine provider base URL.")] = None,
     json_output: Annotated[
         bool, typer.Option("--json", help="Print machine-readable JSON.")
     ] = False,
 ) -> None:
     service = PromptSelectorService(Registry.load())
-    profile = normalize_description(
-        description,
-        _model(provider, model, model_class, capabilities, local, base_url),
+    result, normalization = asyncio.run(
+        service.recommend(
+            description=description,
+            model=_model(provider, model, model_class, capabilities, local, base_url),
+            engine_model=_engine_model(engine_model, engine_provider, engine_base_url),
+        )
     )
-    result = service.select(profile)
     if json_output:
         console.print_json(result.model_dump_json())
     else:
-        console.print("[dim]Inferred task profile:[/dim]")
-        console.print_json(profile.model_dump_json())
+        console.print(f"[dim]Task profile read by: {normalization.source}[/dim]")
+        console.print_json(normalization.profile.model_dump_json())
         _print_selection(result)
 
 
@@ -218,6 +283,17 @@ def select_command(
     capabilities: Annotated[str, typer.Option()] = "system_messages",
     strict_json: Annotated[bool, typer.Option()] = False,
     tools_allowed: Annotated[bool, typer.Option()] = False,
+    retrieval_required: Annotated[
+        bool,
+        typer.Option(help="The material to answer from has to be fetched, not pasted."),
+    ] = False,
+    shape: Annotated[
+        str,
+        typer.Option(
+            help="Comma-separated request traits, e.g. multi_step,verifiable. "
+            "This is what makes two tasks of the same type rank differently."
+        ),
+    ] = "",
     local_only: Annotated[bool, typer.Option()] = False,
     max_calls: Annotated[int, typer.Option(min=1, max=20)] = 3,
     quality: Annotated[float, typer.Option(min=0)] = 0.35,
@@ -239,6 +315,8 @@ def select_command(
         ),
         tools_allowed,
         max_calls,
+        retrieval_required,
+        shape,
     )
     profile.constraints.local_only = local_only
     result = PromptSelectorService(Registry.load()).select(profile)
@@ -268,6 +346,17 @@ def compile_command(
     technique: Annotated[str | None, typer.Option()] = None,
     variables: Annotated[str | None, typer.Option(help="JSON object of recipe variables.")] = None,
     tools_allowed: Annotated[bool, typer.Option()] = False,
+    retrieval_required: Annotated[
+        bool,
+        typer.Option(help="The material to answer from has to be fetched, not pasted."),
+    ] = False,
+    shape: Annotated[
+        str,
+        typer.Option(
+            help="Comma-separated request traits, e.g. multi_step,verifiable. "
+            "This is what makes two tasks of the same type rank differently."
+        ),
+    ] = "",
     base_url: Annotated[str | None, typer.Option()] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -277,6 +366,8 @@ def compile_command(
         _model(provider, model, model_class, capabilities, provider == "ollama", base_url),
         bool(schema),
         tools_allowed=tools_allowed,
+        retrieval_required=retrieval_required,
+        shape=shape,
     )
     request = CompileRequest(
         task=profile,
@@ -391,6 +482,55 @@ def benchmark_command(
         console.print("[dim]Measurement recorded; future rankings will use it.[/dim]")
 
 
+@app.command("check")
+def check_command(
+    config: Annotated[
+        Path,
+        typer.Option(help="Committed expectation file."),
+    ] = Path("prompt-selector.yaml"),
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print one machine-readable result."),
+    ] = False,
+    update: Annotated[
+        bool,
+        typer.Option(help="Replace require values with the current measurements."),
+    ] = False,
+    no_record: Annotated[
+        bool,
+        typer.Option("--no-record", help="Do not add these measurements to the evidence store."),
+    ] = False,
+) -> None:
+    """Re-measure committed expectations and fail CI on regression."""
+    if json_output and update:
+        console.print("--update cannot be combined with --json; run one mode at a time")
+        raise typer.Exit(code=2)
+    try:
+        result = asyncio.run(run_checks(config, record=not no_record, update=update))
+    except CheckConfigError as exc:
+        if json_output:
+            console.print_json(
+                json.dumps(
+                    {
+                        "status": "error",
+                        "exit_code": 2,
+                        "config": str(config),
+                        "checks": [],
+                        "error": str(exc),
+                    }
+                )
+            )
+        else:
+            console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from None
+    if json_output:
+        console.print_json(result.model_dump_json())
+    else:
+        _print_check_run(result)
+    if result.exit_code:
+        raise typer.Exit(code=result.exit_code)
+
+
 @app.command("compare")
 def compare_command(
     model: Annotated[str, typer.Option()],
@@ -497,8 +637,15 @@ def optimize_command(
     latency: Annotated[float, typer.Option(min=0)] = 0.1,
     token_cost: Annotated[float, typer.Option(min=0)] = 0.2,
     optimizer_model: Annotated[
-        str | None, typer.Option(help="Model that proposes rewrites.")
+        str | None,
+        typer.Option(help="Deprecated name for --engine-model."),
     ] = None,
+    engine_model: Annotated[
+        str | None,
+        typer.Option(help="Model that proposes rewrites. Never the model under test."),
+    ] = None,
+    engine_provider: Annotated[str | None, typer.Option(help="Engine provider id.")] = None,
+    engine_base_url: Annotated[str | None, typer.Option(help="Engine provider base URL.")] = None,
     base_url: Annotated[str | None, typer.Option()] = None,
     timeout_seconds: Annotated[float, typer.Option(min=1)] = 120,
     export: Annotated[
@@ -529,8 +676,10 @@ def optimize_command(
     if inline is None and not dataset:
         raise typer.BadParameter("Provide --dataset or --dataset-file")
 
-    optimizer_profile = (
-        target_model.model_copy(update={"model_id": optimizer_model}) if optimizer_model else None
+    if optimizer_model and not engine_model:
+        console.print("[yellow]--optimizer-model is deprecated; use --engine-model.[/yellow]")
+    engine_profile = _engine_model(
+        engine_model or optimizer_model, engine_provider, engine_base_url
     )
 
     def show(event: dict) -> None:
@@ -548,7 +697,7 @@ def optimize_command(
             beam_width=beam_width,
             repeats=repeats,
             timeout_seconds=timeout_seconds,
-            optimizer_model=optimizer_profile,
+            engine_model=engine_profile,
             max_metric_calls=max_metric_calls,
             auto=auto,
             progress=show,
@@ -919,6 +1068,7 @@ def new_technique(
         "strong_tasks": [task.value],
         "acceptable_tasks": [],
         "avoid_tasks": [],
+        "suits": [TaskShape.verifiable.value],
         "required_capabilities": ["system_messages"],
         "model_classes": ["small", "medium", "large", "reasoning"],
         "min_calls": 1,
@@ -993,6 +1143,19 @@ def serve(
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
     reload: Annotated[bool, typer.Option()] = False,
 ) -> None:
+    try:
+        import fastapi  # noqa: F401
+        import multipart  # noqa: F401
+        import uvicorn
+    except ModuleNotFoundError as exc:
+        if exc.name in {"fastapi", "uvicorn", "multipart"}:
+            console.print(
+                "Server dependencies are missing; run: pip install 'prompt-selector[serve]'",
+                style="red",
+                markup=False,
+            )
+            raise typer.Exit(code=1) from None
+        raise
     uvicorn.run("prompt_selector.api:app", host=host, port=port, reload=reload)
 
 

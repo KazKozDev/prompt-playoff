@@ -3,6 +3,9 @@ acceptable_tasks:
 - structured_extraction
 - summarization
 avoid_tasks: []
+suits:
+- computational
+- verifiable
 required_capabilities:
 - system_messages
 model_classes:
@@ -26,12 +29,12 @@ strong_tasks:
 - coding
 - classification
 - research
-min_calls: 2
+min_calls: 1
 characteristics:
   quality: 0.82
   reliability: 0.82
-  latency_efficiency: 0.62
-  token_efficiency: 0.72
+  latency_efficiency: 0.82
+  token_efficiency: 0.86
   simplicity: 0.82
 recipe:
   system: Think in shorthand. The draft is scaffolding, not an explanation.
@@ -42,7 +45,7 @@ recipe:
   - name: procedure
     title: DRAFT
     body: 'Think step by step, but write each step as a minimal note of at most five words. No sentences,
-      no explanation, no restating the input. One note per line. Stop before the answer.
+      no explanation, no restating the input. One note per line. Do not answer inside the notes.
 
       '
   - name: input
@@ -52,13 +55,8 @@ recipe:
       '
   - name: answer_task
     title: ANSWER
-    body: 'Your notes:
-
-
-      {previous}
-
-
-      Give the answer alone.
+    body: 'After the notes, on a new line, give the answer alone. Do not repeat the notes and do not
+      explain them.
 
       '
   - name: contract_native
@@ -89,21 +87,7 @@ recipe:
   - json_schema
   fallback: Re-answer from the same notes, obeying the format.
 execution:
-  strategy: multi_stage
-  stages:
-  - name: draft
-    blocks:
-    - procedure
-    - input
-    system: Write terse notes. Five words per step, maximum.
-    carries_schema: false
-  - name: answer
-    blocks:
-    - input
-    - answer_task
-    - contract_native
-    - contract_embedded
-    - fields
+  strategy: single
 benchmark_priors:
   default: 0.75
   task:coding: 0.83

@@ -4,6 +4,9 @@ acceptable_tasks:
 - summarization
 - coding
 avoid_tasks: []
+suits:
+- underspecified
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:
@@ -25,12 +28,12 @@ description: Understand, judge, then criticise that judgement before committing.
 strong_tasks:
 - classification
 - research
-min_calls: 2
+min_calls: 1
 characteristics:
   quality: 0.86
   reliability: 0.84
-  latency_efficiency: 0.46
-  token_efficiency: 0.42
+  latency_efficiency: 0.66
+  token_efficiency: 0.62
   simplicity: 0.62
 recipe:
   system: Judge, then interrogate your own judgement before committing to it.
@@ -62,13 +65,8 @@ recipe:
       '
   - name: commit_task
     title: COMMIT
-    body: 'Your reflection:
-
-
-      {previous}
-
-
-      Give the answer you settled on in step 4. Answer alone.
+    body: 'After the four steps, give the answer you settled on in step 4, on its own, with no recap
+      of the reflection.
 
       '
   - name: contract_native
@@ -99,21 +97,7 @@ recipe:
   - json_schema
   fallback: Fall back to the preliminary judgement if the critique was inconclusive.
 execution:
-  strategy: multi_stage
-  stages:
-  - name: reflect
-    blocks:
-    - procedure
-    - input
-    system: Reflect through the four steps. Do not format an answer.
-    carries_schema: false
-  - name: commit
-    blocks:
-    - input
-    - commit_task
-    - contract_native
-    - contract_embedded
-    - fields
+  strategy: single
 benchmark_priors:
   default: 0.77
   task:classification: 0.85

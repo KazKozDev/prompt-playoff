@@ -5,6 +5,9 @@ acceptable_tasks:
 - coding
 avoid_tasks:
 - creative_writing
+suits:
+- verifiable
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:
@@ -59,7 +62,8 @@ recipe:
 
 
       Write three short questions whose answers would reveal a mistake in that draft, then answer each
-      one strictly from the input. If the input does not settle a question, say so.
+      one. Where the input settles a question, answer strictly from it; where nothing settles it, say
+      so rather than guessing.
 
       '
   - name: revise_task

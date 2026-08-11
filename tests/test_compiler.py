@@ -1,5 +1,6 @@
 from prompt_selector.compiler import PromptCompiler
 from prompt_selector.domain import Capability, Constraints, ModelProfile, TaskProfile, TaskType
+from prompt_selector.normalizer import normalize_description
 
 
 def user_text(program, stage: int = 0) -> str:
@@ -126,3 +127,35 @@ def test_legacy_recipe_without_blocks_still_compiles(extraction_task, registry):
     program = PromptCompiler().compile(extraction_task, technique, "Legacy input")
     assert "Legacy input" in user_text(program)
     assert "INSTRUCTIONS" in user_text(program)
+
+
+def test_retrieval_task_without_tools_is_flagged_in_the_notes(registry) -> None:
+    description = "собери в интернете статьи про архитектуры агентов ллм за 2026 год"
+    task = normalize_description(
+        description, ModelProfile(capabilities={Capability.system_messages})
+    )
+    program = PromptCompiler().compile(
+        task, registry.technique("reasoning.decomposition"), description
+    )
+
+    assert task.constraints.retrieval_required is True
+    assert any("declares no tools" in note for note in program.notes)
+
+
+def test_a_recipe_can_word_itself_for_a_request_that_supplies_nothing(registry) -> None:
+    technique = registry.technique("reasoning.self-ask")
+    topic = TaskProfile(
+        task_type=TaskType.research,
+        constraints=Constraints(supplied_material=False, requires_validation=False),
+        model=ModelProfile(capabilities={Capability.system_messages}),
+    )
+    supplied = topic.model_copy(
+        update={"constraints": Constraints(supplied_material=True, requires_validation=False)}
+    )
+
+    for_topic = user_text(PromptCompiler().compile(topic, technique, "рынок ИИ в ЕС"))
+    for_material = user_text(PromptCompiler().compile(supplied, technique, "a long report"))
+
+    assert "from what you reliably know" in for_topic
+    assert "using only the input" not in for_topic
+    assert "using only the input" in for_material

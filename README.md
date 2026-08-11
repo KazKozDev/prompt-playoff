@@ -11,8 +11,11 @@ measured on your model, and it always says which.
 ## What it does
 
 1. **Selects.** Filters techniques on hard constraints (capabilities, tool
-   access, call budget, model class), ranks the rest against your priorities,
-   and explains each recommendation and each rejection.
+   access, call budget, model class, and whether the evidence is supplied or has
+   to be fetched), then ranks the rest on what the request actually looks like —
+   whether it has dependent steps, a checkable answer, a fixed output shape, a
+   long input, real cost of error — not on its task type alone. Every
+   recommendation and every rejection comes with its reasons.
 2. **Compiles.** Turns the task into the prompt *that technique implies* — its
    own block structure, its own stages, its own call count. Schema-first and
    map-reduce do not produce the same prompt with a different label on it.
@@ -24,6 +27,17 @@ measured on your model, and it always says which.
    a new technique.
 
 ## Quick start
+
+Install only the surface you use:
+
+| Install | For whom |
+|---|---|
+| `pip install prompt-selector` | Python applications importing the deterministic registry, selector, normalizer, and compiler. |
+| `pip install 'prompt-selector[cli]'` | Developers running terminal commands such as `recommend`, `benchmark`, and `check`. |
+| `pip install 'prompt-selector[serve]'` | Deployments starting the HTTP API/UI with Uvicorn. |
+| `pip install 'prompt-selector[all]'` | Contributors who want CLI, server, tracing, corpus imports, and every optimizer backend. |
+
+For local development, clone the repository and install the development environment:
 
 ```bash
 python3 -m venv .venv
@@ -52,6 +66,7 @@ prompt-selector benchmark --model llama3.2:3b --model-class small --dataset enti
 Start the web interface at `http://127.0.0.1:8000`:
 
 ```bash
+# The command needs both command-line and server extras; [all] includes both.
 prompt-selector serve
 ```
 
@@ -129,6 +144,52 @@ output contract. The Pareto front over (quality, reliability, tokens, latency)
 is reported alongside the scalarized winner, so a cheaper-but-slightly-worse
 prompt stays visible instead of being averaged away.
 
+### The engine model
+
+Three jobs in this project can use an LLM *for the selector*: reading a free-text
+task description, authoring the task-specific prompt from a selected technique,
+and proposing prompt rewrites during optimization. Description parsing keeps its
+documented deterministic fallback; prompt authoring is fail-closed and never
+returns the compiler scaffold as if it were a model-written prompt.
+
+```bash
+export PROMPT_SELECTOR_ENGINE_MODEL=qwen3.5:9b
+prompt-selector recommend "Render this contract into German, keeping terms consistent."
+```
+
+```
+Task profile read by: engine
+  "task_type": "translation",
+  "domain": "legal",
+
+Warning: Keyword matching would have chosen summarization; the engine chose translation.
+```
+
+The keyword matcher takes the first list entry whose substring appears in your
+text, and falls through to `summarization` when nothing matches — the sentence
+above contains none of its translation cues. The engine reads it instead, and
+the warning states which path ran, so a profile is never silently guessed.
+
+`--engine-model` (plus `--engine-provider` and `--engine-base-url`) overrides the
+environment per run, and the web UI has the same field. The engine is a full
+profile of its own: a remote proposer against a local target is the point, so
+nothing is inherited from the model under test.
+
+Engine answers are cached in `benchmark-results/engine-cache.json`, keyed by
+description, technique, scaffold, mode, and engine model. Description-parse
+failures fall back to keyword matching and say so. Authoring failures return an
+explicit error: no deterministic substitution is shown as a ready prompt.
+Selection, scaffold compilation and grading remain LLM-free: the engine does not
+choose the technique or score anything.
+
+On the optimizer side the split is what makes the result interpretable. Every
+`OptimizationResult` carries `engine_model_id` and `engine_is_target`, and a run
+where the model wrote its own prompts says so in its notes:
+
+> Candidate prompts were written by llama3.2:3b, the same model the numbers
+> describe. Part of the gain may be that model's own phrasing rather than a
+> better prompt.
+
 ### Stronger search: DSPy
 
 `--backend` swaps the search algorithm without changing anything else — the
@@ -157,6 +218,44 @@ modes:
 [docs/benchmarks/native-vs-mipro.md](docs/benchmarks/native-vs-mipro.md).
 
 ## CI gates and the model matrix: promptfoo
+
+### Use it in CI
+
+Commit `prompt-selector.yaml` with the model and thresholds your build promises:
+
+```yaml
+version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+  model_class: small
+  capabilities: [structured_output, system_messages]
+checks:
+  - name: entities-schema-first
+    technique: structured.schema-first
+    task: structured_extraction
+    dataset: entity-extraction
+    repeats: 3
+    strict_json: true
+    require:
+      quality_min: 0.85
+      reliability_min: 0.95
+      mean_total_tokens_max: 300
+      p95_latency_seconds_max: 2.0
+```
+
+Run `prompt-selector check`; use `--json` for machine-readable output,
+`--no-record` to keep the evidence store untouched, or `--update` to replace the
+committed bounds with the current measurements while preserving YAML comments and
+key order. Exit code `0` means every bound passed, `1` means at least one regression,
+and `2` means invalid configuration or setup such as an unknown dataset or unreachable
+provider. `--update` and `--json` are intentionally mutually exclusive.
+
+Requirement names are explicit Scorecard fields ending in `_min` or `_max`; expression
+strings are not accepted. An empty `require` block is an error, so a check can never pass
+without enforcing anything.
+
+### Larger matrices with promptfoo
 
 ```bash
 prompt-selector export-promptfoo \
@@ -256,24 +355,53 @@ GET  /v1/datasets/{name}     the examples themselves
 POST /v1/recommend           rank from a description; returns the profile it ranked against
 POST /v1/select              rank from an explicit TaskProfile
 POST /v1/compile             the compiled prompt, stage by stage
+POST /v1/author              have an engine model author prompt text from that contract
 POST /v1/run                 execute it, with the full call trace
 POST /v1/benchmark           start a measurement job
 POST /v1/compare             start a multi-technique measurement job
 POST /v1/optimize            start an optimization job (native or dspy:* backend)
 POST /v1/export/promptfoo    write a promptfoo project
 GET  /v1/integrations        which optional integrations are installed and active
+GET  /v1/jobs                list current and historical jobs with their event logs
 GET  /v1/jobs/{id}           poll progress and collect the result
 GET  /v1/measurements        recorded evidence used for ranking
 ```
 
 Benchmark, compare and optimize return a job id immediately, because they issue
-real model calls.
+real model calls. Job status, results, errors, and the complete event stream are
+persisted atomically to `benchmark-results/jobs.json`, so the Logs view survives
+application restarts. Set `PROMPT_SELECTOR_JOBS_PATH` to use another location.
 
 ## Providers
 
-Ollama and any OpenAI-compatible endpoint. Native JSON Schema is used when the
+Ollama and any OpenAI-compatible endpoint. Keys resolve in this order: an
+in-memory request key from Settings, `model.api_key_env`, the provider default
+below, then `PROMPT_SELECTOR_API_KEY`.
+A missing key fails before the request and names the environment variable to set.
+
+| Provider id | Default base URL | Default key environment |
+|---|---|---|
+| `ollama` | `http://127.0.0.1:11434` | none |
+| `openai` | `https://api.openai.com` | `OPENAI_API_KEY` |
+| `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
+| `together` | `https://api.together.xyz` | `TOGETHER_API_KEY` |
+| `openrouter` | `https://openrouter.ai/api` | `OPENROUTER_API_KEY` |
+| `groq` | `https://api.groq.com/openai` | `GROQ_API_KEY` |
+| `fireworks` | `https://api.fireworks.ai/inference` | `FIREWORKS_API_KEY` |
+| `deepseek` | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
+
+Unknown OpenAI-compatible provider ids require `base_url` and use
+`PROMPT_SELECTOR_API_KEY` unless `api_key_env` names another variable. Anthropic uses
+`x-api-key` and `anthropic-version`; the other cloud providers use bearer auth.
+Native JSON Schema is used when the
 model declares `structured_output`; otherwise the schema is embedded in the
 prompt and validated after the call, and the compiler says so in its notes.
+
+## Docker UI
+
+Build with `docker build -t prompt-selector .`.
+Run with `docker run --rm -p 8000:8000 prompt-selector`.
+Open `http://127.0.0.1:8000`; the non-root image health-checks `/health`.
 
 ## Development
 
@@ -294,7 +422,7 @@ the suite runs on a bare install.
   are the datasets with real headroom; the others are small demonstrations.
 - The optimizer is only as good as the model writing its proposals. With the
   target model doubling as the proposer, expect rephrasings rather than genuine
-  rule discovery — use `--optimizer-model` to put a stronger model on that job.
+  rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in the registry
   (`prompt_selector.tools`), which ships with a calculator. Register your own to
   benchmark real agent work.

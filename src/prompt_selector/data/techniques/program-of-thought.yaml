@@ -6,6 +6,9 @@ acceptable_tasks:
 avoid_tasks:
 - creative_writing
 - translation
+suits:
+- computational
+- verifiable
 required_capabilities:
 - system_messages
 model_classes:

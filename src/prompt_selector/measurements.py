@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from prompt_selector.domain import MeasuredEvidence, TaskType
+from prompt_selector.persistence import advisory_lock, atomic_write_json, quarantine_corrupt_file
 
 DEFAULT_PATH = Path("benchmark-results/measurements.json")
 
@@ -18,16 +19,26 @@ DEFAULT_PATH = Path("benchmark-results/measurements.json")
 class MeasurementStore:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or _default_path()
+        self.lock_path = self.path.with_name(f"{self.path.name}.lock")
+        self.corrupt_path: Path | None = None
         self._records: list[MeasuredEvidence] = []
         self.reload()
 
     def reload(self) -> None:
+        with advisory_lock(self.lock_path):
+            self._reload_unlocked()
+
+    def _reload_unlocked(self) -> None:
         if not self.path.exists():
             self._records = []
             return
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            try:
+                self.corrupt_path = quarantine_corrupt_file(self.path)
+            except OSError:
+                self.corrupt_path = self.path
             self._records = []
             return
         records: list[MeasuredEvidence] = []
@@ -44,15 +55,31 @@ class MeasurementStore:
 
     def record(self, evidence: MeasuredEvidence) -> None:
         """Newest measurement for a key wins; history is not needed for ranking."""
-        key = _key(evidence)
-        self._records = [item for item in self._records if _key(item) != key]
-        self._records.append(evidence)
-        self.save()
+        with advisory_lock(self.lock_path):
+            self._reload_unlocked()
+            key = _key(evidence)
+            self._records = [item for item in self._records if _key(item) != key]
+            self._records.append(evidence)
+            self._save_unlocked()
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with advisory_lock(self.lock_path):
+            local_records = list(self._records)
+            self._reload_unlocked()
+            merged = {_key(item): item for item in self._records}
+            merged.update({_key(item): item for item in local_records})
+            self._records = list(merged.values())
+            self._save_unlocked()
+
+    def _save_unlocked(self) -> None:
         payload = {"records": [item.model_dump(mode="json") for item in self._records]}
-        self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(self.path, payload)
+
+    @property
+    def recovery_warning(self) -> str | None:
+        if self.corrupt_path is None:
+            return None
+        return f"Unreadable measurement data was moved to {self.corrupt_path}"
 
     def lookup(
         self,

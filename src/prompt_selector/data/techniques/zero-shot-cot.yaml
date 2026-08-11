@@ -5,6 +5,9 @@ acceptable_tasks:
 - summarization
 avoid_tasks:
 - translation
+suits:
+- computational
+- verifiable
 required_capabilities:
 - system_messages
 model_classes:

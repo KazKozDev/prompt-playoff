@@ -62,15 +62,46 @@ literal `{bullet_kount}` reaching the model:
 
 Write `{{` and `}}` for literal braces.
 
+**`suits`** is what makes selection about the request instead of its task type.
+Every request carries a *shape* — one to four of `multi_step`, `verifiable`,
+`underspecified`, `long_input`, `exact_format`, `has_examples`, `open_ended`,
+`high_stakes`, `computational` — and a recipe declares which of them it is built
+for:
+
+```yaml
+suits:
+  - multi_step
+  - high_stakes
+```
+
+Traits are weighted by how rare the claim is across the registry, so declaring a
+trait eight other recipes already claim buys little and declaring a rare one that
+actually fits buys a lot. Keep the list to four; `validate-registry` fails above
+that, because a recipe that suits everything ranks first for everything and has
+said nothing. Shape is applied *within* a task type — it can reorder the recipes
+that fit the task, never promote one that does not.
+
+**`requires_supplied_evidence: true`** marks a recipe that answers only from
+material pasted into the prompt. The selector then rejects it for any task whose
+`constraints.retrieval_required` is set — a task that has to find its own
+sources would otherwise get a prompt telling the model to quote evidence nobody
+supplied. Set it on grounding and long-context recipes; leave it off for
+tool-using ones, which get a ranking bonus on exactly those tasks instead.
+
 **Runtime placeholders** survive compilation untouched and are filled during
 execution: `{previous}` (multi-stage), `{chunk}` and `{partials}` (map-reduce).
 A compiled prompt shows them verbatim so you can see where runtime data lands.
 
 **Conditions** (`when:`) come from a closed vocabulary too: `always`,
 `has_schema`, `native_schema`, `embedded_schema`, `strict_json`, `free_text`,
-`has_exemplars`, `tools_allowed`, `requires_validation`, `has_domain`,
-`reasoning_control`. A block whose condition is false, or which renders empty,
-is dropped.
+`has_exemplars`, `supplied_material`, `topic_only`, `tools_allowed`,
+`requires_validation`, `has_domain`, `reasoning_control`. A block whose condition
+is false, or which renders empty, is dropped.
+
+`supplied_material` and `topic_only` are the two halves of one question: does the
+prompt carry the text to work on? "Answer only from the input" is right when it
+does and tells the model to refuse when it does not, so a recipe that says
+anything like it wants a block for each case.
 
 ### Multi-call techniques
 
@@ -195,5 +226,13 @@ Register it and every technique can select `strategy: best_of_n` from YAML.
 5. `min_calls` does not exceed what the strategy will actually issue
 6. the recipe compiles against a synthetic task, renders a non-empty user
    message, leaves no `{input}` behind, and includes the task input
+7. `suits` names at most four request shapes, and names at least one (a warning:
+   an existing registry keeps loading, but the recipe can never win on shape)
+8. every stage after the first reads `{previous}`. A stage that reads nothing
+   from the stage before it is a second model call doing work that belongs in
+   the first prompt — make it another block instead. Claiming speed or thrift
+   (`token_efficiency` or `latency_efficiency` at 0.7 or above, or the
+   `token-efficient` tag) while declaring two calls is a warning for the same
+   reason: the extra round trip spends what the recipe says it saves.
 
 `--strict` also fails on warnings. CI runs it.

@@ -189,3 +189,60 @@ def test_sources_point_at_a_resolvable_identifier(registry):
         if technique.source and technique.source.url:
             assert technique.source.url.startswith("https://arxiv.org/abs/"), technique.id
             assert technique.source.year, technique.id
+
+
+TWO_STAGE = NEW_TECHNIQUE.replace(
+    "execution:\n  strategy: single\n",
+    "execution:\n"
+    "  strategy: multi_stage\n"
+    "  stages:\n"
+    "    - name: first\n"
+    "      blocks: [role, input]\n"
+    "    - name: second\n"
+    "      blocks: [rules, input]\n",
+).replace("min_calls: 1", "min_calls: 2")
+
+
+def test_a_second_call_that_reads_nothing_from_the_first_is_an_error(tmp_path):
+    """Two stages that never chain are one prompt, and the extra call is unpaid for."""
+    registry = Registry.load(write_registry(tmp_path, TWO_STAGE))
+
+    issues = lint_technique(registry.technique("custom.bullet-summary"))
+
+    assert has_errors(issues)
+    assert any("reads nothing from the stage before" in issue.message for issue in issues)
+
+
+def test_a_second_call_that_consumes_the_first_is_accepted(tmp_path):
+    chained = (
+        TWO_STAGE.replace(
+            '      body: "{instructions}\\n"',
+            '      body: "{instructions}\\nEarlier: {previous}\\n"',
+        )
+        .replace("latency_efficiency: 0.9", "latency_efficiency: 0.5")
+        .replace("token_efficiency: 0.9", "token_efficiency: 0.5")
+    )
+    registry = Registry.load(write_registry(tmp_path, chained))
+
+    assert not has_errors(lint_technique(registry.technique("custom.bullet-summary")))
+
+
+def test_claiming_thrift_while_spending_a_second_call_is_flagged(tmp_path):
+    chained = TWO_STAGE.replace(
+        '      body: "{instructions}\\n"',
+        '      body: "{instructions}\\nEarlier: {previous}\\n"',
+    )
+    registry = Registry.load(write_registry(tmp_path, chained))
+
+    issues = lint_technique(registry.technique("custom.bullet-summary"))
+
+    assert not has_errors(issues)
+    assert any("spends exactly what the recipe claims to save" in issue.message for issue in issues)
+
+
+def test_the_shipped_registry_spends_no_unearned_calls() -> None:
+    """The two-stage mould put a second call on five recipes that never needed one."""
+    issues = lint_registry(Registry.load())
+
+    assert not has_errors(issues)
+    assert not [issue for issue in issues if "claims to save" in issue.message]

@@ -12,6 +12,8 @@ acceptable_tasks:
 - coding
 - creative_writing
 avoid_tasks: []
+suits:
+- exact_format
 required_capabilities:
 - system_messages
 model_classes:
@@ -32,7 +34,7 @@ characteristics:
 recipe:
   system: Perform the requested task directly. Respect every explicit constraint.
   instructions:
-  - Use the input as the only source of task content.
+  - Take the requirements from the input and add none of your own.
   - Follow the requested format.
   - Do not describe your process unless requested.
   validators: []

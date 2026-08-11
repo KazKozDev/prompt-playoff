@@ -13,6 +13,9 @@ acceptable_tasks:
 - structured_extraction
 avoid_tasks:
 - classification
+suits:
+- open_ended
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:

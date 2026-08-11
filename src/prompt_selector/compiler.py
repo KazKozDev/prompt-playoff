@@ -121,6 +121,20 @@ class PromptCompiler:
                 "`when: has_exemplars`, so they do not reach the model. Few-shot bootstrapping "
                 "only helps techniques that have an example block."
             )
+        if task.constraints.retrieval_required and tools:
+            notes.append(
+                "This task has to gather its own material. Executed here, the loop reaches only "
+                f"the registered tools ({', '.join(self.tools.names())}); register a search or "
+                "fetch tool before running it. Pasted into a model with web access, the prompt "
+                "already asks for the search."
+            )
+        elif task.constraints.retrieval_required:
+            notes.append(
+                "This task has to gather its own material, but the compiled prompt declares no "
+                "tools, so the model can only work from what the prompt contains. Paste the "
+                "sources into the input, or compile a tool-using technique for a model that "
+                "declares tool_calling."
+            )
         if response_schema and native_schema is None:
             notes.append(
                 "The model declares no native structured output, so the schema is embedded "

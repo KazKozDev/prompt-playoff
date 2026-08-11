@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class TaskType(StrEnum):
@@ -30,6 +30,35 @@ class Capability(StrEnum):
     vision = "vision"
     reasoning_control = "reasoning_control"
     system_messages = "system_messages"
+
+
+class TaskShape(StrEnum):
+    """What a request looks like, beyond which of the eight task types it is.
+
+    A task type is a bucket; every coding request lands in the same one, so on its
+    own it cannot tell a one-line fix from a multi-service design. These traits are
+    what actually separate the techniques: a recipe declares which of them it is
+    built for, and the selector ranks on how much of the request each one covers.
+    """
+
+    #: The work splits into steps that depend on each other.
+    multi_step = "multi_step"
+    #: There is a right answer that can be checked once it exists.
+    verifiable = "verifiable"
+    #: The request leaves material questions open.
+    underspecified = "underspecified"
+    #: The material to work through is long.
+    long_input = "long_input"
+    #: The output has to match a fixed shape.
+    exact_format = "exact_format"
+    #: The request comes with demonstrations of what is wanted.
+    has_examples = "has_examples"
+    #: Many answers are valid and quality is a judgement.
+    open_ended = "open_ended"
+    #: A wrong answer is expensive.
+    high_stakes = "high_stakes"
+    #: Getting there needs arithmetic or an algorithm.
+    computational = "computational"
 
 
 class EvidenceLevel(StrEnum):
@@ -69,6 +98,15 @@ class Constraints(BaseModel):
     local_only: bool = False
     max_calls: int = Field(default=3, ge=1, le=20)
     tools_allowed: bool = False
+    #: The material needed to answer is not in the request and has to be gathered
+    #: (web search, a browser, a corpus). Techniques that answer only from pasted
+    #: evidence cannot do this task, however well they score on research in general.
+    retrieval_required: bool = False
+    #: The prompt will carry the text or data to work on — pasted into the request,
+    #: or arriving at run time through {input}. False for a request that only states
+    #: a topic: "analyse the EU AI market" supplies nothing to quote, filter or
+    #: translate, and a recipe built to do that to an input can only refuse.
+    supplied_material: bool = True
     strict_json: bool = False
     requires_validation: bool = True
     max_latency_seconds: float | None = Field(default=None, gt=0)
@@ -83,6 +121,10 @@ class ModelProfile(BaseModel):
     context_window: int = Field(default=8192, ge=512)
     capabilities: set[Capability] = Field(default_factory=lambda: {Capability.system_messages})
     base_url: str | None = None
+    # Accepted from the local Settings UI for an immediate provider call, but
+    # deliberately absent from every dump, API response, trace and job result.
+    api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
+    api_key_env: str | None = None
     notes: list[str] = Field(default_factory=list)
 
 
@@ -92,6 +134,9 @@ class TaskProfile(BaseModel):
     input_modality: str = "text"
     output_contract: str = "free_text"
     complexity: str = "medium"
+    #: The traits of this particular request. Empty means nothing was read out of
+    #: the description, and the selector then ranks on the task type alone.
+    shape: set[TaskShape] = Field(default_factory=set)
     priorities: Priorities = Field(default_factory=Priorities)
     constraints: Constraints = Field(default_factory=Constraints)
     model: ModelProfile = Field(default_factory=ModelProfile)
@@ -115,6 +160,11 @@ class BlockCondition(StrEnum):
     strict_json = "strict_json"
     free_text = "free_text"
     has_exemplars = "has_exemplars"
+    #: The prompt carries the text or data to work on.
+    supplied_material = "supplied_material"
+    #: It does not: the request names a topic, and "answer only from the input"
+    #: would tell the model to refuse.
+    topic_only = "topic_only"
     tools_allowed = "tools_allowed"
     requires_validation = "requires_validation"
     has_domain = "has_domain"
@@ -211,10 +261,18 @@ class TechniqueSpec(BaseModel):
     strong_tasks: set[TaskType] = Field(default_factory=set)
     acceptable_tasks: set[TaskType] = Field(default_factory=set)
     avoid_tasks: set[TaskType] = Field(default_factory=set)
+    #: The request traits this recipe is built for. One to four: a recipe that
+    #: claims every shape ranks first for every request and says nothing.
+    suits: set[TaskShape] = Field(default_factory=set)
     required_capabilities: set[Capability] = Field(default_factory=set)
     model_classes: set[ModelClass] = Field(default_factory=set)
     min_calls: int = Field(default=1, ge=1)
     tools_required: bool = False
+    #: The recipe works on material carried by the prompt — it quotes it, filters it,
+    #: takes notes on it, chunks it or translates it. True here is a hard mismatch
+    #: with `retrieval_required` and with a request that supplies no material: the
+    #: prompt would tell the model to work from something nobody gave it.
+    requires_supplied_evidence: bool = False
     strict_json_fit: bool = False
     validation_fit: bool = False
     characteristics: TechniqueCharacteristics
@@ -266,11 +324,16 @@ class MeasuredEvidence(BaseModel):
 
 class ScoreBreakdown(BaseModel):
     task_fit: float
+    #: How much of this request's shape the technique is built for, relative to the
+    #: best-matching eligible technique. 0.5 when the request declares no shape.
+    shape_fit: float = 0.5
     model_fit: float
     priority_fit: float
     benchmark_prior: float
     evidence_quality: float
     penalties: float
+    #: Only non-zero when the task must gather its own material and the technique can.
+    retrieval_fit: float = 0.0
 
 
 class Recommendation(BaseModel):
@@ -337,6 +400,12 @@ class CompiledProgram(BaseModel):
     #: Raw task input, kept so chunking strategies operate on the source rather
     #: than on rendered prompt text.
     source_input: str = ""
+    #: The deterministic compiler always builds the executable scaffold.  The
+    #: interactive authoring endpoint can then ask an engine model to rewrite
+    #: its messages without changing the execution contract.
+    artifact_source: Literal["deterministic_compiler", "engine"] = "deterministic_compiler"
+    authored_by_model: str | None = None
+    authored_by_provider: str | None = None
 
     @property
     def main(self) -> CompiledPrompt:
@@ -401,6 +470,20 @@ class CompileRequest(BaseModel):
     exemplars: list[Exemplar] = Field(default_factory=list)
 
 
+class AuthorRequest(BaseModel):
+    """Create task-specific prompt text while preserving a technique contract."""
+
+    task: TaskProfile
+    description: str = Field(min_length=3)
+    technique_id: str | None = None
+    reusable: bool = False
+    response_schema: dict[str, Any] | None = None
+    variables: dict[str, str] = Field(default_factory=dict)
+    exemplars: list[Exemplar] = Field(default_factory=list)
+    engine_model: ModelProfile
+    timeout_seconds: float = Field(default=120, gt=0, le=1800)
+
+
 class RunRequest(CompileRequest):
     timeout_seconds: float = Field(default=120, gt=0, le=1800)
 
@@ -409,3 +492,6 @@ class DescriptionRequest(BaseModel):
     description: str = Field(min_length=3)
     model: ModelProfile = Field(default_factory=ModelProfile)
     overrides: dict[str, Any] = Field(default_factory=dict)
+    #: The model that reads the description. Never the model under test; unset
+    #: falls back to the environment, and then to deterministic keyword matching.
+    engine_model: ModelProfile | None = None

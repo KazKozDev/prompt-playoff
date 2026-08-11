@@ -8,9 +8,16 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+uv.lock
 .env
 .DS_Store
+
+# Local agent/tooling state: machine-specific paths, not project configuration
+.claude/
+.playwright-cli/
 benchmark-results/*.json
+benchmark-results/*.lock
+benchmark-results/*.corrupt-*
 !benchmark-results/.gitkeep
 
 # Third-party papers: indexed in references/README.md, fetched with `make papers`

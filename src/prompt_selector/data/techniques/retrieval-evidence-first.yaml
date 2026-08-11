@@ -11,6 +11,9 @@ acceptable_tasks:
 - agents
 avoid_tasks:
 - creative_writing
+suits:
+- high_stakes
+- long_input
 required_capabilities:
 - system_messages
 model_classes:
@@ -20,6 +23,7 @@ model_classes:
 - reasoning
 min_calls: 1
 tools_required: false
+requires_supplied_evidence: true
 strict_json_fit: false
 validation_fit: true
 characteristics:

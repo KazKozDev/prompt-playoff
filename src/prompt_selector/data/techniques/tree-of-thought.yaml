@@ -4,6 +4,9 @@ acceptable_tasks:
 - structured_extraction
 avoid_tasks:
 - translation
+suits:
+- open_ended
+- multi_step
 required_capabilities:
 - system_messages
 model_classes:

@@ -3,6 +3,9 @@ acceptable_tasks:
 - coding
 - research
 avoid_tasks: []
+suits:
+- has_examples
+- verifiable
 required_capabilities:
 - system_messages
 model_classes:

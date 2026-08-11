@@ -114,3 +114,5 @@ def entity_schema() -> dict[str, Any]:
 def isolated_measurements(tmp_path, monkeypatch):
     """Keep the suite independent of whatever has been benchmarked locally."""
     monkeypatch.setenv("PROMPT_SELECTOR_MEASUREMENTS", str(tmp_path / "measurements.json"))
+    monkeypatch.setenv("PROMPT_SELECTOR_ENGINE_CACHE", str(tmp_path / "engine-cache.json"))
+    monkeypatch.setenv("PROMPT_SELECTOR_JOBS_PATH", str(tmp_path / "jobs.json"))

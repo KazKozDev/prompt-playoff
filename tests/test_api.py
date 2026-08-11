@@ -1,7 +1,11 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
 from prompt_selector.api import app
+from prompt_selector.domain import ModelResult
+from prompt_selector.engine import EngineCache, TaskEngine
 
 MODEL = {
     "provider": "ollama",
@@ -20,7 +24,54 @@ def client():
 
 
 def test_health(client):
-    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
+
+
+@pytest.mark.parametrize("path", ["/", "/help", "/help/en", "/benchmarks", "/benchmarks/en"])
+def test_static_pages_are_served(client, path):
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.text.lstrip().startswith("<!doctype html>")
+
+
+def test_documentation_pages_are_reachable(client):
+    # The app opens both documents in its own panel, so each page only carries its translation link.
+    home = client.get("/").text
+    assert "/help/en" in home
+    assert "/benchmarks/en" in home
+    assert "/help/en" in client.get("/help").text
+    assert "/help" in client.get("/help/en").text
+    assert "/benchmarks/en" in client.get("/benchmarks").text
+    assert "/benchmarks" in client.get("/benchmarks/en").text
+
+
+def test_home_exposes_the_complete_technique_catalog(client):
+    html = client.get("/").text
+    techniques = client.get("/v1/techniques").json()
+    examples = client.get("/v1/techniques/examples").json()
+
+    assert 'data-global-tab="techniques"' in html
+    assert "function renderTechniqueCatalog()" in html
+    assert len(techniques) == 29
+    assert len(examples) == len(techniques)
+    assert len({item["user_input"] for item in examples}) == len(techniques)
+    assert {item["technique_id"] for item in examples} == {item["id"] for item in techniques}
+    compiled_signatures = {
+        json.dumps(item["program"]["stages"], ensure_ascii=False, sort_keys=True)
+        for item in examples
+    }
+    assert len(compiled_signatures) == len(techniques)
+
+    by_id = {item["technique_id"]: item for item in examples}
+    visible_examples = {
+        "classification.label-rules": "BOUNDARY EXAMPLES",
+        "few-shot.contrastive-cot": "DEMONSTRATIONS",
+        "structured.few-shot-repair": "DEMONSTRATIONS",
+        "translation.glossary-context": "REFERENCE RENDERINGS",
+    }
+    for technique_id, heading in visible_examples.items():
+        messages = json.dumps(by_id[technique_id]["program"]["stages"], ensure_ascii=False)
+        assert heading in messages
 
 
 def test_recommend_returns_the_profile_it_ranked_against(client):
@@ -34,6 +85,18 @@ def test_recommend_returns_the_profile_it_ranked_against(client):
     # Clients reuse this verbatim for compile and benchmark.
     assert body["task"]["task_type"] == "structured_extraction"
     assert body["task"]["constraints"]["strict_json"] is True
+
+
+def test_request_api_key_is_not_returned_by_the_api(client):
+    model = {**MODEL, "provider": "openai", "local": False, "api_key": "browser-secret"}
+    response = client.post(
+        "/v1/recommend",
+        json={"description": "Extract entities to strict JSON", "model": model},
+    )
+
+    assert response.status_code == 200
+    assert "browser-secret" not in response.text
+    assert "api_key" not in response.json()["task"]["model"]
 
 
 def test_compile_returns_every_stage(client):
@@ -53,6 +116,57 @@ def test_compile_returns_every_stage(client):
     assert [stage["stage"] for stage in program["stages"]] == ["draft", "repair"]
     assert program["expected_calls"] == 2
     assert "Mara went to Veyr." in program["stages"][0]["messages"][1]["content"]
+
+
+def test_author_endpoint_returns_engine_written_prompt(client, monkeypatch, tmp_path):
+    task = client.post(
+        "/v1/recommend", json={"description": "Write a Snake game in Python", "model": MODEL}
+    ).json()["task"]
+    authored = {
+        "stages": [
+            {
+                "stage": "decompose",
+                "system": "Plan a Python Snake game in terse architectural notes.",
+                "user": "Cover the game loop, movement, food, scoring, and collisions.",
+            },
+            {
+                "stage": "solve",
+                "system": "Implement a complete runnable Python game from the notes.",
+                "user": "Use these notes: {previous}\nReturn code and run instructions.",
+            },
+        ]
+    }
+
+    class AuthorProvider:
+        async def generate(self, prompt, model, timeout_seconds=120):
+            return ModelResult(content=json.dumps(authored))
+
+    service = client.app.state.service
+    engine = TaskEngine(
+        None,
+        provider=AuthorProvider(),
+        cache=EngineCache(tmp_path / "author-cache.json"),
+    )
+
+    def use_engine(profile=None):
+        engine.profile = profile
+        return engine
+
+    monkeypatch.setattr(service, "engine", use_engine)
+    response = client.post(
+        "/v1/author",
+        json={
+            "task": task,
+            "description": "Write a Snake game in Python",
+            "technique_id": "reasoning.decomposition",
+            "engine_model": {"provider": "ollama", "model_id": "prompt-writer"},
+        },
+    )
+    assert response.status_code == 200
+    program = response.json()
+    assert program["artifact_source"] == "engine"
+    assert program["authored_by_model"] == "prompt-writer"
+    assert "game loop" in program["stages"][0]["messages"][1]["content"]
 
 
 def test_compile_rejects_an_unknown_technique(client):
@@ -189,6 +303,10 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
         if job["status"] in {"done", "error"}:
             break
     assert job["status"] in {"done", "error"}
+    assert job["events"][0]["event"] == "queued"
+    assert job["events"][1]["event"] == "running"
+    assert job["events"][-1]["event"] in {"completed", "error"}
+    assert all("at" in event for event in job["events"])
     if job["status"] == "done":
         # A reachable model would still produce a scorecard; failures must be counted.
         assert job["result"]["scorecard"]["failures"] >= 0
@@ -196,3 +314,56 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
 
 def test_unknown_job_is_404(client):
     assert client.get("/v1/jobs/deadbeef").status_code == 404
+
+
+def test_recommend_without_an_engine_stays_on_the_deterministic_path(client, monkeypatch):
+    monkeypatch.delenv("PROMPT_SELECTOR_ENGINE_MODEL", raising=False)
+    response = client.post(
+        "/v1/recommend",
+        json={"description": "Extract entities to strict JSON", "model": MODEL},
+    )
+    assert response.status_code == 200
+    # No engine means no engine note, so the warnings are only about the ranking.
+    assert not any("engine model" in warning for warning in response.json()["warnings"])
+
+
+def test_recommend_reports_an_unreachable_engine_instead_of_failing(client):
+    response = client.post(
+        "/v1/recommend",
+        json={
+            "description": "Extract entities to strict JSON",
+            "model": MODEL,
+            "engine_model": {
+                "provider": "ollama",
+                "model_id": "not-running",
+                "base_url": "http://127.0.0.1:9",
+            },
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recommendations"], "an unreachable engine must not empty the ranking"
+    assert any("not-running" in warning for warning in body["warnings"])
+
+
+def test_optimize_still_accepts_the_legacy_optimizer_model_field():
+    from prompt_selector.api import OptimizeRequest
+
+    payload = {
+        "task": {"task_type": "structured_extraction", "model": MODEL},
+        "optimizer_model": {"provider": "ollama", "model_id": "proposer"},
+    }
+    assert OptimizeRequest.model_validate(payload).engine_model.model_id == "proposer"
+
+    payload["engine_model"] = {"provider": "ollama", "model_id": "engine"}
+    assert OptimizeRequest.model_validate(payload).engine_model.model_id == "engine"
+
+
+def test_recommend_returns_rejections_the_ui_can_render(client):
+    response = client.post(
+        "/v1/recommend",
+        json={"description": "Extract entities to strict JSON", "model": MODEL},
+    )
+    rejected = response.json()["rejected"]
+    assert rejected, "the ruled-out block has nothing to show without these"
+    assert all(item["technique_id"] and item["title"] and item["reasons"] for item in rejected)

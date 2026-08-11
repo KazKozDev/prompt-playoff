@@ -8,10 +8,11 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from prompt_selector import __version__
 from prompt_selector.domain import (
+    AuthorRequest,
     CompiledProgram,
     CompileRequest,
     DescriptionRequest,
@@ -23,16 +24,17 @@ from prompt_selector.domain import (
     TaskProfile,
     TechniqueSpec,
 )
+from prompt_selector.engine import PromptAuthoringError
 from prompt_selector.evals import BenchmarkExample, load_jsonl_text
 from prompt_selector.graders import grader_names
 from prompt_selector.jobs import Job, JobStore
 from prompt_selector.lint import lint_registry, registry_summary
-from prompt_selector.normalizer import normalize_description
 from prompt_selector.optimizer import BACKENDS
 from prompt_selector.providers import ProviderError
 from prompt_selector.registry import Registry, RegistryError
 from prompt_selector.service import PromptSelectorService
 from prompt_selector.strategies import aggregator_names, strategy_names
+from prompt_selector.technique_examples import compiled_examples
 
 
 @asynccontextmanager
@@ -87,10 +89,19 @@ class OptimizeRequest(BenchmarkRequest):
     #: native backend only: how many parents the search mutates from each round.
     beam_width: int = Field(default=2, ge=1, le=5)
     validation_ratio: float = Field(default=0.34, gt=0, lt=0.9)
+    #: The model that proposes rewrites, never the one being measured.
+    engine_model: ModelProfile | None = None
+    #: The name `engine_model` shipped under. Kept working; `engine_model` wins.
     optimizer_model: ModelProfile | None = None
     #: DSPy backends only.
     auto: str = "light"
     max_metric_calls: int | None = Field(default=None, ge=4, le=2000)
+
+    @model_validator(mode="after")
+    def fold_legacy_optimizer_model(self) -> OptimizeRequest:
+        if self.engine_model is None and self.optimizer_model is not None:
+            self.engine_model = self.optimizer_model
+        return self
 
 
 class PromptfooExportRequest(BaseModel):
@@ -122,6 +133,22 @@ def help_page_en() -> str:
     return files("prompt_selector").joinpath("data/static/help.en.html").read_text(encoding="utf-8")
 
 
+@app.get("/benchmarks", response_class=HTMLResponse, include_in_schema=False)
+def benchmarks_page() -> str:
+    return (
+        files("prompt_selector").joinpath("data/static/benchmarks.html").read_text(encoding="utf-8")
+    )
+
+
+@app.get("/benchmarks/en", response_class=HTMLResponse, include_in_schema=False)
+def benchmarks_page_en() -> str:
+    return (
+        files("prompt_selector")
+        .joinpath("data/static/benchmarks.en.html")
+        .read_text(encoding="utf-8")
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
@@ -151,6 +178,12 @@ def lint(request: Request) -> dict[str, Any]:
 @app.get("/v1/techniques", response_model=list[TechniqueSpec])
 def techniques(request: Request) -> list[TechniqueSpec]:
     return sorted(_service(request).registry.techniques.values(), key=lambda item: item.id)
+
+
+@app.get("/v1/techniques/examples")
+def technique_examples(request: Request) -> list[dict[str, Any]]:
+    service = _service(request)
+    return compiled_examples(service.compiler, service.registry.techniques)
 
 
 @app.get("/v1/models", response_model=list[ModelProfile])
@@ -232,9 +265,14 @@ def measurements(request: Request) -> list[MeasuredEvidence]:
 
 
 @app.post("/v1/recommend", response_model=SelectionResult)
-def recommend(payload: DescriptionRequest, request: Request) -> SelectionResult:
-    task = normalize_description(payload.description, payload.model, payload.overrides)
-    return _service(request).select(task)
+async def recommend(payload: DescriptionRequest, request: Request) -> SelectionResult:
+    result, _ = await _service(request).recommend(
+        description=payload.description,
+        model=payload.model,
+        overrides=payload.overrides,
+        engine_model=payload.engine_model,
+    )
+    return result
 
 
 @app.post("/v1/select", response_model=SelectionResult)
@@ -246,6 +284,17 @@ def select(payload: TaskProfile, request: Request) -> SelectionResult:
 def compile_prompt(payload: CompileRequest, request: Request) -> CompiledProgram:
     try:
         return _service(request).compile(payload)
+    except (ValueError, RegistryError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/author", response_model=CompiledProgram)
+async def author_prompt(payload: AuthorRequest, request: Request) -> CompiledProgram:
+    """Use an engine LLM to write prompt text; never substitute a compiler fallback."""
+    try:
+        return await _service(request).author(payload)
+    except PromptAuthoringError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (ValueError, RegistryError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -334,7 +383,7 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
             repeats=payload.repeats,
             validation_ratio=payload.validation_ratio,
             timeout_seconds=payload.timeout_seconds,
-            optimizer_model=payload.optimizer_model,
+            engine_model=payload.engine_model,
             max_metric_calls=payload.max_metric_calls,
             auto=payload.auto,
             progress=lambda event: store.note(job.id, event),

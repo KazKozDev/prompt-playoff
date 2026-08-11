@@ -12,6 +12,9 @@ avoid_tasks:
 - translation
 - creative_writing
 - classification
+suits:
+- multi_step
+- verifiable
 required_capabilities:
 - tool_calling
 - system_messages

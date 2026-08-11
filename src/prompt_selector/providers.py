@@ -49,7 +49,7 @@ class OllamaProvider:
                 response = await client.post(f"{self.base_url}/api/chat", json=payload)
                 response.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderError(f"Ollama request failed: {exc}") from exc
+                raise ProviderError(f"Ollama request failed: {_reason(exc)}") from exc
 
         data = response.json()
         message = data.get("message", {})
@@ -75,9 +75,17 @@ class OllamaProvider:
 
 
 class OpenAICompatibleProvider:
-    def __init__(self, base_url: str, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str | None = None,
+        provider_id: str = "openai",
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        self.provider_id = provider_id
+        self.transport = transport
 
     async def generate(
         self,
@@ -103,10 +111,13 @@ class OpenAICompatibleProvider:
             payload["tools"] = prompt.tools
 
         headers = {"Content-Type": "application/json"}
-        if self.api_key:
+        if self.provider_id == "anthropic":
+            headers["x-api-key"] = self.api_key or ""
+            headers["anthropic-version"] = "2023-06-01"
+        elif self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=timeout_seconds, transport=self.transport) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/v1/chat/completions",
@@ -115,7 +126,7 @@ class OpenAICompatibleProvider:
                 )
                 response.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderError(f"OpenAI-compatible request failed: {exc}") from exc
+                raise ProviderError(f"OpenAI-compatible request failed: {_reason(exc)}") from exc
 
         data = response.json()
         message = data.get("choices", [{}])[0].get("message", {})
@@ -127,11 +138,66 @@ class OpenAICompatibleProvider:
         )
 
 
+def _reason(exc: httpx.HTTPError) -> str:
+    """httpx timeouts stringify to an empty message, which reads as no error at all."""
+    return str(exc) or type(exc).__name__
+
+
+PROVIDER_API_KEY_ENVS = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "together": "TOGETHER_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "fireworks": "FIREWORKS_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+}
+
+PROVIDER_BASE_URLS = {
+    "openai": "https://api.openai.com",
+    "anthropic": "https://api.anthropic.com",
+    "together": "https://api.together.xyz",
+    "openrouter": "https://openrouter.ai/api",
+    "groq": "https://api.groq.com/openai",
+    "fireworks": "https://api.fireworks.ai/inference",
+    "deepseek": "https://api.deepseek.com",
+}
+
+
+def resolve_api_key(model: ModelProfile) -> tuple[str, str]:
+    """Resolve secrets at the provider boundary so profiles and traces contain only names."""
+    if model.api_key is not None:
+        value = model.api_key.get_secret_value()
+        if value:
+            return value, "request"
+    candidates = [model.api_key_env, PROVIDER_API_KEY_ENVS.get(model.provider)]
+    candidates.append("PROMPT_SELECTOR_API_KEY")
+    checked: list[str] = []
+    for name in candidates:
+        if not name or name in checked:
+            continue
+        checked.append(name)
+        value = os.environ.get(name)
+        if value:
+            return value, name
+    expected = checked[0]
+    suffix = f" (also checked {', '.join(checked[1:])})" if len(checked) > 1 else ""
+    raise ProviderError(
+        f"Missing API key: set {expected}{suffix} before using provider {model.provider!r}"
+    )
+
+
 def provider_for(model: ModelProfile) -> ModelProvider:
-    base_url = model.base_url
     if model.provider == "ollama":
-        return OllamaProvider(base_url)
+        return OllamaProvider(model.base_url)
+    base_url = model.base_url or PROVIDER_BASE_URLS.get(model.provider)
     if not base_url:
-        raise ProviderError("OpenAI-compatible models require model.base_url")
-    api_key = os.environ.get("OPENAI_API_KEY") if model.provider == "openai" else None
-    return OpenAICompatibleProvider(base_url=base_url, api_key=api_key)
+        raise ProviderError(
+            f"Provider {model.provider!r} needs model.base_url for its OpenAI-compatible endpoint"
+        )
+    api_key, _ = resolve_api_key(model)
+    return OpenAICompatibleProvider(
+        base_url=base_url,
+        api_key=api_key,
+        provider_id=model.provider,
+    )

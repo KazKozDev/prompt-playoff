@@ -12,6 +12,9 @@ acceptable_tasks:
 avoid_tasks:
 - classification
 - structured_extraction
+suits:
+- open_ended
+- exact_format
 required_capabilities:
 - system_messages
 model_classes:

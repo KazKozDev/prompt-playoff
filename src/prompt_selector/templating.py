@@ -105,6 +105,8 @@ def build_context(
         BlockCondition.strict_json: task.constraints.strict_json,
         BlockCondition.free_text: not task.constraints.strict_json,
         BlockCondition.has_exemplars: bool(exemplars),
+        BlockCondition.supplied_material: task.constraints.supplied_material,
+        BlockCondition.topic_only: not task.constraints.supplied_material,
         BlockCondition.tools_allowed: task.constraints.tools_allowed,
         BlockCondition.requires_validation: task.constraints.requires_validation,
         BlockCondition.has_domain: bool(task.domain),

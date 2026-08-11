@@ -11,6 +11,9 @@ avoid_tasks:
 - coding
 - agents
 - classification
+suits:
+- exact_format
+- high_stakes
 required_capabilities:
 - system_messages
 model_classes:
@@ -20,6 +23,7 @@ model_classes:
 - reasoning
 min_calls: 1
 tools_required: false
+requires_supplied_evidence: true
 strict_json_fit: false
 validation_fit: true
 characteristics:
