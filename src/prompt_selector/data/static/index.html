@@ -218,6 +218,15 @@
     .technique-identity { margin-top:7px; color:var(--muted); font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
     .technique-description { margin:13px 0 0; color:#d1d5db; font-size:14px; line-height:1.55; }
     .technique-facts { margin-top:9px; color:var(--muted); font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    .technique-source { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 8px; margin-top:9px; color:var(--muted); font-size:12.5px; line-height:1.5; }
+    .technique-source a { color:var(--text); text-decoration-color:var(--border); text-underline-offset:3px; }
+    .technique-source a:hover { color:var(--accent); text-decoration-color:var(--accent); }
+    .technique-source a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); }
+    .technique-source-id { flex:none; padding:1px 7px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .technique-source-credit { color:var(--muted); }
+    .technique-source-note { flex-basis:100%; color:var(--muted); }
+    .technique-source.none { color:var(--muted); }
+    .technique-source.none code { padding:1px 5px; border:1px solid var(--border); border-radius:5px; background:var(--panel2); color:#d1d5db; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
     .technique-example { margin-top:24px; }
     .technique-example h4 { margin:16px 0 5px; color:var(--text); font-size:14px; font-weight:700; }
     .technique-example p { margin:0; color:#d1d5db; font-size:14px; line-height:1.55; }
@@ -648,6 +657,31 @@ function renderCompiledExample(example) {
     </div>`;
 }
 
+// A registry can be swapped for an external one, so the url here is not
+// necessarily ours. Only http(s) becomes a link; anything else is shown as text
+// rather than handed to the browser as a scheme.
+function paperLink(url, label) {
+  const safe = /^https?:\/\//i.test(String(url || ''));
+  return safe
+    ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+    : label;
+}
+
+function techniqueSource(source) {
+  if (!source || !source.paper) {
+    // Saying nothing would read as an oversight. These are patterns built here,
+    // and the registry already grades them heuristic for exactly that reason.
+    return `<div class="technique-source none">No published source — an engineering pattern built for this registry, and graded <code>heuristic</code> because of it.</div>`;
+  }
+  const arxiv = /arxiv\.org\/abs\/([\w.\/-]+)/i.exec(String(source.url || ''));
+  const credit = [source.authors, source.year].filter(Boolean).map(esc).join(', ');
+  const label = esc(source.paper) + (credit ? ` <span class="technique-source-credit">— ${credit}</span>` : '');
+  const badge = arxiv ? `<span class="technique-source-id">arXiv:${esc(arxiv[1])}</span>` : '';
+  return `<div class="technique-source">${badge}${paperLink(source.url, label)}${
+    source.note ? `<span class="technique-source-note">${esc(source.note)}</span>` : ''
+  }</div>`;
+}
+
 function renderTechniqueCatalog() {
   if (state.catalogStatus === 'loading') return '<div class="empty">Loading all techniques…</div>';
   if (state.catalogStatus === 'error') return `<div class="method-error"><span>Could not load the technique catalog: ${esc(state.catalogError)}</span><button type="button" class="retry-catalog">Retry</button></div>`;
@@ -672,6 +706,7 @@ function renderTechniqueCatalog() {
       <div class="technique-identity">${esc(technique.id)} · ${esc(technique.family)}</div>
       <p class="technique-description">${esc(technique.description)}</p>
       <div class="technique-facts">Best for: ${esc((technique.strong_tasks || []).join(', ') || 'general tasks')} · strategy: ${esc(strategy)} · minimum calls: ${esc(technique.min_calls)}</div>
+      ${techniqueSource(technique.source)}
       ${renderCompiledExample(example)}
       ${methodDisclosure(technique.id, true)}
       <a class="technique-index-return" href="#technique-index">Back to technique index</a>
