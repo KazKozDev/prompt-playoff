@@ -65,9 +65,12 @@ tracing = [
   "opentelemetry-sdk>=1.30",
   "opentelemetry-exporter-otlp-proto-http>=1.30",
 ]
-# Importing Hugging Face NER corpora as benchmark datasets.
+# Importing Hugging Face corpora as benchmark datasets.
+# pyarrow arrives with datasets anyway, but the parquet fallback imports it
+# directly — and that fallback is the path MultiCoNER takes on datasets>=4.
 huggingface = [
   "datasets>=3,<6",
+  "pyarrow>=15",
 ]
 all = [
   "prompt-selector[cli,serve,dspy,tracing,huggingface]",

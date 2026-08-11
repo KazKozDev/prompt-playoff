@@ -328,6 +328,7 @@ def _rows_from_parquet(
     import io
     import urllib.request
 
+    require("pyarrow", "huggingface")
     import pyarrow.parquet as pq
 
     urls = _parquet_urls(preset.repo_id, preset.config, preset.split)
