@@ -1,0 +1,51 @@
+name: Bug report
+description: Something behaves differently from what it says it does.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command or call you ran, and what came back. Paste output verbatim.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`prompt-selector --version`, or the commit if running from a clone."
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python and OS
+      placeholder: "3.12 on macOS 15"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Provider and model
+      description: Leave blank if the problem happens without calling a model.
+      placeholder: "ollama / llama3.2:3b"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: "`prompt-selector validate-registry` reports no issues"
+        - label: I checked that no API key or private data is in the output above
+          required: true

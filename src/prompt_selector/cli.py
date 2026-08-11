@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
+from prompt_selector import __version__
 from prompt_selector.checks import CheckConfigError, CheckRun, run_checks
 from prompt_selector.domain import (
     CompileRequest,
@@ -37,6 +38,27 @@ app = typer.Typer(no_args_is_help=True, help="Explainable prompt-technique selec
 console = Console()
 
 REPORT_DIR = Path("benchmark-results")
+
+
+def _version(value: bool) -> None:
+    if value:
+        console.print(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version,
+            is_eager=True,
+            help="Print the installed version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Explainable prompt-technique selector."""
 
 
 def _model(

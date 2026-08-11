@@ -1,5 +1,10 @@
 # Prompt Selector
 
+[![CI](https://github.com/KazKozDev/prompt-selector/actions/workflows/ci.yml/badge.svg)](https://github.com/KazKozDev/prompt-selector/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/prompt-selector)](https://pypi.org/project/prompt-selector/)
+[![Python](https://img.shields.io/pypi/pyversions/prompt-selector)](https://pypi.org/project/prompt-selector/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 An explainable decision engine that maps:
 
 > **task → constraints → model capabilities → prompt technique → compiled prompt → measured result → optimized prompt**

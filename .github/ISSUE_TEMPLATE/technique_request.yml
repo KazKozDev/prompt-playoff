@@ -1,0 +1,59 @@
+name: Technique request
+description: Propose a prompting technique the registry should carry.
+labels: [technique]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        The shortlist for what to add next is the taxonomy in
+        [The Prompt Report](https://arxiv.org/abs/2406.06608) — see
+        `references/README.md`. A technique nobody has written up is welcome too,
+        but say so plainly rather than implying a source that does not exist.
+
+  - type: input
+    id: name
+    attributes:
+      label: Technique
+      placeholder: "Tree of thought"
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Paper, post, or "none — this is my own".
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What request shape is it for
+      description: >
+        Which of multi_step, verifiable, underspecified, long_input, exact_format,
+        has_examples, open_ended, high_stakes, computational does it suit, and why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: How many model calls
+      description: >
+        And what each one does. A technique whose published form emits reasoning
+        and answer in one response needs an extra stage here when the output is
+        schema-enforced.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence it works
+      description: >
+        A measurement, a dataset it wins on, or an honest "declared prior only".
+        This project labels which one every number is, so an unmeasured claim is
+        acceptable when it says it is unmeasured.
+    validations:
+      required: true

@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Only main on push: a branch with an open pull request would otherwise run
+  # the whole matrix twice for one commit.
   push:
+    branches: [main]
   pull_request:
 
 jobs:

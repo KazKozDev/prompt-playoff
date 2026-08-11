@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from prompt_selector import __version__
 from prompt_selector.api import app
 from prompt_selector.domain import ModelResult
 from prompt_selector.engine import EngineCache, TaskEngine
@@ -24,7 +25,9 @@ def client():
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
+    # Read the version rather than repeating it: a hardcoded copy here would have
+    # to be found and edited on every release, and silently lies until someone does.
+    assert client.get("/health").json() == {"status": "ok", "version": __version__}
 
 
 @pytest.mark.parametrize("path", ["/", "/help", "/help/ru", "/benchmarks", "/benchmarks/ru"])

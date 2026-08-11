@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-08-11
+
 ### Added
 
 - Selection now reads the shape of a request, not only its task type. A task carries a `shape` —
@@ -85,5 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[cli]`, `[serve]`, or `[all]` for command-line, HTTP/UI, or all optional features.
 - Cloud provider failures now identify the credential or endpoint configuration to fix.
 
-[Unreleased]: https://github.com/KazKozDev/prompt-selector/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/KazKozDev/prompt-selector/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/KazKozDev/prompt-selector/releases/tag/v0.3.0
 [0.2.0]: https://github.com/KazKozDev/prompt-selector/releases/tag/v0.2.0
