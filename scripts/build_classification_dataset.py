@@ -270,7 +270,7 @@ def build(count: int = 150, seed: int = 20260808) -> list[dict]:
 
 def main() -> None:
     rows = build()
-    out = Path("src/prompt_selector/data/datasets/support-classification.jsonl")
+    out = Path("src/prompt_playoff/data/datasets/support-classification.jsonl")
     out.write_text(
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n", encoding="utf-8"
     )

@@ -1,8 +1,8 @@
-# Prompt Selector
+# Prompt Playoff
 
-[![CI](https://github.com/KazKozDev/prompt-selector/actions/workflows/ci.yml/badge.svg)](https://github.com/KazKozDev/prompt-selector/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/prompt-selector)](https://pypi.org/project/prompt-selector/)
-[![Python](https://img.shields.io/pypi/pyversions/prompt-selector)](https://pypi.org/project/prompt-selector/)
+[![CI](https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml/badge.svg)](https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/prompt-playoff)](https://pypi.org/project/prompt-playoff/)
+[![Python](https://img.shields.io/pypi/pyversions/prompt-playoff)](https://pypi.org/project/prompt-playoff/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 An explainable decision engine that maps:
@@ -37,10 +37,10 @@ Install only the surface you use:
 
 | Install | For whom |
 |---|---|
-| `pip install prompt-selector` | Python applications importing the deterministic registry, selector, normalizer, and compiler. |
-| `pip install 'prompt-selector[cli]'` | Developers running terminal commands such as `recommend`, `benchmark`, and `check`. |
-| `pip install 'prompt-selector[serve]'` | Deployments starting the HTTP API/UI with Uvicorn. |
-| `pip install 'prompt-selector[all]'` | Contributors who want CLI, server, tracing, corpus imports, and every optimizer backend. |
+| `pip install prompt-playoff` | Python applications importing the deterministic registry, selector, normalizer, and compiler. |
+| `pip install 'prompt-playoff[cli]'` | Developers running terminal commands such as `recommend`, `benchmark`, and `check`. |
+| `pip install 'prompt-playoff[serve]'` | Deployments starting the HTTP API/UI with Uvicorn. |
+| `pip install 'prompt-playoff[all]'` | Contributors who want CLI, server, tracing, corpus imports, and every optimizer backend. |
 
 For local development, clone the repository and install the development environment:
 
@@ -53,26 +53,26 @@ pip install -e '.[dev]'
 Rank techniques for a task:
 
 ```bash
-prompt-selector recommend "Extract entities from a book into strict JSON. Reliability matters most." --model qwen3:14b --capabilities structured_output,system_messages
+prompt-playoff recommend "Extract entities from a book into strict JSON. Reliability matters most." --model qwen3:14b --capabilities structured_output,system_messages
 ```
 
 Read the prompt a technique compiles to:
 
 ```bash
-prompt-selector compile --task structured_extraction --input-file examples/book_excerpt.txt --schema-file examples/entity_schema.json --technique structured.schema-first --capabilities structured_output,system_messages
+prompt-playoff compile --task structured_extraction --input-file examples/book_excerpt.txt --schema-file examples/entity_schema.json --technique structured.schema-first --capabilities structured_output,system_messages
 ```
 
 Measure it against a real model:
 
 ```bash
-prompt-selector benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
+prompt-playoff benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
 ```
 
 Start the web interface at `http://127.0.0.1:8000`:
 
 ```bash
 # The command needs both command-line and server extras; [all] includes both.
-prompt-selector serve
+prompt-playoff serve
 ```
 
 ## Measured, not assumed
@@ -105,7 +105,7 @@ Where the numbers come from:
 Comparisons rank on those measurements, weighted by your priorities:
 
 ```bash
-prompt-selector compare --model llama3.2:3b --model-class small --dataset entity-extraction \
+prompt-playoff compare --model llama3.2:3b --model-class small --dataset entity-extraction \
   --techniques structured.schema-first,structured.few-shot-repair,reasoning.self-consistency,direct.explicit-constraints
 ```
 
@@ -125,7 +125,7 @@ ranking, labelled `measured` instead of `prior only`.
 ## Optimizing a prompt
 
 ```bash
-prompt-selector optimize --model llama3.2:3b --model-class small \
+prompt-playoff optimize --model llama3.2:3b --model-class small \
   --dataset entity-extraction --technique structured.schema-first \
   --rounds 3 --token-cost 0.3 --export my-technique.yaml
 ```
@@ -158,8 +158,8 @@ documented deterministic fallback; prompt authoring is fail-closed and never
 returns the compiler scaffold as if it were a model-written prompt.
 
 ```bash
-export PROMPT_SELECTOR_ENGINE_MODEL=qwen3.5:9b
-prompt-selector recommend "Render this contract into German, keeping terms consistent."
+export PROMPT_PLAYOFF_ENGINE_MODEL=qwen3.5:9b
+prompt-playoff recommend "Render this contract into German, keeping terms consistent."
 ```
 
 ```
@@ -202,7 +202,7 @@ prompt is still built by this project's compiler, executed by the technique's
 own strategy, and graded by its graders:
 
 ```bash
-prompt-selector optimize --model llama3.2:3b --model-class small \
+prompt-playoff optimize --model llama3.2:3b --model-class small \
   --dataset entity-extraction --backend dspy:gepa --max-metric-calls 60
 ```
 
@@ -226,7 +226,7 @@ modes:
 
 ### Use it in CI
 
-Commit `prompt-selector.yaml` with the model and thresholds your build promises:
+Commit `prompt-playoff.yaml` with the model and thresholds your build promises:
 
 ```yaml
 version: 1
@@ -249,7 +249,7 @@ checks:
       p95_latency_seconds_max: 2.0
 ```
 
-Run `prompt-selector check`; use `--json` for machine-readable output,
+Run `prompt-playoff check`; use `--json` for machine-readable output,
 `--no-record` to keep the evidence store untouched, or `--update` to replace the
 committed bounds with the current measurements while preserving YAML comments and
 key order. Exit code `0` means every bound passed, `1` means at least one regression,
@@ -263,7 +263,7 @@ without enforcing anything.
 ### Larger matrices with promptfoo
 
 ```bash
-prompt-selector export-promptfoo \
+prompt-playoff export-promptfoo \
   --techniques structured.schema-first,direct.explicit-constraints \
   --models llama3.2:3b,qwen3.5:4b --model-class small \
   --dataset entity-extraction --output promptfoo
@@ -283,8 +283,8 @@ explicitly rather than silently truncating.
 ## Tracing and datasets from production: Langfuse / Phoenix
 
 ```bash
-export PROMPT_SELECTOR_TRACING=langfuse   # or phoenix
-prompt-selector tracing-status
+export PROMPT_PLAYOFF_TRACING=langfuse   # or phoenix
+prompt-playoff tracing-status
 ```
 
 Tracing wraps the provider, so every call of every technique is a separate span
@@ -292,14 +292,14 @@ with its own latency and token counts. Then turn observed traffic into a
 dataset:
 
 ```bash
-prompt-selector import-traces --output datasets/from-prod.jsonl --limit 200
+prompt-playoff import-traces --output datasets/from-prod.jsonl --limit 200
 ```
 
 ## Datasets from public corpora
 
 ```bash
-prompt-selector list-hf-presets
-prompt-selector import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
+prompt-playoff list-hf-presets
+prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
 ```
 
 Four presets convert Hugging Face corpora into benchmark examples:
@@ -337,8 +337,8 @@ answer stage carries the contract. That costs one extra model call and the
 technique's `min_calls` says so.
 
 ```bash
-prompt-selector list-techniques
-prompt-selector show-technique structured.schema-first
+prompt-playoff list-techniques
+prompt-playoff show-technique structured.schema-first
 ```
 
 ## Adding your own
@@ -348,9 +348,9 @@ A new technique is one YAML file and no Python. See
 vocabulary, execution strategies, graders and datasets.
 
 ```bash
-prompt-selector new-technique structured.my-technique
-prompt-selector validate-registry          # placeholders, strategies, graders, render probe
-prompt-selector capabilities               # everything a YAML file may reference
+prompt-playoff new-technique structured.my-technique
+prompt-playoff validate-registry          # placeholders, strategies, graders, render probe
+prompt-playoff capabilities               # everything a YAML file may reference
 ```
 
 ## HTTP API
@@ -379,13 +379,13 @@ GET  /v1/measurements        recorded evidence used for ranking
 Benchmark, compare and optimize return a job id immediately, because they issue
 real model calls. Job status, results, errors, and the complete event stream are
 persisted atomically to `benchmark-results/jobs.json`, so the Logs view survives
-application restarts. Set `PROMPT_SELECTOR_JOBS_PATH` to use another location.
+application restarts. Set `PROMPT_PLAYOFF_JOBS_PATH` to use another location.
 
 ## Providers
 
 Ollama and any OpenAI-compatible endpoint. Keys resolve in this order: an
 in-memory request key from Settings, `model.api_key_env`, the provider default
-below, then `PROMPT_SELECTOR_API_KEY`.
+below, then `PROMPT_PLAYOFF_API_KEY`.
 A missing key fails before the request and names the environment variable to set.
 
 | Provider id | Default base URL | Default key environment |
@@ -400,7 +400,7 @@ A missing key fails before the request and names the environment variable to set
 | `deepseek` | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
 
 Unknown OpenAI-compatible provider ids require `base_url` and use
-`PROMPT_SELECTOR_API_KEY` unless `api_key_env` names another variable. Anthropic uses
+`PROMPT_PLAYOFF_API_KEY` unless `api_key_env` names another variable. Anthropic uses
 `x-api-key` and `anthropic-version`; the other cloud providers use bearer auth.
 Native JSON Schema is used when the
 model declares `structured_output`; otherwise the schema is embedded in the
@@ -408,8 +408,8 @@ prompt and validated after the call, and the compiler says so in its notes.
 
 ## Docker UI
 
-Build with `docker build -t prompt-selector .`.
-Run with `docker run --rm -p 8000:8000 prompt-selector`.
+Build with `docker build -t prompt-playoff .`.
+Run with `docker run --rm -p 8000:8000 prompt-playoff`.
 Open `http://127.0.0.1:8000`; the non-root image health-checks `/health`.
 
 ## Development
@@ -433,7 +433,7 @@ the suite runs on a bare install.
   target model doubling as the proposer, expect rephrasings rather than genuine
   rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in the registry
-  (`prompt_selector.tools`), which ships with a calculator. Register your own to
+  (`prompt_playoff.tools`), which ships with a calculator. Register your own to
   benchmark real agent work.
 - Graders are deterministic by design. There is no LLM judge, so open-ended
   generation is measured on grounding overlap and constraint coverage rather

@@ -1,16 +1,16 @@
 import pytest
 from conftest import FakeProvider, ToolCallingProvider
 
-from prompt_selector.compiler import PromptCompiler
-from prompt_selector.domain import TaskType
-from prompt_selector.strategies import (
+from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.domain import TaskType
+from prompt_playoff.strategies import (
     get_strategy,
     json_field_vote,
     majority_vote,
     split_chunks,
     strategy_names,
 )
-from prompt_selector.tools import DEFAULT_REGISTRY
+from prompt_playoff.tools import DEFAULT_REGISTRY
 
 
 @pytest.mark.asyncio
@@ -159,7 +159,7 @@ async def test_tree_search_expands_ranks_and_answers(extraction_task, entity_sch
 
 def test_ranking_survives_a_chatty_reply():
     """A model asked for numbers often wraps them in prose; unranked options are kept."""
-    from prompt_selector.strategies import _order_by_ranking
+    from prompt_playoff.strategies import _order_by_ranking
 
     options = ["first", "second", "third"]
     assert _order_by_ranking(options, "I think 3, then 1, then 2.") == ["third", "first", "second"]

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from prompt_selector.domain import (
+from prompt_playoff.domain import (
     Capability,
     CompiledPrompt,
     Constraints,
@@ -16,7 +16,7 @@ from prompt_selector.domain import (
     TaskProfile,
     TaskType,
 )
-from prompt_selector.registry import Registry
+from prompt_playoff.registry import Registry
 
 ENTITY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -113,6 +113,6 @@ def entity_schema() -> dict[str, Any]:
 @pytest.fixture(autouse=True)
 def isolated_measurements(tmp_path, monkeypatch):
     """Keep the suite independent of whatever has been benchmarked locally."""
-    monkeypatch.setenv("PROMPT_SELECTOR_MEASUREMENTS", str(tmp_path / "measurements.json"))
-    monkeypatch.setenv("PROMPT_SELECTOR_ENGINE_CACHE", str(tmp_path / "engine-cache.json"))
-    monkeypatch.setenv("PROMPT_SELECTOR_JOBS_PATH", str(tmp_path / "jobs.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_MEASUREMENTS", str(tmp_path / "measurements.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_ENGINE_CACHE", str(tmp_path / "engine-cache.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_JOBS_PATH", str(tmp_path / "jobs.json"))

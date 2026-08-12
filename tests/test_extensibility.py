@@ -5,11 +5,11 @@ import textwrap
 import pytest
 import yaml
 
-from prompt_selector.compiler import PromptCompiler
-from prompt_selector.graders import grader_names
-from prompt_selector.lint import has_errors, lint_registry, lint_technique
-from prompt_selector.registry import Registry, RegistryError
-from prompt_selector.strategies import strategy_names
+from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.graders import grader_names
+from prompt_playoff.lint import has_errors, lint_registry, lint_technique
+from prompt_playoff.registry import Registry, RegistryError
+from prompt_playoff.strategies import strategy_names
 
 NEW_TECHNIQUE = textwrap.dedent(
     """
@@ -157,8 +157,8 @@ def test_every_shipped_strategy_is_registered():
 
 def test_an_evidence_claim_without_a_source_is_an_error(registry):
     """`documented` with nothing behind it is exactly what this rule exists to stop."""
-    from prompt_selector.domain import EvidenceLevel
-    from prompt_selector.lint import has_errors, lint_technique
+    from prompt_playoff.domain import EvidenceLevel
+    from prompt_playoff.lint import has_errors, lint_technique
 
     technique = registry.technique("reasoning.step-back").model_copy(deep=True)
     assert technique.source is not None  # shipped with one
@@ -174,7 +174,7 @@ def test_an_evidence_claim_without_a_source_is_an_error(registry):
 
 
 def test_every_shipped_evidence_claim_is_backed(registry):
-    from prompt_selector.domain import EvidenceLevel
+    from prompt_playoff.domain import EvidenceLevel
 
     for technique in registry.techniques.values():
         if technique.evidence_level is not EvidenceLevel.heuristic:

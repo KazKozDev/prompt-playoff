@@ -16,22 +16,22 @@ format:
 	ruff format .
 
 validate:
-	prompt-selector validate-registry --strict
+	prompt-playoff validate-registry --strict
 
 serve:
-	prompt-selector serve
+	prompt-playoff serve
 
 demo:
-	prompt-selector recommend "Extract entities into strict JSON using a local model" --model qwen3:14b --capabilities structured_output,system_messages
+	prompt-playoff recommend "Extract entities into strict JSON using a local model" --model qwen3:14b --capabilities structured_output,system_messages
 
 benchmark:
-	prompt-selector benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
+	prompt-playoff benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
 
 optimize:
-	prompt-selector optimize --model llama3.2:3b --model-class small --dataset entity-extraction --technique structured.schema-first
+	prompt-playoff optimize --model llama3.2:3b --model-class small --dataset entity-extraction --technique structured.schema-first
 
 promptfoo:
-	prompt-selector export-promptfoo --techniques structured.schema-first,direct.explicit-constraints --models llama3.2:3b --model-class small --dataset entity-extraction --output promptfoo
+	prompt-playoff export-promptfoo --techniques structured.schema-first,direct.explicit-constraints --models llama3.2:3b --model-class small --dataset entity-extraction --output promptfoo
 
 papers:
 	bash scripts/fetch_papers.sh

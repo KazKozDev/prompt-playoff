@@ -29,7 +29,7 @@ There were no provider failures. The separate `contains_all` score is important:
 lexical grounding alone does not prove the requested value and period are right.
 
 ```bash
-prompt-selector benchmark --model qwen2.5:7b --model-class medium \
+prompt-playoff benchmark --model qwen2.5:7b --model-class medium \
   --dataset grounded-qa --task research --technique direct.explicit-constraints \
   --capabilities system_messages --no-strict-json
 ```

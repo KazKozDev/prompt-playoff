@@ -11,7 +11,7 @@ for id in 2406.06608 2604.14197 2407.12994 2502.11560 2401.14043 2402.07927 2312
         continue
     fi
     printf 'get   %s ... ' "$id"
-    if curl -sSL --max-time 120 -A "prompt-selector-research/0.1" -o "$target" "https://arxiv.org/pdf/$id" \
+    if curl -sSL --max-time 120 -A "prompt-playoff-research/0.1" -o "$target" "https://arxiv.org/pdf/$id" \
        && [ "$(stat -f%z "$target" 2>/dev/null || echo 0)" -gt 50000 ]; then
         echo "$(( $(stat -f%z "$target") / 1024 )) KB"
     else

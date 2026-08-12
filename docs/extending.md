@@ -9,18 +9,18 @@ Three extension points, in order of how often you will reach for them:
 | A scoring metric (grader) | one function + decorator | yes, ~10 lines |
 | An execution pattern (strategy) | one class + decorator | yes, ~40 lines |
 
-Run `prompt-selector capabilities` to print everything currently available to a
+Run `prompt-playoff capabilities` to print everything currently available to a
 YAML file: strategies, graders, aggregators, datasets.
 
 ## 1. A new technique
 
 ```bash
-prompt-selector new-technique structured.my-technique --title "My technique"
-prompt-selector validate-registry
+prompt-playoff new-technique structured.my-technique --title "My technique"
+prompt-playoff validate-registry
 ```
 
-The scaffold writes into `src/prompt_selector/data/techniques/`. Point
-`PROMPT_SELECTOR_REGISTRY` at another directory to keep your techniques outside
+The scaffold writes into `src/prompt_playoff/data/techniques/`. Point
+`PROMPT_PLAYOFF_REGISTRY` at another directory to keep your techniques outside
 this repository.
 
 ### The prompt is data
@@ -143,7 +143,7 @@ lint warning, because an unmeasurable validator is decoration:
 
 ## 2. A new dataset
 
-Drop a `.jsonl` file into `src/prompt_selector/data/datasets/`. One example per
+Drop a `.jsonl` file into `src/prompt_playoff/data/datasets/`. One example per
 line:
 
 ```json
@@ -166,7 +166,7 @@ a zero.
 ## 3. A new grader
 
 ```python
-from prompt_selector.graders import GradeContext, grader
+from prompt_playoff.graders import GradeContext, grader
 
 
 @grader("bullet_count")
@@ -190,7 +190,7 @@ number.
 ## 4. A new strategy
 
 ```python
-from prompt_selector.strategies import Strategy, register_strategy, call_once
+from prompt_playoff.strategies import Strategy, register_strategy, call_once
 
 
 class BestOfNParams(BaseModel):
@@ -217,7 +217,7 @@ Register it and every technique can select `strategy: best_of_n` from YAML.
 
 ## What lint checks
 
-`prompt-selector validate-registry` (and `GET /v1/lint`) verifies, per technique:
+`prompt-playoff validate-registry` (and `GET /v1/lint`) verifies, per technique:
 
 1. the strategy exists and its params validate
 2. stages required by the strategy are declared

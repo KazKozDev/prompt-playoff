@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from prompt_selector.compiler import PromptCompiler
-from prompt_selector.domain import (
+from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.domain import (
     Capability,
     CompiledPrompt,
     ModelProfile,
@@ -13,7 +13,7 @@ from prompt_selector.domain import (
     TaskShape,
     TaskType,
 )
-from prompt_selector.engine import (
+from prompt_playoff.engine import (
     AuthoredPrompt,
     EngineCache,
     PromptAuthoringError,
@@ -22,9 +22,9 @@ from prompt_selector.engine import (
     engine_profile_from_env,
     resolve_engine_profile,
 )
-from prompt_selector.normalizer import normalize_description
-from prompt_selector.providers import ProviderError
-from prompt_selector.registry import Registry
+from prompt_playoff.normalizer import normalize_description
+from prompt_playoff.providers import ProviderError
+from prompt_playoff.registry import Registry
 
 TARGET = ModelProfile(
     provider="ollama",
@@ -168,10 +168,10 @@ async def test_engine_call_is_deterministic_and_schema_bound(cache) -> None:
 
 
 def test_env_configures_the_engine(monkeypatch) -> None:
-    monkeypatch.delenv("PROMPT_SELECTOR_ENGINE_MODEL", raising=False)
+    monkeypatch.delenv("PROMPT_PLAYOFF_ENGINE_MODEL", raising=False)
     assert engine_profile_from_env() is None
 
-    monkeypatch.setenv("PROMPT_SELECTOR_ENGINE_MODEL", "qwen3:14b")
+    monkeypatch.setenv("PROMPT_PLAYOFF_ENGINE_MODEL", "qwen3:14b")
     profile = engine_profile_from_env()
     assert profile is not None
     assert profile.model_id == "qwen3:14b"
@@ -179,7 +179,7 @@ def test_env_configures_the_engine(monkeypatch) -> None:
 
 
 def test_explicit_profile_beats_the_environment(monkeypatch) -> None:
-    monkeypatch.setenv("PROMPT_SELECTOR_ENGINE_MODEL", "from-env")
+    monkeypatch.setenv("PROMPT_PLAYOFF_ENGINE_MODEL", "from-env")
     resolved = resolve_engine_profile(ENGINE)
     assert resolved is not None
     assert resolved.model_id == "big-model"

@@ -1,7 +1,7 @@
 # Integrations
 
 Four optional integrations, each behind an extra. The core package works
-without any of them, and `prompt-selector tracing-status` /
+without any of them, and `prompt-playoff tracing-status` /
 `GET /v1/integrations` tell you what is actually installed.
 
 ```bash
@@ -32,7 +32,7 @@ same artefact against the same numbers, and the winner comes back as a plain
 `TechniqueOverlay` you can compile, benchmark and export like any other.
 
 ```bash
-prompt-selector optimize --model llama3.2:3b --model-class small \
+prompt-playoff optimize --model llama3.2:3b --model-class small \
   --dataset entity-extraction --technique structured.schema-first \
   --backend dspy:gepa --max-metric-calls 60 --export optimized.yaml
 ```
@@ -80,7 +80,7 @@ promptfoo is good at running one prompt across many providers and failing a
 build on regression. Rather than reimplement that, export to it:
 
 ```bash
-prompt-selector export-promptfoo \
+prompt-playoff export-promptfoo \
   --techniques structured.schema-first,direct.explicit-constraints \
   --models llama3.2:3b,qwen3.5:4b --model-class small \
   --dataset entity-extraction --output promptfoo
@@ -93,7 +93,7 @@ What lands in the directory:
 ```
 promptfooconfig.yaml         techniques × providers × dataset
 prompts/<technique>.json     the compiled messages, with {{input}} templated
-prompt_selector_asserts.py   a bridge that calls this project's graders
+prompt_playoff_asserts.py   a bridge that calls this project's graders
 ```
 
 Two details that keep the numbers honest:
@@ -115,7 +115,7 @@ warning structured.few-shot-repair runs as multi_stage with 2 calls;
 promptfoo will evaluate only its first stage.
 ```
 
-For the whole technique, use `prompt-selector benchmark`.
+For the whole technique, use `prompt-playoff benchmark`.
 
 ---
 
@@ -126,24 +126,24 @@ individually — a `multi_stage` run produces one span per stage, with its own
 latency and token counts.
 
 ```bash
-export PROMPT_SELECTOR_TRACING=langfuse
+export PROMPT_PLAYOFF_TRACING=langfuse
 export LANGFUSE_PUBLIC_KEY=pk-... LANGFUSE_SECRET_KEY=sk-...
 export LANGFUSE_HOST=https://cloud.langfuse.com   # or your self-hosted URL
 
-prompt-selector tracing-status
+prompt-playoff tracing-status
 ```
 
 For Phoenix or any OTLP collector:
 
 ```bash
-export PROMPT_SELECTOR_TRACING=phoenix
+export PROMPT_PLAYOFF_TRACING=phoenix
 export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://127.0.0.1:6006/v1/traces
 ```
 
 Spans carry the technique id, the stage, the validators, the provider, the
 prompt and completion token counts, and the full messages — Phoenix renders them
 as LLM spans via OpenInference conventions. Tracing is off unless
-`PROMPT_SELECTOR_TRACING` is set, and export failures never propagate into a
+`PROMPT_PLAYOFF_TRACING` is set, and export failures never propagate into a
 run.
 
 ### Datasets from observed traffic
@@ -152,7 +152,7 @@ The point of tracing here is not dashboards, it is closing the loop: turning
 what your users actually sent into a benchmark dataset.
 
 ```bash
-prompt-selector import-traces --output datasets/from-prod.jsonl \
+prompt-playoff import-traces --output datasets/from-prod.jsonl \
   --technique structured.schema-first --limit 200
 ```
 
@@ -160,7 +160,7 @@ Imported rows come back with `expected: null` and tagged `unreviewed`, because a
 benchmark needs a gold answer and a trace does not have one. Fill them in, then:
 
 ```bash
-prompt-selector benchmark --model llama3.2:3b --dataset-file datasets/from-prod.jsonl
+prompt-playoff benchmark --model llama3.2:3b --dataset-file datasets/from-prod.jsonl
 ```
 
 `--output-as-expected` records what the model produced as the gold answer. That
@@ -172,9 +172,9 @@ a model against its own past mistakes. It is off by default for that reason.
 ## Programmatic use
 
 ```python
-from prompt_selector.service import PromptSelectorService
-from prompt_selector.registry import Registry
-from prompt_selector.integrations.tracing import build_tracer
+from prompt_playoff.service import PromptSelectorService
+from prompt_playoff.registry import Registry
+from prompt_playoff.integrations.tracing import build_tracer
 
 service = PromptSelectorService(Registry.load(), tracer=build_tracer("langfuse"))
 
@@ -206,9 +206,9 @@ corpora into benchmark examples, so the optimizer can be measured on data
 somebody else built:
 
 ```bash
-prompt-selector list-hf-presets
-prompt-selector import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
-prompt-selector benchmark --model qwen2.5:7b --dataset-file datasets/multiconer.jsonl
+prompt-playoff list-hf-presets
+prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
+prompt-playoff benchmark --model qwen2.5:7b --dataset-file datasets/multiconer.jsonl
 ```
 
 | Preset | Corpus | Shape | Licence |

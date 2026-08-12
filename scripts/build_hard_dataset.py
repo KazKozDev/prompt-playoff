@@ -249,7 +249,7 @@ def all_rows() -> list[tuple[str, list[str], str, list[str], list[str]]]:
 
 
 def main() -> None:
-    out = Path("src/prompt_selector/data/datasets/entity-extraction-hard.jsonl")
+    out = Path("src/prompt_playoff/data/datasets/entity-extraction-hard.jsonl")
     lines = []
     for row_id, tags, text, people, places in all_rows():
         # A gold value that is not verbatim in the input cannot be "copied", so

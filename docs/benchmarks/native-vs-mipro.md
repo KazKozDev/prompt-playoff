@@ -186,7 +186,7 @@ counter was corrected as part of this change, without changing candidate scores
 or the winner.
 
 ```bash
-prompt-selector optimize --model qwen2.5:7b --model-class medium \
+prompt-playoff optimize --model qwen2.5:7b --model-class medium \
   --dataset entity-extraction-hard --task structured_extraction \
   --technique structured.schema-first --backend native --rounds 2 \
   --candidates 2 --beam-width 1 --quality 1 --reliability 0 \
@@ -231,14 +231,14 @@ the baseline under another name.
 ```bash
 python scripts/build_hard_dataset.py
 
-prompt-selector benchmark --model llama3.2:3b --model-class small \
+prompt-playoff benchmark --model llama3.2:3b --model-class small \
   --dataset entity-extraction-hard --technique structured.schema-first
 
-prompt-selector optimize --model llama3.2:3b --model-class small \
+prompt-playoff optimize --model llama3.2:3b --model-class small \
   --dataset entity-extraction-hard --technique structured.schema-first \
   --backend native --rounds 3 --candidates 3
 
-prompt-selector optimize --model llama3.2:3b --model-class small \
+prompt-playoff optimize --model llama3.2:3b --model-class small \
   --dataset entity-extraction-hard --technique structured.schema-first \
   --backend dspy:mipro --auto light
 ```

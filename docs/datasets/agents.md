@@ -31,7 +31,7 @@ output-contract discipline: the model often added prose despite the exact-only
 instruction.
 
 ```bash
-prompt-selector benchmark --model qwen2.5:7b --model-class medium \
+prompt-playoff benchmark --model qwen2.5:7b --model-class medium \
   --dataset agents --task agents --technique agents.react \
   --capabilities tool_calling,system_messages --tools-allowed --no-strict-json
 ```

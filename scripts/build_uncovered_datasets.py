@@ -13,7 +13,7 @@ from typing import Any
 
 TARGET = 120
 SEED = 20260808
-OUT = Path("src/prompt_selector/data/datasets")
+OUT = Path("src/prompt_playoff/data/datasets")
 
 
 def _write(name: str, rows: list[dict[str, Any]]) -> None:

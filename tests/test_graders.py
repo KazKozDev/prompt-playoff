@@ -1,5 +1,5 @@
-from prompt_selector.domain import ExecutionTrace
-from prompt_selector.graders import (
+from prompt_playoff.domain import ExecutionTrace
+from prompt_playoff.graders import (
     GradeContext,
     default_graders,
     grader_names,
@@ -127,7 +127,7 @@ def test_unknown_grader_names_are_skipped_not_fatal():
 
 
 def test_sandbox_computes():
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     assert run_program("answer = sum([x * x for x in [1, 2, 3]])").value == 14
     assert (
@@ -141,7 +141,7 @@ def test_sandbox_computes():
 
 def test_sandbox_refuses_every_way_out():
     """A model-written program is untrusted input; none of these may run."""
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     escapes = [
         "import os\nanswer = os.listdir('/')",
@@ -159,7 +159,7 @@ def test_sandbox_refuses_every_way_out():
 
 def test_sandbox_allows_local_pure_functions():
     """Function definitions are required by MBPP and are not an escape vector."""
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     result = run_program("def f():\n    return 1\nanswer = f()")
     assert result.ok
@@ -168,7 +168,7 @@ def test_sandbox_allows_local_pure_functions():
 
 def test_sandbox_prebinds_only_whitelisted_pure_module_names():
     """Safe imports are declarations; no module object enters the interpreter."""
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     programs = {
         "import math\nanswer = math.floor(math.pi)": 3,
@@ -194,7 +194,7 @@ def test_sandbox_prebinds_only_whitelisted_pure_module_names():
 
 
 def test_sandbox_rejects_modules_and_members_outside_the_whitelist():
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     rejected = [
         "import os\nanswer = 1",
@@ -211,7 +211,7 @@ def test_sandbox_rejects_modules_and_members_outside_the_whitelist():
 
 
 def test_sandbox_stops_a_runaway_program():
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     result = run_program("i = 0\nwhile True:\n    i += 1\nanswer = i")
     assert not result.ok
@@ -220,7 +220,7 @@ def test_sandbox_stops_a_runaway_program():
 
 def test_sandbox_reports_ordinary_errors_as_results():
     """A division by zero is an outcome to tell the model about, not a crash."""
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     result = run_program("answer = 1 / 0")
     assert not result.ok
@@ -228,6 +228,6 @@ def test_sandbox_reports_ordinary_errors_as_results():
 
 
 def test_comprehension_variables_do_not_leak():
-    from prompt_selector.sandbox import run_program
+    from prompt_playoff.sandbox import run_program
 
     assert run_program("x = 99\nys = [x for x in [1, 2]]\nanswer = x").value == 99

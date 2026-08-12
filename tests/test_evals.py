@@ -1,15 +1,15 @@
 import pytest
 from conftest import FakeProvider
 
-from prompt_selector.domain import Priorities
-from prompt_selector.evals import (
+from prompt_playoff.domain import Priorities
+from prompt_playoff.evals import (
     BenchmarkExample,
     BenchmarkRunner,
     ExampleRun,
     build_scorecard,
     compare_techniques,
 )
-from prompt_selector.measurements import MeasurementStore
+from prompt_playoff.measurements import MeasurementStore
 
 
 def dataset(schema):
@@ -177,7 +177,7 @@ def test_translation_glossary_score_is_a_headline_quality_metric():
 def test_a_measurement_from_another_model_is_not_evidence(tmp_path):
     """A 3B and a 7B model disagree about which technique wins, so a near miss
     must stay a prior rather than silently ranking a model it never ran on."""
-    from prompt_selector.domain import MeasuredEvidence, TaskType
+    from prompt_playoff.domain import MeasuredEvidence, TaskType
 
     store = MeasurementStore(tmp_path / "m.json")
     store.record(

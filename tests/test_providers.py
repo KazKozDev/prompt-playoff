@@ -3,9 +3,9 @@ import json
 import httpx
 import pytest
 
-from prompt_selector.domain import CompiledPrompt, Message, ModelProfile, ModelResult
-from prompt_selector.integrations.tracing import TracingProvider
-from prompt_selector.providers import OpenAICompatibleProvider, ProviderError, provider_for
+from prompt_playoff.domain import CompiledPrompt, Message, ModelProfile, ModelResult
+from prompt_playoff.integrations.tracing import TracingProvider
+from prompt_playoff.providers import OpenAICompatibleProvider, ProviderError, provider_for
 
 
 def test_openai_provider_reads_api_key_from_environment(monkeypatch):
@@ -40,7 +40,7 @@ def test_request_api_key_takes_precedence_and_never_serializes(monkeypatch):
 
 def test_generic_compatible_provider_uses_shared_fallback(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "openai-only-secret")
-    monkeypatch.setenv("PROMPT_SELECTOR_API_KEY", "compatible-secret")
+    monkeypatch.setenv("PROMPT_PLAYOFF_API_KEY", "compatible-secret")
     model = ModelProfile(
         provider="custom",
         model_id="compatible-test",
@@ -75,7 +75,7 @@ def test_provider_default_key_environment(monkeypatch, provider_id, env_name):
 def test_key_precedence_is_explicit_then_provider_then_shared(monkeypatch):
     monkeypatch.setenv("MY_TEAM_KEY", "explicit")
     monkeypatch.setenv("TOGETHER_API_KEY", "provider")
-    monkeypatch.setenv("PROMPT_SELECTOR_API_KEY", "shared")
+    monkeypatch.setenv("PROMPT_PLAYOFF_API_KEY", "shared")
     model = ModelProfile(provider="together", model_id="test", api_key_env="MY_TEAM_KEY")
     assert provider_for(model).api_key == "explicit"  # type: ignore[attr-defined]
     monkeypatch.delenv("MY_TEAM_KEY")
@@ -85,7 +85,7 @@ def test_key_precedence_is_explicit_then_provider_then_shared(monkeypatch):
 
 
 def test_missing_key_fails_before_a_request_and_names_the_fix(monkeypatch):
-    for name in ("OPENROUTER_API_KEY", "PROMPT_SELECTOR_API_KEY"):
+    for name in ("OPENROUTER_API_KEY", "PROMPT_PLAYOFF_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
         provider_for(ModelProfile(provider="openrouter", model_id="test"))

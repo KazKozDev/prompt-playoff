@@ -1,6 +1,6 @@
-from prompt_selector.compiler import PromptCompiler
-from prompt_selector.domain import Capability, Constraints, ModelProfile, TaskProfile, TaskType
-from prompt_selector.normalizer import normalize_description
+from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.domain import Capability, Constraints, ModelProfile, TaskProfile, TaskType
+from prompt_playoff.normalizer import normalize_description
 
 
 def user_text(program, stage: int = 0) -> str:
@@ -73,7 +73,7 @@ def test_self_consistency_declares_the_calls_it_will_make(extraction_task, entit
 def test_exemplars_come_from_the_request_not_the_technique(
     extraction_task, entity_schema, registry
 ):
-    from prompt_selector.domain import Exemplar
+    from prompt_playoff.domain import Exemplar
 
     without = PromptCompiler().compile(
         extraction_task, registry.technique("structured.few-shot-repair"), "Input", entity_schema

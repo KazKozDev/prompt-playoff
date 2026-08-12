@@ -20,7 +20,7 @@ publishing others' private information, and sustained disruption of discussion.
 ## Reporting
 
 Report a problem to the maintainer through a
-[private security advisory](https://github.com/KazKozDev/prompt-selector/security/advisories/new),
+[private security advisory](https://github.com/KazKozDev/prompt-playoff/security/advisories/new),
 which is the only private channel this repository has. Reports are read by the
 maintainer alone.
 

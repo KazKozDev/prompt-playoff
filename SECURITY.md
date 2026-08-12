@@ -8,7 +8,7 @@ receive no backports.
 ## Reporting a vulnerability
 
 Report privately through GitHub's
-[security advisory form](https://github.com/KazKozDev/prompt-selector/security/advisories/new)
+[security advisory form](https://github.com/KazKozDev/prompt-playoff/security/advisories/new)
 rather than a public issue. Expect a first reply within a week.
 
 Please include what you did, what happened, and the version you ran.

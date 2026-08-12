@@ -8,17 +8,17 @@ import pytest
 import yaml
 from conftest import FakeProvider
 
-from prompt_selector.domain import CompiledPrompt, Message, ModelProfile, ModelResult
-from prompt_selector.evals import BenchmarkExample
-from prompt_selector.integrations import IntegrationError, promptfoo, require
-from prompt_selector.integrations.tracing import (
+from prompt_playoff.domain import CompiledPrompt, Message, ModelProfile, ModelResult
+from prompt_playoff.evals import BenchmarkExample
+from prompt_playoff.integrations import IntegrationError, promptfoo, require
+from prompt_playoff.integrations.tracing import (
     CallEvent,
     NullTracer,
     TracingProvider,
     build_tracer,
     write_jsonl,
 )
-from prompt_selector.providers import ProviderError
+from prompt_playoff.providers import ProviderError
 
 HAS_DSPY = importlib.util.find_spec("dspy") is not None
 HAS_LANGFUSE = importlib.util.find_spec("langfuse") is not None
@@ -43,7 +43,7 @@ def dataset(schema):
 
 
 def test_missing_dependency_names_the_extra_to_install():
-    with pytest.raises(IntegrationError, match=r"pip install 'prompt-selector\[nope\]'"):
+    with pytest.raises(IntegrationError, match=r"pip install 'prompt-playoff\[nope\]'"):
         require("definitely_not_installed_xyz", "nope")
 
 
@@ -225,7 +225,7 @@ async def test_failures_are_traced_and_still_raised(extraction_task):
 
 @pytest.mark.asyncio
 async def test_multi_stage_runs_trace_every_stage(extraction_task, entity_schema, registry):
-    from prompt_selector.evals import BenchmarkRunner
+    from prompt_playoff.evals import BenchmarkRunner
 
     recorder = Recorder()
     provider = TracingProvider(FakeProvider(responses=['{"people": [], "places": []}']), recorder)
@@ -240,8 +240,8 @@ async def test_multi_stage_runs_trace_every_stage(extraction_task, entity_schema
 
 
 def test_tracing_is_off_unless_asked_for(monkeypatch):
-    monkeypatch.delenv("PROMPT_SELECTOR_TRACING", raising=False)
-    from prompt_selector.integrations.tracing import tracer_from_env
+    monkeypatch.delenv("PROMPT_PLAYOFF_TRACING", raising=False)
+    from prompt_playoff.integrations.tracing import tracer_from_env
 
     assert isinstance(tracer_from_env(), NullTracer)
     assert isinstance(build_tracer("none"), NullTracer)
@@ -250,7 +250,7 @@ def test_tracing_is_off_unless_asked_for(monkeypatch):
 
 
 def test_service_leaves_the_provider_alone_when_tracing_is_off(registry, extraction_task):
-    from prompt_selector.service import PromptSelectorService
+    from prompt_playoff.service import PromptSelectorService
 
     service = PromptSelectorService(registry, tracer=NullTracer())
     assert not isinstance(service.provider(extraction_task), TracingProvider)
@@ -260,7 +260,7 @@ def test_service_leaves_the_provider_alone_when_tracing_is_off(registry, extract
 
 
 def test_write_jsonl_round_trips(tmp_path):
-    from prompt_selector.evals import load_jsonl
+    from prompt_playoff.evals import load_jsonl
 
     path = tmp_path / "imported.jsonl"
     count = write_jsonl(
@@ -298,7 +298,7 @@ def test_otlp_tracer_builds_spans_without_a_collector(extraction_task):
 
 
 def test_litellm_model_mapping():
-    from prompt_selector.integrations.dspy_backend import litellm_model
+    from prompt_playoff.integrations.dspy_backend import litellm_model
 
     name, kwargs = litellm_model(ModelProfile(provider="ollama", model_id="llama3.2:3b"))
     assert name == "ollama_chat/llama3.2:3b"
@@ -312,7 +312,7 @@ def test_litellm_model_mapping():
 
 
 def test_dspy_metric_reuses_our_graders(extraction_task, entity_schema, registry):
-    from prompt_selector.integrations.dspy_backend import example_score
+    from prompt_playoff.integrations.dspy_backend import example_score
 
     example = dataset(entity_schema)[0]
     technique = registry.technique("structured.schema-first")
@@ -325,7 +325,7 @@ def test_dspy_metric_reuses_our_graders(extraction_task, entity_schema, registry
 
 
 def test_dspy_metric_rewards_fewer_tokens(extraction_task, entity_schema, registry):
-    from prompt_selector.integrations.dspy_backend import example_score
+    from prompt_playoff.integrations.dspy_backend import example_score
 
     example = dataset(entity_schema)[0]
     technique = registry.technique("structured.schema-first")
@@ -340,7 +340,7 @@ def test_dspy_metric_rewards_fewer_tokens(extraction_task, entity_schema, regist
 
 
 def test_mutable_block_is_never_the_output_contract(registry):
-    from prompt_selector.integrations.dspy_backend import mutable_block
+    from prompt_playoff.integrations.dspy_backend import mutable_block
 
     for technique in registry.techniques.values():
         name = mutable_block(technique)
@@ -354,7 +354,7 @@ async def test_bootstrap_backend_runs_through_our_pipeline(
     extraction_task, entity_schema, registry
 ):
     """BootstrapFewShot needs no proposer LM, so it runs fully offline."""
-    from prompt_selector.integrations.dspy_backend import optimize_with_dspy
+    from prompt_playoff.integrations.dspy_backend import optimize_with_dspy
 
     provider = FakeProvider(responses=['{"people": ["Person0"], "places": ["Place0"]}'])
     result = await optimize_with_dspy(
@@ -377,7 +377,7 @@ async def test_bootstrap_backend_runs_through_our_pipeline(
 @pytest.mark.skipif(not HAS_DSPY, reason="dspy not installed")
 @pytest.mark.asyncio
 async def test_unknown_dspy_optimizer_is_rejected(extraction_task, entity_schema, registry):
-    from prompt_selector.integrations.dspy_backend import optimize_with_dspy
+    from prompt_playoff.integrations.dspy_backend import optimize_with_dspy
 
     with pytest.raises(ValueError, match="Unknown DSPy optimizer"):
         await optimize_with_dspy(
@@ -397,7 +397,7 @@ HAS_DATASETS = importlib.util.find_spec("datasets") is not None
 
 
 def test_detokenize_attaches_punctuation_and_reports_offsets():
-    from prompt_selector.integrations.huggingface import detokenize
+    from prompt_playoff.integrations.huggingface import detokenize
 
     text, spans = detokenize(["Mara", "left", "Veyr", "."])
     assert text == "Mara left Veyr."
@@ -406,7 +406,7 @@ def test_detokenize_attaches_punctuation_and_reports_offsets():
 
 
 def test_bio_spans_split_adjacent_entities():
-    from prompt_selector.integrations.huggingface import decode_spans
+    from prompt_playoff.integrations.huggingface import decode_spans
 
     tags = ["B-Person", "I-Person", "B-Person", "O", "B-Facility"]
     assert decode_spans(tags) == [("Person", 0, 1), ("Person", 2, 2), ("Facility", 4, 4)]
@@ -414,7 +414,7 @@ def test_bio_spans_split_adjacent_entities():
 
 def test_bare_labels_without_bio_merge_a_run():
     """Few-NERD's coarse tags carry no prefix, so a run is one entity."""
-    from prompt_selector.integrations.huggingface import decode_spans
+    from prompt_playoff.integrations.huggingface import decode_spans
 
     assert decode_spans(["person", "person", "O", "location"]) == [
         ("person", 0, 1),
@@ -424,7 +424,7 @@ def test_bare_labels_without_bio_merge_a_run():
 
 def test_converted_gold_is_verbatim_in_the_input():
     """The invariant the whole benchmark rests on."""
-    from prompt_selector.integrations.huggingface import MULTICONER_EN, to_example
+    from prompt_playoff.integrations.huggingface import MULTICONER_EN, to_example
 
     example = to_example(
         ["Captain", "Orin", "sailed", "past", "Veyr", ",", "then", "home", "."],
@@ -441,7 +441,7 @@ def test_converted_gold_is_verbatim_in_the_input():
 
 
 def test_unmapped_types_become_empty_not_wrong():
-    from prompt_selector.integrations.huggingface import MULTICONER_EN, to_example
+    from prompt_playoff.integrations.huggingface import MULTICONER_EN, to_example
 
     example = to_example(
         ["Dial", "M", "for", "Murder", "was", "screened", "."],
@@ -454,7 +454,7 @@ def test_unmapped_types_become_empty_not_wrong():
 
 
 def test_conversion_rejects_misaligned_rows():
-    from prompt_selector.integrations.huggingface import MULTICONER_EN, to_example
+    from prompt_playoff.integrations.huggingface import MULTICONER_EN, to_example
 
     assert to_example(["a", "b"], ["O"], MULTICONER_EN, "x") is None
     assert to_example([], [], MULTICONER_EN, "x") is None
@@ -462,7 +462,7 @@ def test_conversion_rejects_misaligned_rows():
 
 def test_sampling_keeps_a_slice_of_empty_examples():
     """Dropping every empty example would reward a prompt that guesses."""
-    from prompt_selector.integrations.huggingface import select
+    from prompt_playoff.integrations.huggingface import select
 
     filled = [{"id": f"f{i}", "expected": {"people": ["x"]}} for i in range(50)]
     empty = [{"id": f"e{i}", "expected": {"people": []}} for i in range(50)]
@@ -478,7 +478,7 @@ def test_sampling_keeps_a_slice_of_empty_examples():
 
 
 def test_schema_matches_the_mapped_fields():
-    from prompt_selector.integrations.huggingface import FEW_NERD, build_schema
+    from prompt_playoff.integrations.huggingface import FEW_NERD, build_schema
 
     schema = build_schema(FEW_NERD.fields)
     assert schema["required"] == ["people", "places", "organizations"]
@@ -486,7 +486,7 @@ def test_schema_matches_the_mapped_fields():
 
 
 def test_every_preset_declares_its_licence():
-    from prompt_selector.integrations.huggingface import PRESETS
+    from prompt_playoff.integrations.huggingface import PRESETS
 
     for name, preset in PRESETS.items():
         assert preset.licence, name
@@ -495,7 +495,7 @@ def test_every_preset_declares_its_licence():
 
 
 def test_mbpp_keeps_only_references_supported_by_the_pure_module_whitelist():
-    from prompt_selector.integrations.huggingface import MBPP, code_example
+    from prompt_playoff.integrations.huggingface import MBPP, code_example
 
     base = {
         "prompt": "Return the integer square root.",

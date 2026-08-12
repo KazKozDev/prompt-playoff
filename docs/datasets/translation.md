@@ -34,7 +34,7 @@ neither translation grader is classified as a unique-reference quality metric;
 0.654 glossary consistency is the relevant headroom signal.
 
 ```bash
-prompt-selector benchmark --model qwen2.5:7b --model-class medium \
+prompt-playoff benchmark --model qwen2.5:7b --model-class medium \
   --dataset translation --task translation --technique direct.explicit-constraints \
   --capabilities system_messages --no-strict-json
 ```

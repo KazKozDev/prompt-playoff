@@ -16,8 +16,8 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from prompt_selector import __version__
-from prompt_selector.cli import app
+from prompt_playoff import __version__
+from prompt_playoff.cli import app
 
 runner = CliRunner()
 
@@ -27,7 +27,7 @@ def invoke():
     def run(*args: str, code: int = 0):
         result = runner.invoke(app, list(args))
         assert result.exit_code == code, (
-            f"prompt-selector {' '.join(args)}\nexit {result.exit_code}\n{result.output}"
+            f"prompt-playoff {' '.join(args)}\nexit {result.exit_code}\n{result.output}"
         )
         return result
 
@@ -95,7 +95,7 @@ def test_every_command_is_reachable_and_describes_itself(invoke, command):
 
 
 def test_list_techniques_covers_the_whole_registry(invoke):
-    from prompt_selector.registry import Registry
+    from prompt_playoff.registry import Registry
 
     output = invoke("list-techniques").output
     families = {spec.family for spec in Registry.load().techniques.values()}
@@ -183,7 +183,7 @@ def test_an_unknown_shape_is_rejected_rather_than_ignored(invoke):
 
 
 def test_max_calls_rules_out_the_expensive_techniques(invoke):
-    from prompt_selector.registry import Registry
+    from prompt_playoff.registry import Registry
 
     payload = json.loads(
         invoke(
@@ -213,7 +213,7 @@ def test_select_file_reads_a_saved_profile(invoke):
 
 
 def test_compile_produces_the_stages_the_technique_declares(invoke):
-    from prompt_selector.registry import Registry
+    from prompt_playoff.registry import Registry
 
     payload = json.loads(
         invoke(

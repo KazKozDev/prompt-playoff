@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from prompt_selector.jobs import JobStore
+from prompt_playoff.jobs import JobStore
 
 
 @pytest.mark.asyncio

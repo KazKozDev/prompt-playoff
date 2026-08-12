@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from prompt_selector.evals import load_jsonl
+from prompt_playoff.evals import load_jsonl
 
-DATASETS = Path(__file__).parents[1] / "src" / "prompt_selector" / "data" / "datasets"
+DATASETS = Path(__file__).parents[1] / "src" / "prompt_playoff" / "data" / "datasets"
 
 
 def test_uncovered_datasets_have_deterministic_headroom_shape():

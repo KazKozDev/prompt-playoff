@@ -5,10 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from prompt_selector.domain import MeasuredEvidence, TaskType
-from prompt_selector.engine import EngineCache
-from prompt_selector.measurements import MeasurementStore
-from prompt_selector.persistence import atomic_write_json
+from prompt_playoff.domain import MeasuredEvidence, TaskType
+from prompt_playoff.engine import EngineCache
+from prompt_playoff.measurements import MeasurementStore
+from prompt_playoff.persistence import atomic_write_json
 
 
 def _evidence(index: int) -> MeasuredEvidence:
@@ -55,7 +55,7 @@ def test_atomic_write_failure_keeps_previous_good_content(tmp_path, monkeypatch)
     def fail_replace(source, destination):
         raise OSError("simulated crash before replace")
 
-    monkeypatch.setattr("prompt_selector.persistence.os.replace", fail_replace)
+    monkeypatch.setattr("prompt_playoff.persistence.os.replace", fail_replace)
     with pytest.raises(OSError, match="simulated crash"):
         atomic_write_json(path, {"new": "incomplete"})
     assert path.read_bytes() == original

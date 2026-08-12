@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Renamed the project from Prompt Selector to Prompt Playoff. Everything that carried the old
+  name moves with it: the distribution is `prompt-playoff`, the import package is
+  `prompt_playoff`, the CLI is `prompt-playoff`, the committed config is `prompt-playoff.yaml`,
+  and the environment variables are `PROMPT_PLAYOFF_*` — `PROMPT_PLAYOFF_API_KEY`,
+  `PROMPT_PLAYOFF_ENGINE_MODEL`, `PROMPT_PLAYOFF_TRACING`, `PROMPT_PLAYOFF_REGISTRY`,
+  `PROMPT_PLAYOFF_JOBS_PATH`, `PROMPT_PLAYOFF_MEASUREMENTS`, `PROMPT_PLAYOFF_ENGINE_CACHE`,
+  `PROMPT_PLAYOFF_ENGINE_PROVIDER`, `PROMPT_PLAYOFF_ENGINE_BASE_URL`, `PROMPT_PLAYOFF_INPUT`.
+  The old names are not read as fallbacks: update imports, shell environments, config paths,
+  and any `pip install prompt-selector` to the new spelling in one pass. `PromptSelectorService`
+  keeps its name — it names the component, not the project.
 
 ## [0.3.0] - 2026-08-11
 
@@ -77,7 +88,7 @@ Nothing yet.
 
 ### Added
 
-- Added `prompt-selector check`, committed YAML expectations, JSON output, snapshot updates,
+- Added `prompt-playoff check`, committed YAML expectations, JSON output, snapshot updates,
   explicit exit codes, and a deterministic CI gate.
 - Added provider-specific API key resolution and Anthropic authentication headers.
 - Added process-safe, atomic persistence with surfaced corrupt-file recovery.
@@ -89,6 +100,6 @@ Nothing yet.
   `[cli]`, `[serve]`, or `[all]` for command-line, HTTP/UI, or all optional features.
 - Cloud provider failures now identify the credential or endpoint configuration to fix.
 
-[Unreleased]: https://github.com/KazKozDev/prompt-selector/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/KazKozDev/prompt-selector/releases/tag/v0.3.0
-[0.2.0]: https://github.com/KazKozDev/prompt-selector/releases/tag/v0.2.0
+[Unreleased]: https://github.com/KazKozDev/prompt-playoff/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/KazKozDev/prompt-playoff/releases/tag/v0.3.0
+[0.2.0]: https://github.com/KazKozDev/prompt-playoff/releases/tag/v0.2.0

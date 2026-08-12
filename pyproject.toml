@@ -3,7 +3,7 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "prompt-selector"
+name = "prompt-playoff"
 version = "0.3.0"
 description = "Explainable prompt-technique selection, compilation, and benchmarking for local and cloud LLMs."
 readme = "README.md"
@@ -44,7 +44,7 @@ serve = [
   "uvicorn[standard]>=0.40,<1",
 ]
 dev = [
-  "prompt-selector[cli,serve]",
+  "prompt-playoff[cli,serve]",
   "pytest>=9,<10",
   "pytest-asyncio>=1.2,<2",
   "ruff>=0.14,<1",
@@ -73,17 +73,17 @@ huggingface = [
   "pyarrow>=15",
 ]
 all = [
-  "prompt-selector[cli,serve,dspy,tracing,huggingface]",
+  "prompt-playoff[cli,serve,dspy,tracing,huggingface]",
 ]
 
 [project.scripts]
-prompt-selector = "prompt_selector.entrypoint:main"
+prompt-playoff = "prompt_playoff.entrypoint:main"
 
 [project.urls]
-Homepage = "https://github.com/KazKozDev/prompt-selector"
-Repository = "https://github.com/KazKozDev/prompt-selector"
-Issues = "https://github.com/KazKozDev/prompt-selector/issues"
-Changelog = "https://github.com/KazKozDev/prompt-selector/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/KazKozDev/prompt-playoff"
+Repository = "https://github.com/KazKozDev/prompt-playoff"
+Issues = "https://github.com/KazKozDev/prompt-playoff/issues"
+Changelog = "https://github.com/KazKozDev/prompt-playoff/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -93,7 +93,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-prompt_selector = ["data/**/*.yaml", "data/**/*.jsonl", "data/static/*.html"]
+prompt_playoff = ["data/**/*.yaml", "data/**/*.jsonl", "data/static/*.html"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

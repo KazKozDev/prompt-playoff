@@ -28,7 +28,7 @@ Reliability was 0.800 and there were no provider failures. Both correctness and
 constraint compliance therefore retain measurable headroom.
 
 ```bash
-prompt-selector benchmark --model qwen2.5:7b --model-class medium \
+prompt-playoff benchmark --model qwen2.5:7b --model-class medium \
   --dataset summarization --task summarization \
   --technique direct.explicit-constraints --capabilities system_messages \
   --no-strict-json

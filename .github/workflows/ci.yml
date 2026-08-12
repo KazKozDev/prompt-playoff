@@ -27,8 +27,8 @@ jobs:
       - name: Import, select, and compile with the core only
         run: |
           python - <<'PY'
-          from prompt_selector import PromptCompiler, Registry, Selector, normalize_description
-          from prompt_selector.domain import ModelProfile, TaskProfile, TaskType
+          from prompt_playoff import PromptCompiler, Registry, Selector, normalize_description
+          from prompt_playoff.domain import ModelProfile, TaskProfile, TaskType
 
           registry = Registry.load()
           task = TaskProfile(task_type=TaskType.structured_extraction, model=ModelProfile())
@@ -39,8 +39,8 @@ jobs:
           PY
       - name: Console command explains how to install the CLI
         run: |
-          if prompt-selector >message.txt 2>&1; then exit 1; fi
-          grep -F "pip install 'prompt-selector[cli]'" message.txt
+          if prompt-playoff >message.txt 2>&1; then exit 1; fi
+          grep -F "pip install 'prompt-playoff[cli]'" message.txt
 
   test:
     runs-on: ubuntu-latest
@@ -58,7 +58,7 @@ jobs:
       - run: ruff format --check .
       # API and CLI tests run with their declared extras; core-only is isolated above.
       - run: pytest
-      - run: prompt-selector validate-registry --strict
+      - run: prompt-playoff validate-registry --strict
 
   check-gate:
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
       - run: pip install -e '.[cli]'
       - name: Exercise the gate against a deterministic provider
         env:
-          PROMPT_SELECTOR_API_KEY: ci-only-not-a-secret
+          PROMPT_PLAYOFF_API_KEY: ci-only-not-a-secret
         run: |
           python tests/fake_provider_server.py &
           provider_pid=$!
@@ -82,7 +82,7 @@ jobs:
             fi
             sleep 0.1
           done
-          prompt-selector check --config tests/fixtures/check-ci.yaml --no-record
+          prompt-playoff check --config tests/fixtures/check-ci.yaml --no-record
 
   integrations:
     runs-on: ubuntu-latest

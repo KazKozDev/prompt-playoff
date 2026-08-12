@@ -3,10 +3,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from prompt_selector import __version__
-from prompt_selector.api import app
-from prompt_selector.domain import ModelResult
-from prompt_selector.engine import EngineCache, TaskEngine
+from prompt_playoff import __version__
+from prompt_playoff.api import app
+from prompt_playoff.domain import ModelResult
+from prompt_playoff.engine import EngineCache, TaskEngine
 
 MODEL = {
     "provider": "ollama",
@@ -323,7 +323,7 @@ def test_unknown_job_is_404(client):
 
 
 def test_recommend_without_an_engine_stays_on_the_deterministic_path(client, monkeypatch):
-    monkeypatch.delenv("PROMPT_SELECTOR_ENGINE_MODEL", raising=False)
+    monkeypatch.delenv("PROMPT_PLAYOFF_ENGINE_MODEL", raising=False)
     response = client.post(
         "/v1/recommend",
         json={"description": "Extract entities to strict JSON", "model": MODEL},
@@ -353,7 +353,7 @@ def test_recommend_reports_an_unreachable_engine_instead_of_failing(client):
 
 
 def test_optimize_still_accepts_the_legacy_optimizer_model_field():
-    from prompt_selector.api import OptimizeRequest
+    from prompt_playoff.api import OptimizeRequest
 
     payload = {
         "task": {"task_type": "structured_extraction", "model": MODEL},

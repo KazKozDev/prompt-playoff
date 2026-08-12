@@ -1,5 +1,5 @@
-from prompt_selector.domain import EvidenceLevel
-from prompt_selector.registry import Registry
+from prompt_playoff.domain import EvidenceLevel
+from prompt_playoff.registry import Registry
 
 
 def test_registry_loads() -> None:

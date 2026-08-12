@@ -57,15 +57,15 @@ that.
 
 ```bash
 python - <<'EOF'
-from prompt_selector.evals import load_jsonl
-from prompt_selector.registry import Registry
+from prompt_playoff.evals import load_jsonl
+from prompt_playoff.registry import Registry
 import pathlib
 rows = load_jsonl(Registry.load().dataset_path("few-nerd"))
 pathlib.Path("/tmp/few-nerd-40.jsonl").write_text(
     "\n".join(r.model_dump_json() for r in rows[::5][:40]) + "\n")
 EOF
 
-prompt-selector compare --model qwen2.5:7b --model-class medium \
+prompt-playoff compare --model qwen2.5:7b --model-class medium \
   --dataset-file /tmp/few-nerd-40.jsonl \
   --techniques structured.schema-first,reasoning.re-reading,reasoning.chain-of-draft,reasoning.zero-shot-cot \
   --quality 0.7 --reliability 0.3 --latency 0 --token-cost 0

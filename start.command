@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click this file in Finder to set up and launch Prompt Selector.
+# Double-click this file in Finder to set up and launch Prompt Playoff.
 # It installs what is missing, waits for Ollama, starts the web interface and
 # opens it in the browser. Close the Terminal window or press Ctrl-C to stop.
 
@@ -24,7 +24,7 @@ fail() {
 }
 
 printf '\n'
-say "Prompt Selector"
+say "Prompt Playoff"
 note "$(pwd)"
 printf '\n'
 
@@ -39,7 +39,7 @@ if [ ! -x .venv/bin/python ]; then
     python3 -m venv .venv || fail "Could not create .venv"
 fi
 
-if [ ! -x .venv/bin/prompt-selector ]; then
+if [ ! -x .venv/bin/prompt-playoff ]; then
     say "Installing dependencies (a couple of minutes)…"
     .venv/bin/python -m pip install --quiet --upgrade pip
     .venv/bin/python -m pip install --quiet -e '.[dev]' || fail "Installation failed"
@@ -92,7 +92,7 @@ done
 URL="http://127.0.0.1:$PORT"
 say "Starting the interface…"
 
-.venv/bin/prompt-selector serve --port "$PORT" >/tmp/prompt-selector-$PORT.log 2>&1 &
+.venv/bin/prompt-playoff serve --port "$PORT" >/tmp/prompt-playoff-$PORT.log 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
@@ -108,14 +108,14 @@ for _ in $(seq 1 40); do
     curl -s --max-time 2 "$URL/health" >/dev/null 2>&1 && break
     kill -0 "$SERVER_PID" 2>/dev/null || {
         printf '%s\n' "${RED}The server did not start. Log:${RESET}"
-        tail -20 "/tmp/prompt-selector-$PORT.log"
+        tail -20 "/tmp/prompt-playoff-$PORT.log"
         fail "Startup failed"
     }
     sleep 0.5
 done
 
 if ! curl -s --max-time 2 "$URL/health" >/dev/null 2>&1; then
-    tail -20 "/tmp/prompt-selector-$PORT.log"
+    tail -20 "/tmp/prompt-playoff-$PORT.log"
     fail "The server did not answer within 20 seconds"
 fi
 
@@ -128,7 +128,7 @@ printf '  %s\n' "1. Describe your task and press \"Create my prompt\""
 printf '  %s\n' "2. Pick a technique to see the prompt it compiles to"
 printf '  %s\n' "3. \"Benchmark this prompt\" measures it on a live model"
 printf '\n'
-note "Log: /tmp/prompt-selector-$PORT.log"
+note "Log: /tmp/prompt-playoff-$PORT.log"
 note "Stop with Ctrl-C, or just close this window"
 printf '\n'
 

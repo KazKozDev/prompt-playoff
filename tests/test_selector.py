@@ -1,6 +1,6 @@
 from collections import Counter
 
-from prompt_selector.domain import (
+from prompt_playoff.domain import (
     Capability,
     Constraints,
     ModelClass,
@@ -10,8 +10,8 @@ from prompt_selector.domain import (
     TaskShape,
     TaskType,
 )
-from prompt_selector.registry import Registry
-from prompt_selector.selector import Selector
+from prompt_playoff.registry import Registry
+from prompt_playoff.selector import Selector
 
 
 def extraction_profile() -> TaskProfile:

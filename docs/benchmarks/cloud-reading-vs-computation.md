@@ -59,18 +59,18 @@ endpoint, map the endpoint-specific environment variable only for the child
 process:
 
 ```bash
-OPENAI_API_KEY="$DEEPSEEK_API_KEY" prompt-selector compare \
+OPENAI_API_KEY="$DEEPSEEK_API_KEY" prompt-playoff compare \
   --model deepseek-v4-pro --model-class large --provider openai \
   --base-url https://api.deepseek.com --capabilities system_messages \
-  --dataset-file /tmp/prompt-selector-task5/entity-40.jsonl \
+  --dataset-file /tmp/prompt-playoff-task5/entity-40.jsonl \
   --task structured_extraction \
   --techniques structured.schema-first,reasoning.zero-shot-cot \
   --quality 1 --reliability 0 --latency 0 --token-cost 0
 
-OPENAI_API_KEY="$DEEPSEEK_API_KEY" prompt-selector compare \
+OPENAI_API_KEY="$DEEPSEEK_API_KEY" prompt-playoff compare \
   --model deepseek-v4-pro --model-class large --provider openai \
   --base-url https://api.deepseek.com --capabilities system_messages \
-  --dataset-file /tmp/prompt-selector-task5/gsm-20.jsonl --task coding \
+  --dataset-file /tmp/prompt-playoff-task5/gsm-20.jsonl --task coding \
   --techniques direct.explicit-constraints,reasoning.zero-shot-cot \
   --quality 1 --reliability 0 --latency 0 --token-cost 0
 ```

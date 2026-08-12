@@ -9,7 +9,7 @@ build passes:
 ruff check .
 ruff format --check .
 pytest
-prompt-selector validate-registry --strict
+prompt-playoff validate-registry --strict
 ```
 
 `ruff format --check` only reports; `ruff format .` applies. `--strict` on the

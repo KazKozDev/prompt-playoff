@@ -7,8 +7,8 @@ import pytest
 import yaml
 from conftest import FakeProvider
 
-from prompt_selector.checks import CheckConfigError, load_check_file, run_checks
-from prompt_selector.providers import ProviderError
+from prompt_playoff.checks import CheckConfigError, load_check_file, run_checks
+from prompt_playoff.providers import ProviderError
 
 
 class UnreachableProvider:
@@ -38,7 +38,7 @@ def _files(tmp_path, *, technique="structured.schema-first", require=None):
         + "\n",
         encoding="utf-8",
     )
-    config = tmp_path / "prompt-selector.yaml"
+    config = tmp_path / "prompt-playoff.yaml"
     payload = {
         "version": 1,
         "model": {

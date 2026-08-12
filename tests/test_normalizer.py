@@ -1,6 +1,6 @@
-from prompt_selector.compiler import PromptCompiler
-from prompt_selector.domain import Capability, ModelProfile, TaskShape, TaskType
-from prompt_selector.normalizer import normalize_description
+from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.domain import Capability, ModelProfile, TaskShape, TaskType
+from prompt_playoff.normalizer import normalize_description
 
 
 def test_normalizer_infers_extraction_and_json() -> None:

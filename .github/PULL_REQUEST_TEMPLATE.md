@@ -8,7 +8,7 @@
 ruff check .
 ruff format --check .
 pytest
-prompt-selector validate-registry --strict
+prompt-playoff validate-registry --strict
 ```
 
 - [ ] All four pass locally

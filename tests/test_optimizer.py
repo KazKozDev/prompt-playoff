@@ -3,15 +3,15 @@ import re
 
 import pytest
 
-from prompt_selector.domain import (
+from prompt_playoff.domain import (
     CompiledPrompt,
     ModelProfile,
     ModelResult,
     TaskProfile,
     TaskType,
 )
-from prompt_selector.evals import BenchmarkExample, Scorecard
-from prompt_selector.optimizer import Candidate, PromptOptimizer, TechniqueOverlay, pareto_front
+from prompt_playoff.evals import BenchmarkExample, Scorecard
+from prompt_playoff.optimizer import Candidate, PromptOptimizer, TechniqueOverlay, pareto_front
 
 
 class ScriptedProvider:
@@ -167,8 +167,8 @@ def test_pareto_front_keeps_the_cheap_and_the_accurate():
 
 def test_a_winner_carrying_unrenderable_demos_is_flagged(registry):
     """bootstrap can "win" with demos a technique has no block to render."""
-    from prompt_selector.domain import Exemplar
-    from prompt_selector.providers import OllamaProvider
+    from prompt_playoff.domain import Exemplar
+    from prompt_playoff.providers import OllamaProvider
 
     optimizer = PromptOptimizer(OllamaProvider())
     technique = registry.technique("structured.schema-first")
@@ -187,7 +187,7 @@ def test_a_winner_carrying_unrenderable_demos_is_flagged(registry):
 
 
 def test_discarded_proposals_are_reported_not_swallowed(registry):
-    from prompt_selector.providers import OllamaProvider
+    from prompt_playoff.providers import OllamaProvider
 
     optimizer = PromptOptimizer(OllamaProvider())
     optimizer.proposal_failures = ["proposer call failed: timeout"] * 3
@@ -208,7 +208,7 @@ def scored(name, quality, tokens, weighted):
 
 def test_beam_keeps_the_quality_leader_the_weighted_score_would_drop():
     """A verbose but more accurate candidate is the interesting parent."""
-    from prompt_selector.optimizer import select_parents
+    from prompt_playoff.optimizer import select_parents
 
     cheap = scored("cheap", quality=0.60, tokens=100, weighted=0.90)
     accurate = scored("accurate", quality=0.85, tokens=600, weighted=0.70)
@@ -223,7 +223,7 @@ def test_beam_keeps_the_quality_leader_the_weighted_score_would_drop():
 
 
 def test_beam_fills_remaining_slots_by_weighted_score():
-    from prompt_selector.optimizer import select_parents
+    from prompt_playoff.optimizer import select_parents
 
     best = scored("best", quality=0.9, tokens=100, weighted=0.95)
     second = scored("second", quality=0.5, tokens=100, weighted=0.80)
@@ -239,7 +239,7 @@ def test_beam_fills_remaining_slots_by_weighted_score():
 
 
 def test_select_parents_survives_unevaluated_candidates():
-    from prompt_selector.optimizer import select_parents
+    from prompt_playoff.optimizer import select_parents
 
     assert select_parents([], 2) == []
     fresh = Candidate(id="fresh", technique_id="t", origin="x")
@@ -266,8 +266,8 @@ async def test_a_repeated_rewrite_is_discarded_instead_of_re_measured(
 
 def test_brevity_proposals_are_dropped_when_tokens_do_not_matter():
     """Asking for a shorter prompt trades away the thing being optimized."""
-    from prompt_selector.domain import Priorities
-    from prompt_selector.optimizer import BREVITY_BIAS, mutation_biases
+    from prompt_playoff.domain import Priorities
+    from prompt_playoff.optimizer import BREVITY_BIAS, mutation_biases
 
     cost_aware = TaskProfile(
         task_type=TaskType.structured_extraction,
@@ -283,7 +283,7 @@ def test_brevity_proposals_are_dropped_when_tokens_do_not_matter():
 
 
 def _report_with(runs):
-    from prompt_selector.evals import BenchmarkReport, ExampleRun, build_scorecard
+    from prompt_playoff.evals import BenchmarkReport, ExampleRun, build_scorecard
 
     example_runs = [
         ExampleRun(
@@ -316,7 +316,7 @@ def _report_with(runs):
 
 
 def test_skeleton_tells_the_proposer_which_blocks_it_must_not_restate(registry):
-    from prompt_selector.optimizer import technique_digest
+    from prompt_playoff.optimizer import technique_digest
 
     digest = technique_digest(registry.technique("structured.schema-first"), "procedure")
     assert "← YOU ARE REWRITING THIS ONE" in digest
@@ -326,7 +326,7 @@ def test_skeleton_tells_the_proposer_which_blocks_it_must_not_restate(registry):
 
 
 def test_tag_digest_ranks_the_weakest_case_types_first(entity_schema):
-    from prompt_selector.optimizer import tag_digest
+    from prompt_playoff.optimizer import tag_digest
 
     dataset = [
         BenchmarkExample(id="a", input="x", tags=["demonym"]),
@@ -345,7 +345,7 @@ def test_tag_digest_ranks_the_weakest_case_types_first(entity_schema):
 
 def test_failure_digest_shows_the_gold_answer(entity_schema):
     """ "wrong content" alone gives the proposer nothing to infer a rule from."""
-    from prompt_selector.optimizer import _failure_digest
+    from prompt_playoff.optimizer import _failure_digest
 
     dataset = [
         BenchmarkExample(
@@ -367,7 +367,7 @@ def test_failure_digest_shows_the_gold_answer(entity_schema):
 
 
 def test_history_digest_ranks_measured_attempts(registry):
-    from prompt_selector.optimizer import history_digest
+    from prompt_playoff.optimizer import history_digest
 
     good = Candidate(id="g", technique_id="t", origin="x", train=card(0.9, 1.0, 100, 1.0))
     good.overlay.block_bodies["procedure"] = "keep titles with names"
