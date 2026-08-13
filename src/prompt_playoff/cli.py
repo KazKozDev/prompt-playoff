@@ -994,19 +994,18 @@ def list_hf_presets() -> None:
 @app.command("tracing-status")
 def tracing_status() -> None:
     """Show which tracing backend is active and whether its dependency is present."""
-    import importlib.util
     import os
+
+    from prompt_playoff.integrations import installed
 
     backend = os.getenv("PROMPT_PLAYOFF_TRACING", "none")
     table = Table(title="Tracing")
     table.add_column("Setting")
     table.add_column("Value")
     table.add_row("PROMPT_PLAYOFF_TRACING", backend)
-    table.add_row("langfuse installed", str(importlib.util.find_spec("langfuse") is not None))
-    table.add_row(
-        "opentelemetry installed", str(importlib.util.find_spec("opentelemetry.sdk") is not None)
-    )
-    table.add_row("dspy installed", str(importlib.util.find_spec("dspy") is not None))
+    table.add_row("langfuse installed", str(installed("langfuse")))
+    table.add_row("opentelemetry installed", str(installed("opentelemetry.sdk")))
+    table.add_row("dspy installed", str(installed("dspy")))
     for key in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
         value = os.getenv(key)
         table.add_row(key, "set" if value else "unset")

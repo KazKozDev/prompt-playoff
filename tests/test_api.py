@@ -7,6 +7,7 @@ from prompt_playoff import __version__
 from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
 from prompt_playoff.engine import EngineCache, TaskEngine
+from prompt_playoff.optimizer import BACKENDS
 
 MODEL = {
     "provider": "ollama",
@@ -264,6 +265,18 @@ def test_capabilities_documents_the_extension_contract(client):
     assert "field_f1" in body["graders"]
     assert "majority_vote" in body["aggregators"]
     assert body["techniques"] >= 14
+
+
+def test_integrations_lists_every_backend_without_the_optional_extras(client):
+    # The UI builds its "Optimizer search" list from this endpoint and falls back
+    # to a stub when it fails, so a 500 here silently costs the user three of the
+    # four backends. It used to 500 on any machine without opentelemetry, because
+    # find_spec("opentelemetry.sdk") imports the missing parent package.
+    response = client.get("/v1/integrations")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["optimizer_backends"] == list(BACKENDS)
+    assert body["tracing"]["otel_installed"] in (True, False)
 
 
 def test_lint_endpoint_reports_a_clean_registry(client):

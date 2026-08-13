@@ -1,7 +1,6 @@
 """The three optional integrations. Everything that can run without the extra
 dependency runs unconditionally; the rest skips."""
 
-import importlib.util
 import json
 
 import pytest
@@ -10,7 +9,7 @@ from conftest import FakeProvider
 
 from prompt_playoff.domain import CompiledPrompt, Message, ModelProfile, ModelResult
 from prompt_playoff.evals import BenchmarkExample
-from prompt_playoff.integrations import IntegrationError, promptfoo, require
+from prompt_playoff.integrations import IntegrationError, installed, promptfoo, require
 from prompt_playoff.integrations.tracing import (
     CallEvent,
     NullTracer,
@@ -20,9 +19,9 @@ from prompt_playoff.integrations.tracing import (
 )
 from prompt_playoff.providers import ProviderError
 
-HAS_DSPY = importlib.util.find_spec("dspy") is not None
-HAS_LANGFUSE = importlib.util.find_spec("langfuse") is not None
-HAS_OTEL = importlib.util.find_spec("opentelemetry.sdk") is not None
+HAS_DSPY = installed("dspy")
+HAS_LANGFUSE = installed("langfuse")
+HAS_OTEL = installed("opentelemetry.sdk")
 
 
 def dataset(schema):
@@ -393,7 +392,7 @@ async def test_unknown_dspy_optimizer_is_rejected(extraction_task, entity_schema
 # Hugging Face import — the conversion itself needs no dependency
 # --------------------------------------------------------------------------- #
 
-HAS_DATASETS = importlib.util.find_spec("datasets") is not None
+HAS_DATASETS = installed("datasets")
 
 
 def test_detokenize_attaches_punctuation_and_reports_offsets():

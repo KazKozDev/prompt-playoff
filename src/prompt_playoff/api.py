@@ -420,21 +420,22 @@ def export_promptfoo(payload: PromptfooExportRequest, request: Request) -> dict[
 @app.get("/v1/integrations")
 def integrations(request: Request) -> dict[str, Any]:
     """What is installed and configured, so a client can hide what will not work."""
-    import importlib.util
     import os
+
+    from prompt_playoff.integrations import installed
 
     return {
         "optimizer_backends": list(BACKENDS),
         "dspy": {
-            "installed": importlib.util.find_spec("dspy") is not None,
+            "installed": installed("dspy"),
             "optimizers": ["mipro", "gepa", "bootstrap"],
         },
         "promptfoo": {"export": True},
         "tracing": {
             "active": os.getenv("PROMPT_PLAYOFF_TRACING", "none"),
             "backend": type(_service(request).tracer).__name__,
-            "langfuse_installed": importlib.util.find_spec("langfuse") is not None,
-            "otel_installed": importlib.util.find_spec("opentelemetry.sdk") is not None,
+            "langfuse_installed": installed("langfuse"),
+            "otel_installed": installed("opentelemetry.sdk"),
         },
     }
 
