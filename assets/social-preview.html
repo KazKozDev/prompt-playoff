@@ -2,9 +2,10 @@
 <meta charset="utf-8">
 <title>social</title>
 <style>
-  /* The interface's own tokens, so the card and the app look like one thing. */
+  /* The interface's own tokens and its own tab styling, scaled up: the card
+     is a piece of the product rather than a drawing of it. */
   :root {
-    --bg:#0f1115; --text:#f3f4f6; --sub:#b9c0cc; --line:#5a6376; --accent:#f6c344;
+    --bg:#0f1115; --text:#f3f4f6; --muted:#9ca3af; --border:#2a2f3a; --accent:#f6c344;
     --sans: -apple-system, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -15,39 +16,31 @@
   }
   .glow {
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:900px; height:700px; pointer-events:none;
+    width:1000px; height:720px; pointer-events:none;
     background:radial-gradient(ellipse, rgba(246,195,68,.09) 0%, rgba(246,195,68,0) 62%);
   }
-  /* Everything lives inside the centre two thirds, because X, LinkedIn and
-     Slack each crop this image to a different aspect ratio. */
+  /* Everything inside the centre two thirds: the platforms that show this
+     image each crop it to a different aspect ratio. */
   main {
-    position:relative; width:845px; height:422px;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative; width:845px;
+    display:flex; flex-direction:column; align-items:center;
   }
-  h1 { font-size:88px; font-weight:800; letter-spacing:-.045em; line-height:1; margin:44px 0 0; }
-  p { margin-top:22px; color:var(--sub); font-size:29px; line-height:1.35; letter-spacing:-.015em; }
-  svg { flex:none; }
+  h1 { font-size:108px; font-weight:800; letter-spacing:-.05em; line-height:1; }
+  .tabs { display:flex; gap:16px; margin-top:52px; }
+  .tab {
+    padding:18px 34px; border:2px solid var(--border); border-radius:14px;
+    color:var(--muted); font-size:28px; font-weight:600; letter-spacing:-.01em;
+  }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:#111; font-weight:700; }
 </style>
 
 <div class="glow"></div>
 
 <main>
-  <!-- The name is the diagram: techniques enter, they are measured against
-       each other, one comes out. Strokes are heavy enough to survive the
-       300px-wide thumbnail every link unfurl shrinks this to. -->
-  <svg width="360" height="150" viewBox="-4 -4 360 158" fill="none"
-       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <g stroke="var(--line)" stroke-width="5">
-      <path d="M0 15 H80 M0 55 H80 M0 95 H80 M0 135 H80"/>
-      <path d="M80 15 V55 M80 95 V135"/>
-      <path d="M80 35 H170 M80 115 H170"/>
-      <path d="M170 35 V115"/>
-      <path d="M170 75 H344"/>
-    </g>
-    <path stroke="var(--accent)" stroke-width="5.5" d="M0 15 H80 V35 H170 V75 H344"/>
-    <circle cx="344" cy="75" r="9" fill="var(--accent)"/>
-  </svg>
-
   <h1>Prompt Playoff</h1>
-  <p>Prompt optimization and LLM evaluation for local models</p>
+  <div class="tabs">
+    <span class="tab active">Authoring</span>
+    <span class="tab">Benchmarking</span>
+    <span class="tab">Optimization</span>
+  </div>
 </main>
