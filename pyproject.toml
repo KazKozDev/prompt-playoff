@@ -5,16 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "prompt-playoff"
 version = "0.3.0"
-description = "Explainable prompt-technique selection, compilation, and benchmarking for local and cloud LLMs."
+description = "Prompt optimization and LLM evaluation for local LLMs: picks the prompting technique your task needs, compiles the prompt it implies, measures it on your model, and searches for a better one."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Artem Kazakov Kozlov" }]
 keywords = [
   "prompt-engineering",
-  "ollama",
+  "prompt-optimization",
+  "prompt-techniques",
   "llm-evaluation",
+  "llm-benchmark",
+  "llmops",
+  "evals",
+  "chain-of-thought",
   "structured-output",
+  "ollama",
   "local-llm",
 ]
 classifiers = [
