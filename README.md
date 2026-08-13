@@ -18,7 +18,7 @@ pip install 'prompt-playoff[all]' && prompt-playoff serve
 <p align="center">Double-click <code>start.command</code> on macOS. Elsewhere, install from PyPI and run the same server.</p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-demo.gif" alt="Prompt Playoff ranking prompt techniques and benchmarking them against a local Ollama model" width="100%">
+  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model, then showing how it ranked the techniques" width="100%">
 </p>
 
 ---
@@ -36,6 +36,14 @@ pip install 'prompt-playoff[all]' && prompt-playoff serve
    ```
 
    The same four steps are `recommend`, `compile`, `benchmark` and `optimize` on the command line.
+
+## Prompt builder UI for local models
+
+`prompt-playoff serve`, or the macOS launcher, opens the same engine in a browser: describe the task, and it selects the technique, writes the prompt for it, and offers to benchmark and optimize that prompt on the tabs above.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-ui.gif" alt="The Prompt Playoff web interface producing a schema-first prompt from a plain-language task, with the ranked alternatives below it" width="100%">
+</p>
 
 ## Which prompting technique to use for your task
 
