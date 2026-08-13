@@ -14,11 +14,6 @@
     font-family:var(--sans); overflow:hidden; position:relative;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
   }
-  .glow {
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:1000px; height:720px; pointer-events:none;
-    background:radial-gradient(ellipse, rgba(246,195,68,.09) 0%, rgba(246,195,68,0) 62%);
-  }
   /* Everything inside the centre two thirds: the platforms that show this
      image each crop it to a different aspect ratio. */
   main {
@@ -33,8 +28,6 @@
   }
   .tab.active { background:var(--accent); border-color:var(--accent); color:#111; font-weight:700; }
 </style>
-
-<div class="glow"></div>
 
 <main>
   <h1>Prompt Playoff</h1>
