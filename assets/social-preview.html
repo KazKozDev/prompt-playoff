@@ -4,28 +4,49 @@
 <style>
   /* The interface's own tokens, so the card and the app look like one thing. */
   :root {
-    --bg:#0f1115; --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344;
+    --bg:#0f1115; --text:#f3f4f6; --muted:#9ca3af; --line:#3d4453; --accent:#f6c344;
     --sans: -apple-system, "Helvetica Neue", Arial, sans-serif;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
     width:1280px; height:640px; background:var(--bg); color:var(--text);
-    font-family:var(--sans); overflow:hidden;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:var(--sans); overflow:hidden; position:relative;
+    display:flex; align-items:center; justify-content:space-between; padding:0 92px;
   }
-  h1 {
-    font-size:104px; font-weight:800; letter-spacing:-.05em; line-height:1;
+  .glow {
+    position:absolute; right:0; top:50%; transform:translateY(-50%);
+    width:700px; height:700px; pointer-events:none;
+    background:radial-gradient(circle, rgba(246,195,68,.10) 0%, rgba(246,195,68,0) 62%);
   }
-  /* One accent mark, sized to the descender of the word above it. */
-  .rule {
-    width:64px; height:4px; margin:38px 0; border-radius:2px; background:var(--accent);
-  }
-  p {
-    color:var(--muted); font-size:27px; line-height:1.4; letter-spacing:-.01em;
-    text-align:center; max-width:840px;
-  }
+  h1 { font-size:92px; font-weight:800; letter-spacing:-.05em; line-height:1; }
+  .rule { width:64px; height:4px; margin:34px 0; border-radius:2px; background:var(--accent); }
+  p { color:var(--muted); font-size:26px; line-height:1.4; letter-spacing:-.01em; max-width:470px; }
+  svg { position:relative; flex:none; }
 </style>
 
-<h1>Prompt Playoff</h1>
-<div class="rule"></div>
-<p>Prompt optimization and LLM evaluation for local models</p>
+<div class="glow"></div>
+
+<section>
+  <h1>Prompt<br>Playoff</h1>
+  <div class="rule"></div>
+  <p>Prompt optimization and LLM evaluation for local models</p>
+</section>
+
+<!-- The name is the diagram: techniques enter, they are measured against each
+     other, one comes out. The winning path is the only thing in accent. -->
+<svg width="404" height="340" viewBox="-6 -6 404 340" fill="none"
+     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <g stroke="var(--line)" stroke-width="3">
+    <path d="M0 10 H70 M0 54 H70 M0 98 H70 M0 142 H70"/>
+    <path d="M0 186 H70 M0 230 H70 M0 274 H70 M0 318 H70"/>
+    <path d="M70 10 V54 M70 98 V142 M70 186 V230 M70 274 V318"/>
+    <path d="M70 32 H150 M70 120 H150 M70 208 H150 M70 296 H150"/>
+    <path d="M150 32 V120 M150 208 V296"/>
+    <path d="M150 76 H240 M150 252 H240"/>
+    <path d="M240 76 V252"/>
+    <path d="M240 164 H380"/>
+  </g>
+  <path stroke="var(--accent)" stroke-width="3.5"
+        d="M0 10 H70 V32 H150 V76 H240 V164 H380"/>
+  <circle cx="380" cy="164" r="7.5" fill="var(--accent)"/>
+</svg>
