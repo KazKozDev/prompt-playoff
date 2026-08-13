@@ -4,110 +4,28 @@
 <style>
   /* The interface's own tokens, so the card and the app look like one thing. */
   :root {
-    --bg:#0f1115; --panel:#171a21; --panel2:#10131a; --border:#2a2f3a;
-    --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344; --good:#4ade80;
+    --bg:#0f1115; --text:#f3f4f6; --muted:#9ca3af; --accent:#f6c344;
     --sans: -apple-system, "Helvetica Neue", Arial, sans-serif;
-    --mono: ui-monospace, Menlo, monospace;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
     width:1280px; height:640px; background:var(--bg); color:var(--text);
-    font-family:var(--sans); overflow:hidden; position:relative;
+    font-family:var(--sans); overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
   }
-  /* A wash from the accent, kept far from the text so nothing loses contrast. */
-  .glow {
-    position:absolute; right:-180px; top:-220px; width:760px; height:760px;
-    background:radial-gradient(circle, rgba(246,195,68,.13) 0%, rgba(246,195,68,0) 68%);
+  h1 {
+    font-size:104px; font-weight:800; letter-spacing:-.05em; line-height:1;
   }
-  .frame {
-    position:relative; height:100%; padding:64px 72px;
-    display:grid; grid-template-columns:1fr 470px; gap:56px; align-content:center;
+  /* One accent mark, sized to the descender of the word above it. */
+  .rule {
+    width:64px; height:4px; margin:38px 0; border-radius:2px; background:var(--accent);
   }
-  .kicker {
-    color:var(--accent); font-size:15px; font-weight:800;
-    text-transform:uppercase; letter-spacing:.16em; margin-bottom:20px;
+  p {
+    color:var(--muted); font-size:27px; line-height:1.4; letter-spacing:-.01em;
+    text-align:center; max-width:840px;
   }
-  h1 { font-size:78px; line-height:.96; letter-spacing:-.045em; font-weight:800; }
-  .lede {
-    margin-top:22px; max-width:610px; color:var(--muted);
-    font-size:23px; line-height:1.45;
-  }
-  .lede b { color:var(--text); font-weight:600; }
-  .stats { display:flex; gap:34px; margin-top:38px; }
-  .stat .n { font-size:34px; font-weight:800; letter-spacing:-.03em; }
-  .stat .l {
-    margin-top:5px; color:var(--muted); font-size:12.5px; font-weight:700;
-    text-transform:uppercase; letter-spacing:.09em;
-  }
-  .stat.zero .n { color:var(--accent); }
-
-  .card {
-    align-self:center; border:1px solid var(--border); border-radius:16px;
-    background:var(--panel); padding:26px 28px;
-  }
-  .card h2 {
-    font-size:12.5px; font-weight:800; color:var(--muted);
-    text-transform:uppercase; letter-spacing:.11em; margin-bottom:18px;
-  }
-  table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:17px; }
-  th {
-    text-align:right; color:var(--muted); font-size:11.5px; font-weight:700;
-    text-transform:uppercase; letter-spacing:.09em; padding-bottom:11px;
-  }
-  th:first-child { text-align:left; }
-  td { padding:8px 0; border-top:1px solid var(--border); text-align:right; }
-  td:first-child { text-align:left; color:var(--muted); }
-  .measured { color:var(--good); font-weight:700; }
-  .card figcaption {
-    margin-top:18px; padding-top:16px; border-top:1px solid var(--border);
-    color:var(--muted); font-size:14px; line-height:1.45;
-  }
-  .card figcaption b { color:var(--text); font-weight:600; }
-
-  footer {
-    /* Nothing that matters sits within 50px of an edge: platforms crop. */
-    position:absolute; left:72px; right:72px; bottom:58px;
-    display:flex; justify-content:space-between; align-items:baseline;
-    color:var(--muted); font-family:var(--mono); font-size:15px;
-  }
-  footer .repo { color:var(--text); }
 </style>
 
-<div class="glow"></div>
-
-<div class="frame">
-  <section>
-    <p class="kicker">Deterministic · Local-first · MIT</p>
-    <h1>Prompt<br>Playoff</h1>
-    <p class="lede">
-      Picks the <b>prompting technique</b> your task needs, compiles the prompt it
-      implies, and <b>measures it on your own model</b> — instead of guessing.
-    </p>
-    <div class="stats">
-      <div class="stat"><div class="n">29</div><div class="l">Techniques</div></div>
-      <div class="stat"><div class="n">7</div><div class="l">Strategies</div></div>
-      <div class="stat"><div class="n">21</div><div class="l">Graders</div></div>
-      <div class="stat zero"><div class="n">0</div><div class="l">LLM judges</div></div>
-    </div>
-  </section>
-
-  <figure class="card">
-    <h2>Schema-first output · llama3.2:3b</h2>
-    <table>
-      <tr><th>Metric</th><th>Measured</th><th>Declared</th></tr>
-      <tr><td>quality</td><td class="measured">0.867</td><td>0.840</td></tr>
-      <tr><td>reliability</td><td class="measured">1.000</td><td>0.960</td></tr>
-      <tr><td>mean tokens</td><td class="measured">204.3</td><td>—</td></tr>
-      <tr><td>mean latency</td><td class="measured">0.94s</td><td>—</td></tr>
-    </table>
-    <figcaption>
-      Every score says whether it is a <b>declared prior</b> or a number
-      <b>measured on your model</b>.
-    </figcaption>
-  </figure>
-</div>
-
-<footer>
-  <span class="repo">github.com/KazKozDev/prompt-playoff</span>
-  <span>pip install prompt-playoff</span>
-</footer>
+<h1>Prompt Playoff</h1>
+<div class="rule"></div>
+<p>Prompt optimization and LLM evaluation for local models</p>
