@@ -6,9 +6,8 @@ Deterministic prompt-technique selection, compilation and benchmarking for local
 # macOS
 git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && ./start.command
 
-# Linux (Python 3.11+, after cloning)
-python3 -m venv .venv && .venv/bin/pip install -e '.[all]'
-.venv/bin/python -m prompt_playoff serve
+# Linux — or any machine with Python 3.11+
+pip install 'prompt-playoff[all]' && prompt-playoff serve
 ```
 
 <p align="center">
@@ -16,7 +15,7 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[all]'
   <a href="#quick-start"><img src="https://raw.githubusercontent.com/KazKozDev/book-translator/main/assets/badges/linux.png" alt="Linux" height="36"></a>
 </p>
 
-<p align="center">Double-click <code>start.command</code> on macOS. Linux runs the same server from the checkout.</p>
+<p align="center">Double-click <code>start.command</code> on macOS. Elsewhere, install from PyPI and run the same server.</p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-demo.gif" alt="Prompt Playoff ranking prompt techniques and benchmarking them against a local Ollama model" width="100%">
