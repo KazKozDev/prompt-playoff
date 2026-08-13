@@ -197,66 +197,114 @@
     .log-status.error { color:var(--bad); border-color:var(--bad); }
     .log-lines { margin:0; padding:10px 12px; border:0; border-top:1px solid var(--border); border-radius:0; background:#0b0e13; max-height:320px; overflow:auto; color:#d1d5db; }
     .log-error { margin:10px 12px; color:var(--bad); font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    /* ------------------------------------------------------------------ *
+     * One type scale for the whole catalog. Everything below picks from it
+     * and nothing invents a size of its own:
+     *   label    sans 10.5 / 800 / uppercase  — every kicker and key
+     *   small    sans 12.5                    — source line, back link
+     *   link     sans 13.5                    — index entries, disclosures
+     *   body     sans 14.5 / 1.6              — description and example
+     *   title    sans 19 / 700
+     *   literal  mono 12.5                    — ids, counts, stage names
+     * Monospace means "this is a machine string", never emphasis. The accent
+     * is spent on two things only: the family kicker that starts a card, and
+     * the triangles that say a row opens.
+     * ------------------------------------------------------------------ */
     .techniques-shell { width:min(100%,780px); margin:0 auto; }
     .techniques-intro { margin-bottom:12px; }
-    .techniques-intro p { max-width:720px; margin:8px 0 0; color:#d1d5db; font-size:14px; line-height:1.55; }
+    .techniques-intro p { max-width:72ch; margin:8px 0 0; color:#d1d5db; font-size:14.5px; line-height:1.6; }
+    .technique-index-family,
+    .technique-family,
+    .technique-facts dt,
+    .technique-example-label,
+    .technique-example-key,
+    .compiled-example-stage-order,
+    .compiled-example-role { color:var(--muted); font:800 10.5px/1.5 Inter,ui-sans-serif,system-ui,sans-serif; text-transform:uppercase; letter-spacing:.1em; }
+    .technique-id,
+    .technique-facts code,
+    .technique-prompt-summary-meta,
+    .compiled-example-stage-title,
+    .compiled-example-schema,
+    .technique-source-id,
+    .technique-source.none code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
     .technique-index { padding:26px 0 30px; border-bottom:1px solid var(--border); }
     /* Inherits the global h3: every section header in the app is the same tier. */
     .technique-index h3 { margin:0 0 15px; }
     .technique-index-group { display:grid; grid-template-columns:132px minmax(0,1fr); gap:10px 18px; padding:8px 0; border-top:1px solid var(--border); }
     .technique-index-group:first-of-type { border-top:0; }
-    .technique-index-family { color:var(--muted); font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    .technique-index-family { padding-top:3px; overflow-wrap:anywhere; }
     .technique-index-links { display:flex; flex-wrap:wrap; gap:5px 16px; }
     .technique-index a { color:var(--text); font-size:13.5px; line-height:1.45; text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-index a:hover { color:var(--accent); text-decoration-color:var(--accent); }
     .technique-index a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); text-decoration-color:var(--accent); }
     .technique-catalog { display:block; }
-    .technique-card { min-width:0; padding:38px 0 40px; border-bottom:1px solid var(--border); scroll-margin-top:18px; }
+    /* 29 cards in one scroll: the eye needs to find where a technique starts.
+       The family kicker and the larger title do that; everything below them
+       stays quiet so the description and the example carry the card. */
+    .technique-card { min-width:0; padding:44px 0 38px; border-bottom:1px solid var(--border); scroll-margin-top:18px; }
     .technique-card:last-child { border-bottom:0; padding-bottom:10px; }
-    /* A repeated card inside a panel, same tier as .settings-card h3. */
-    .technique-card h3 { margin:0; color:var(--text); font-size:17px; font-weight:700; text-transform:none; letter-spacing:0; }
-    .technique-identity { margin-top:7px; color:var(--muted); font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
-    .technique-description { margin:13px 0 0; color:#d1d5db; font-size:14px; line-height:1.55; }
-    .technique-facts { margin-top:9px; color:var(--muted); font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    .technique-family { color:var(--accent); }
+    /* A repeated card inside a panel, one tier above .settings-card h3. */
+    .technique-card h3 { margin:7px 0 0; color:var(--text); font-size:19px; font-weight:700; text-transform:none; letter-spacing:-.01em; }
+    .technique-id { display:inline-block; margin-top:6px; color:var(--muted); line-height:1.5; overflow-wrap:anywhere; }
+    /* Prose stays readable up to roughly 75 characters; the shell is wider than
+       that because the compiled prompts and the index need the room. */
+    .technique-description { max-width:72ch; margin:13px 0 0; color:#d1d5db; font-size:14.5px; line-height:1.6; }
+    /* Was one run-on monospace line. Keys on the left, values as the same
+       bordered chips the blueprint uses for its execution facts. */
+    .technique-facts { display:grid; grid-template-columns:112px minmax(0,1fr); gap:8px 18px; margin:17px 0 0; }
+    .technique-facts dt { padding-top:4px; }
+    .technique-facts dd { display:flex; flex-wrap:wrap; gap:6px; margin:0; min-width:0; }
+    .technique-facts code { padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:#d1d5db; overflow-wrap:anywhere; }
     /* Sits in the gap between the compiled prompt and the blueprint disclosure.
        Block, not flex: as a flex item the long title cannot share a line with the
        id, so the chip was stranded on a line of its own. */
-    .technique-source { margin:16px 0 12px; color:var(--muted); font-size:12.5px; line-height:1.7; }
+    .technique-source { margin:16px 0 12px; color:var(--muted); font-size:12.5px; line-height:1.65; }
     .technique-source a { color:var(--text); text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-source a:hover { color:var(--accent); text-decoration-color:var(--accent); }
     .technique-source a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); }
-    .technique-source-id { display:inline-block; margin-right:8px; padding:1px 7px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .technique-source-id { display:inline-block; margin-right:8px; padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--muted); }
     .technique-source-credit { color:var(--muted); }
     .technique-source-note { display:block; color:var(--muted); }
     .technique-source.none { color:var(--muted); }
-    .technique-source.none code { padding:1px 5px; border:1px solid var(--border); border-radius:5px; background:var(--panel2); color:#d1d5db; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
-    .technique-example { margin-top:24px; }
-    .technique-example h4 { margin:16px 0 5px; color:var(--text); font-size:14px; font-weight:700; }
-    .technique-example p { margin:0; color:#d1d5db; font-size:14px; line-height:1.55; }
+    .technique-source.none code { padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:#d1d5db; }
+    .technique-example { margin-top:26px; }
+    /* Small grey labels, not bold white headings: at 14px they were the same
+       weight as the prose under them and the card read as a list of headings. */
+    .technique-example-key { display:block; margin:16px 0 4px; }
+    .technique-example p { max-width:72ch; margin:0; color:#d1d5db; font-size:14.5px; line-height:1.6; }
     .technique-prompt { margin-top:22px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
-    .technique-prompt > summary { padding:14px 2px; cursor:pointer; color:var(--text); font-size:13.5px; font-weight:700; }
-    .technique-prompt > summary::marker { color:var(--accent); }
     .technique-prompt[open] > summary { border-bottom:1px solid var(--border); }
-    .technique-prompt-summary-meta { margin-left:6px; color:var(--muted); font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:400; }
+    .technique-prompt-summary-meta { margin-left:6px; color:var(--muted); font-weight:400; }
     .compiled-example { padding:2px 0 20px; }
     .compiled-example-stage { padding:20px 0 4px; }
     .compiled-example-stage + .compiled-example-stage { margin-top:16px; border-top:1px solid var(--border); }
     .compiled-example-stage .template-toolbar { margin:0 0 13px; }
-    .compiled-example-stage-title { color:var(--text); font:700 13px ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
-    .compiled-example-stage-order { display:block; margin-bottom:3px; color:var(--muted); font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; letter-spacing:.09em; }
+    .compiled-example-stage-title { color:var(--text); font-weight:700; overflow-wrap:anywhere; }
+    .compiled-example-stage-order { display:block; margin-bottom:4px; }
     .compiled-example-stage pre { max-height:360px; margin:6px 0 0; padding:13px 14px; background:var(--panel2); color:var(--text); font-size:12.5px; line-height:1.6; }
-    .compiled-example-role { display:block; margin-top:14px; color:var(--muted); font:700 10.5px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em; }
-    .compiled-example-schema { margin-top:10px; color:var(--muted); font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
-    /* Peer of .technique-prompt: two disclosures in one card, same treatment. */
+    .compiled-example-role { display:block; margin-top:14px; }
+    .compiled-example-schema { margin-top:10px; color:var(--muted); line-height:1.5; }
+    /* Peer of .technique-prompt: two disclosures in one card, same treatment.
+       Both draw their own triangle rather than leaning on ::marker, which
+       Safari and Chrome disagree about and .method hides outright. */
     .technique-blueprint { margin-top:0; border:0; border-top:0; border-bottom:1px solid var(--border); border-radius:0; background:transparent; }
-    .technique-blueprint > summary { padding:14px 2px; color:var(--text); font-size:13.5px; font-weight:700; text-transform:none; letter-spacing:0; }
+    .technique-prompt > summary,
+    .technique-blueprint > summary { display:block; gap:0; padding:14px 2px; cursor:pointer; color:var(--text); font:700 13.5px Inter,ui-sans-serif,system-ui,sans-serif; text-transform:none; letter-spacing:0; list-style:none; }
+    .technique-prompt > summary::-webkit-details-marker,
+    .technique-blueprint > summary::-webkit-details-marker { display:none; }
+    .technique-prompt > summary::before,
+    .technique-blueprint > summary::before { content:'▸'; display:inline; width:auto; height:auto; margin-right:8px; border:0; border-radius:0; background:none; color:var(--accent); font-size:12px; }
+    .technique-prompt[open] > summary::before,
+    .technique-blueprint[open] > summary::before { content:'▾'; color:var(--accent); border:0; }
+    .technique-prompt > summary:hover,
+    .technique-blueprint > summary:hover { background:transparent; color:var(--accent); }
     .technique-blueprint[open] > summary { border-bottom:1px solid var(--border); }
-    .technique-blueprint > summary::before { display:none; }
-    .technique-blueprint > summary::marker { color:var(--muted); }
-    .technique-blueprint > summary:hover { background:transparent; color:var(--text); }
     .technique-blueprint .method-body { margin-top:10px; padding:0 0 8px; border-top:1px solid var(--border); }
     .technique-blueprint .eyebrow { color:var(--muted); }
-    .technique-index-return { display:inline-block; margin-top:22px; color:var(--muted); font-size:12.5px; line-height:1.4; text-decoration-color:var(--border); text-underline-offset:3px; }
+    /* Right-aligned: it closes the card instead of starting a fifth row of
+       left-aligned text under the two disclosures. */
+    .technique-index-return { display:block; width:fit-content; margin:20px 0 0 auto; color:var(--muted); font-size:12.5px; line-height:1.4; text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-index-return:hover { color:var(--text); text-decoration-color:var(--muted); }
     .technique-index-return:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); }
     .selected { outline:2px solid var(--accent); outline-offset:6px; border-radius:6px; }
@@ -282,8 +330,10 @@
       .mode-options { grid-template-columns:1fr; }
       .technique-index-group { grid-template-columns:1fr; gap:5px; padding:11px 0; }
       .technique-index-links { display:grid; gap:6px; }
-      .technique-card { padding:31px 0 34px; }
-      .technique-identity, .technique-facts, .technique-index-family { font-size:12.5px; }
+      .technique-card { padding:34px 0 36px; }
+      .technique-facts { grid-template-columns:1fr; gap:2px 0; }
+      .technique-facts dd + dt { margin-top:9px; }
+      .technique-id, .technique-index-family { font-size:12.5px; }
       .technique-prompt-summary-meta { display:block; margin:4px 0 0 18px; }
       .compiled-example-stage .template-toolbar { align-items:center; }
     }
@@ -380,6 +430,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = v => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const plural = (count, word) => `${count} ${word}${Number(count) === 1 ? '' : 's'}`;
+const chips = values => values.map(value => `<code>${esc(value)}</code>`).join('');
 const state = {
   task:null, recs:[], chosen:null, program:null, tab:'prompt', lastResultTab:'prompt', report:null,
   comparison:null, optimization:null, inputSource:'task',
@@ -504,17 +556,22 @@ async function loadBackends() {
     'dspy:gepa': 'DSPy GEPA — reflective Pareto evolution',
     'dspy:bootstrap': 'DSPy BootstrapFewShot — demos only'
   };
+  const options = (ids, dspyOk) => ids.map(id => {
+    const ok = !id.startsWith('dspy:') || dspyOk;
+    return `<option value="${esc(id)}"${ok ? '' : ' disabled'}>${esc(labels[id] || id)}${ok ? '' : ' (not installed)'}</option>`;
+  }).join('');
   try {
     const info = await api('/v1/integrations');
-    $('backend').innerHTML = info.optimizer_backends.map(id => {
-      const needsDspy = id.startsWith('dspy:');
-      const ok = !needsDspy || info.dspy.installed;
-      return `<option value="${esc(id)}"${ok ? '' : ' disabled'}>${esc(labels[id] || id)}${ok ? '' : ' (not installed)'}</option>`;
-    }).join('');
+    $('backend').innerHTML = options(info.optimizer_backends, info.dspy.installed);
     if (info.tracing.active && info.tracing.active !== 'none') {
       $('progress').textContent = `tracing → ${info.tracing.active}`;
     }
-  } catch { $('backend').innerHTML = '<option value="native">native</option>'; }
+  } catch {
+    // The probe failed, not the backends: keep the same list the server ships
+    // and only mark the ones we cannot vouch for, instead of silently
+    // collapsing the search down to a single choice.
+    $('backend').innerHTML = options(Object.keys(labels), false);
+  }
 }
 
 // The full recipes live in one shared catalog. Recommendations remain compact
@@ -652,11 +709,11 @@ function renderCompiledExample(example) {
     </section>`;
   }).join('');
   return `<div class="technique-example">
-      <div class="technique-facts">Example type: ${esc(example.task_type)}</div>
-      <h4>Example task</h4><p>${esc(example.user_input)}</p>
-      <h4>Why this example</h4><p>${esc(example.why_this_example)}</p>
+      <div class="technique-example-label">Example · ${esc(example.task_type)}</div>
+      <div class="technique-example-key">Task</div><p>${esc(example.user_input)}</p>
+      <div class="technique-example-key">Why this one</div><p>${esc(example.why_this_example)}</p>
       <details class="technique-prompt">
-        <summary>Compiled prompt <span class="technique-prompt-summary-meta">${esc(program.stages.length)} stage(s) · ${esc(program.expected_calls)} call(s) · ${esc(program.strategy)}</span></summary>
+        <summary>Compiled prompt <span class="technique-prompt-summary-meta">${esc(plural(program.stages.length, 'stage'))} · ${esc(plural(program.expected_calls, 'call'))} · ${esc(program.strategy)}</span></summary>
         <div class="compiled-example">${stages}${program.response_schema ? `<div class="compiled-example-schema">A native JSON Schema is attached to the compiled call.</div>` : ''}</div>
       </details>
     </div>`;
@@ -707,10 +764,14 @@ function renderTechniqueCatalog() {
     const example = state.techniqueExamples.get(technique.id);
     const strategy = technique.execution?.strategy || 'single';
     return `<article class="technique-card" id="${esc(anchorFor(technique.id))}">
+      <div class="technique-family">${esc(technique.family)}</div>
       <h3>${esc(technique.title)}</h3>
-      <div class="technique-identity">${esc(technique.id)} · ${esc(technique.family)}</div>
+      <div class="technique-id">${esc(technique.id)}</div>
       <p class="technique-description">${esc(technique.description)}</p>
-      <div class="technique-facts">Best for: ${esc((technique.strong_tasks || []).join(', ') || 'general tasks')} · strategy: ${esc(strategy)} · minimum calls: ${esc(technique.min_calls)}</div>
+      <dl class="technique-facts">
+        <dt>Best for</dt><dd>${chips((technique.strong_tasks || []).length ? technique.strong_tasks : ['general tasks'])}</dd>
+        <dt>Strategy</dt><dd>${chips([strategy, `minimum ${plural(technique.min_calls, 'call')}`])}</dd>
+      </dl>
       ${renderCompiledExample(example)}
       ${techniqueSource(technique.source)}
       ${methodDisclosure(technique.id, true)}
