@@ -40,3 +40,9 @@ pip install -e '.[dev]'
 `[dev]` covers the CLI, the server and the test tools. The optional backends —
 `[dspy]`, `[tracing]`, `[huggingface]` — are skipped by the suite when absent,
 so a bare install runs green.
+
+The Makefile wraps the same four commands as `make test`, `make lint` and
+`make validate`. The suite replaces every provider call with controlled test
+doubles, so it needs no network and no running model server. `make validate`
+checks every technique file for unknown placeholders, strategies and graders,
+then render-probes the prompt it compiles to.

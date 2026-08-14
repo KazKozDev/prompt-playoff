@@ -197,12 +197,25 @@ other number in the project is.
 `normalize_usage` maps each provider's token accounting onto one pair, so token
 cost is comparable across providers.
 
+## HTTP surface
+
+```text
+GET   /v1/capabilities  /v1/techniques  /v1/datasets  /v1/lint  /v1/integrations
+POST  /v1/recommend  /v1/select  /v1/compile  /v1/author  /v1/run
+POST  /v1/benchmark  /v1/compare  /v1/optimize  /v1/export/promptfoo
+GET   /v1/jobs  /v1/jobs/{id}  /v1/measurements
+```
+
+The reads mirror the CLI.
+
 ## Jobs
 
 Benchmark, compare and optimize issue real model calls and take minutes. The API
 starts them as in-process jobs (`jobs.py`) and the client polls
 `GET /v1/jobs/{id}` for progress and the result. One process, no broker — this
-is a local tool.
+is a local tool. Status, results, errors and the complete event stream are
+persisted atomically to `benchmark-results/jobs.json`, so the Logs view survives
+a restart.
 
 ## Benchmark identity
 

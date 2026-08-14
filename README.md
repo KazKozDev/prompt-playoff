@@ -131,7 +131,7 @@ The loop: seed candidates (baseline, plus few-shot demos bootstrapped from the t
 
 Only instruction blocks are mutable — a candidate cannot win by dropping the output contract. The Pareto front over quality, reliability, tokens and latency is reported next to the scalarized winner, so a cheaper-but-slightly-worse prompt stays visible instead of being averaged away.
 
-`--backend` swaps the search algorithm and nothing else: the prompt is still built by this project's compiler, executed by the technique's own strategy and graded by its graders. `native` reflects on measured failures, `dspy:mipro` searches instructions and demonstrations jointly, `dspy:gepa` is reflective and Pareto-selected, `dspy:bootstrap` does demonstrations only and needs no proposer model.
+`--backend` swaps the search algorithm and nothing else — `native`, or three DSPy optimizers ([which to pick](docs/integrations.md)). The prompt is still built by this project's compiler, executed by the technique's own strategy and graded by its graders.
 
 ```bash
 prompt-playoff optimize --model llama3.2:3b --model-class small \
@@ -176,15 +176,7 @@ prompt-playoff check
 
 Exit code `0` means every bound passed, `1` means at least one regression, `2` means invalid configuration such as an unknown dataset or an unreachable provider. Requirement names are explicit fields ending in `_min` or `_max`, and an empty `require` block is an error — a check can never pass while enforcing nothing. `--json` prints machine-readable output; `--update` rewrites the committed bounds to the current measurements, preserving YAML comments and key order.
 
-For wider matrices, hand the work to promptfoo:
-
-```bash
-prompt-playoff export-promptfoo --techniques structured.schema-first,direct.explicit-constraints \
-  --models llama3.2:3b,qwen3.5:4b --model-class small --dataset entity-extraction --output promptfoo
-cd promptfoo && promptfoo eval && promptfoo view
-```
-
-The export writes the compiled prompts with `{{input}}` templated, a config covering techniques × providers, and a Python assertion bridge that calls **this project's graders** — so promptfoo reports the same `field_f1`, not a different metric wearing the same name. Multi-call techniques export their first stage only, and the command says so instead of silently truncating.
+For wider matrices, `export-promptfoo` writes a promptfoo project whose assertions call this project's graders, so both tools report the same `field_f1` rather than two metrics sharing a name — [docs/integrations.md](docs/integrations.md).
 
 ## Build datasets from traces and public corpora
 
@@ -193,9 +185,7 @@ prompt-playoff import-traces --output datasets/from-prod.jsonl --limit 200
 prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
 ```
 
-With `PROMPT_PLAYOFF_TRACING` set to `langfuse` or `phoenix`, every call of every technique becomes its own span, and `import-traces` turns observed traffic into a dataset. Rows arrive with `expected: null` and tagged `unreviewed` — a trace has no gold answer, and pretending otherwise would benchmark a model against its own past mistakes.
-
-Four presets convert Hugging Face corpora instead: [MultiCoNER v2](https://hf.co/datasets/MultiCoNER/multiconer_v2) and [Few-NERD](https://hf.co/datasets/DFKI-SLT/few-nerd) for extraction, [GSM8K](https://hf.co/datasets/openai/gsm8k) for reasoning graded on the number, and [MBPP](https://hf.co/datasets/google-research-datasets/mbpp) for code graded by running its own tests. Licence and citation are printed on every import.
+Tracing to Langfuse or Phoenix makes every call of every technique its own span, and `import-traces` turns observed traffic into a dataset — with `expected: null` and tagged `unreviewed`, because a trace has no gold answer and pretending otherwise would benchmark a model against its own past mistakes. Four presets convert Hugging Face corpora instead: MultiCoNER v2 and Few-NERD for extraction, GSM8K for reasoning, MBPP for code graded by running its own tests. Both paths are set up in [docs/integrations.md](docs/integrations.md).
 
 ## How it differs from DSPy, promptfoo and PromptWizard
 
@@ -230,60 +220,9 @@ prompt-playoff new-technique structured.my-technique
 prompt-playoff validate-registry     # placeholders, strategies, graders, render probe
 ```
 
-<details>
-<summary>HTTP API</summary>
+The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a job id — [docs/architecture.md](docs/architecture.md). Everything configurable, including the provider list and the engine-model variables, is in [docs/configuration.md](docs/configuration.md).
 
-```text
-GET   /v1/capabilities  /v1/techniques  /v1/datasets  /v1/lint  /v1/integrations
-POST  /v1/recommend  /v1/select  /v1/compile  /v1/author  /v1/run
-POST  /v1/benchmark  /v1/compare  /v1/optimize  /v1/export/promptfoo
-GET   /v1/jobs  /v1/jobs/{id}  /v1/measurements
-```
-
-The reads mirror the CLI. Benchmark, compare and optimize return a job id immediately, because they issue real model calls; status, results, errors and the complete event stream are persisted atomically to `benchmark-results/jobs.json`, so the Logs view survives a restart.
-
-</details>
-
-<details>
-<summary>Configuration</summary>
-
-| Variable | Default | What it changes |
-|---|---|---|
-| `PROMPT_PLAYOFF_ENGINE_MODEL` | Unset — keyword parsing only | Model that reads descriptions, authors prompts, and proposes rewrites |
-| `PROMPT_PLAYOFF_ENGINE_PROVIDER` | Provider of the target model | Provider for the engine model |
-| `PROMPT_PLAYOFF_ENGINE_BASE_URL` | Provider default | Base URL for the engine model |
-| `PROMPT_PLAYOFF_ENGINE_CACHE` | `benchmark-results/engine-cache.json` | Engine answer cache, keyed by description, technique, scaffold, mode and engine model |
-| `PROMPT_PLAYOFF_TRACING` | `none` | `langfuse`, `phoenix`, or none |
-| `PROMPT_PLAYOFF_MEASUREMENTS` | `benchmark-results/measurements.json` | Evidence store read back into ranking |
-| `PROMPT_PLAYOFF_JOBS_PATH` | `benchmark-results/jobs.json` | Persisted job records and event logs |
-| `PROMPT_PLAYOFF_REGISTRY` | Packaged `data/` | Alternative technique, model and dataset root |
-| `PROMPT_PLAYOFF_API_KEY` | Unset | Fallback API key for providers without their own variable |
-
-`--engine-model`, `--engine-provider` and `--engine-base-url` override the environment per run, and the web UI has the same fields. The engine is a full profile of its own — a remote proposer against a local target is the point, so nothing is inherited from the model under test.
-
-### Providers
-
-Ollama plus eight OpenAI-compatible endpoints out of the box: `openai`, `anthropic`, `together`, `openrouter`, `groq`, `fireworks` and `deepseek`, each with its default base URL and its usual key variable (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and so on). Unknown ids work too when given a `base_url`. Keys resolve from the Settings request key, then `model.api_key_env`, then the provider default, then `PROMPT_PLAYOFF_API_KEY`; a missing key fails before the request and names the variable to set.
-
-Native JSON Schema is used when the model declares `structured_output`. Otherwise the schema is embedded in the prompt and validated after the call, and the compiler says so in its notes.
-
-</details>
-
-<details>
-<summary>Requirements</summary>
-
-Python 3.11 or newer, and — for anything that measures — Ollama with a local model such as `llama3.2:3b`, or an OpenAI-compatible endpoint.
-
-**Optional extras**, installed only when needed: `[cli]` for the terminal commands, `[serve]` for the HTTP API and web UI, `[dspy]` for the MIPROv2/GEPA/Bootstrap backends, `[tracing]` for Langfuse or Phoenix, `[huggingface]` for the corpus presets, `[all]` for everything. The base install is the registry, selector, normalizer and compiler alone.
-
-**macOS, Windows and Linux.** Linux has no launcher: install from PyPI and run `prompt-playoff serve`.
-
-CI runs the suite on Linux across 3.11, 3.12 and 3.13, and on Windows on 3.12 — where it also starts the server and fails the build unless `/health` answers. The launchers themselves are not exercised there, so the double-click path is verified by hand rather than by CI.
-
-</details>
-
-<details>
-<summary>Limitations</summary>
+## Limitations
 
 - Ranking still uses declared priors for any (technique, task, model) triple you have not benchmarked. The UI and the CLI mark those `prior only`.
 - Of the 29 techniques, 6 carry `benchmarked` evidence, 16 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
@@ -293,22 +232,6 @@ CI runs the suite on Linux across 3.11, 3.12 and 3.13, and on Windows on 3.12 �
 - Graders are deterministic by design. There is no LLM judge, so open-ended generation cannot be scored on prose quality at all.
 - The promptfoo export covers a technique's first stage only. Multi-call techniques must be measured here.
 - Trace import reads from Langfuse only. Phoenix is write-only in this direction — spans go out, datasets do not come back.
-
-</details>
-
-<details>
-<summary>Docker and development setup</summary>
-
-```bash
-docker build -t prompt-playoff .
-docker run --rm -p 8000:8000 prompt-playoff
-```
-
-Open `http://127.0.0.1:8000`; the non-root image health-checks `/health`.
-
-For a local checkout, `make test`, `make lint` and `make validate` are the gate — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup and the exact commands CI runs. The suite replaces every provider call with controlled test doubles, so it needs no network and no running model server, and the optional extras are skipped when absent. `make validate` checks every technique file for unknown placeholders, strategies and graders, then render-probes the prompt it compiles to.
-
-</details>
 
 ## License
 
@@ -328,8 +251,10 @@ Prompt Playoff is free and open-source software licensed under the [MIT License]
 <p align="center">
   <a href="https://github.com/KazKozDev/prompt-playoff/issues">Issues</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/CONTRIBUTING.md">Contributing</a> ·
+  <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/extending.md">Extending</a> ·
   <a href="docs/integrations.md">Integrations</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
   <a href="references/README.md">Papers</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE">LICENSE</a> ·
   <a href="https://www.linkedin.com/in/kazkozdev/">LinkedIn</a>
