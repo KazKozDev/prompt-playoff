@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +9,25 @@ from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
 from prompt_playoff.engine import EngineCache, TaskEngine
 from prompt_playoff.optimizer import BACKENDS
+
+
+def wait_for_job(client, job_id, timeout=60.0):
+    """Wait for the worker thread to finish, on the clock rather than on a request count.
+
+    A bare `for _ in range(200)` is not a wait: 200 polls against the test client
+    take a fraction of a second. On Linux that happened to be enough because a
+    connection to a closed port is refused immediately; Windows retries the SYN
+    first, so the job was still running when the polls ran out.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        job = client.get(f"/v1/jobs/{job_id}").json()
+        if job["status"] in {"done", "error"}:
+            return job
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"job {job_id} still {job['status']} after {timeout}s")
+        time.sleep(0.05)
+
 
 MODEL = {
     "provider": "ollama",
@@ -249,10 +269,7 @@ def test_uploaded_dataset_is_session_selectable_and_benchmarkable(client):
     )
     assert started.status_code == 200
     job_id = started.json()["id"]
-    for _ in range(200):
-        job = client.get(f"/v1/jobs/{job_id}").json()
-        if job["status"] in {"done", "error"}:
-            break
+    job = wait_for_job(client, job_id)
     assert job["status"] == "done"
     assert job["result"]["dataset"] == name
     assert job["result"]["examples"] == 1
@@ -317,11 +334,7 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
     assert started.status_code == 200
     job_id = started.json()["id"]
 
-    for _ in range(200):
-        job = client.get(f"/v1/jobs/{job_id}").json()
-        if job["status"] in {"done", "error"}:
-            break
-    assert job["status"] in {"done", "error"}
+    job = wait_for_job(client, job_id)
     assert job["events"][0]["event"] == "queued"
     assert job["events"][1]["event"] == "running"
     assert job["events"][-1]["event"] in {"completed", "error"}
