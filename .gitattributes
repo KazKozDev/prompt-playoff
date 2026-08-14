@@ -1,0 +1,9 @@
+# cmd.exe re-reads a batch file from disk between lines and can lose a label
+# when the line endings are not CRLF, so the Windows launcher is checked out
+# with CRLF even on a repository cloned with LF everywhere else.
+*.bat text eol=crlf
+
+# The shell launcher is the mirror image: CRLF would make `#!/bin/bash\r` an
+# interpreter that does not exist.
+*.command text eol=lf
+*.sh text eol=lf

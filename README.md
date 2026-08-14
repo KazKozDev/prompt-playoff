@@ -1,21 +1,23 @@
 # Prompt Playoff — Prompt Optimization and Benchmarking for Local LLMs
 
-Deterministic prompt-technique selection, compilation and benchmarking for local LLMs: it picks the technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one — chain-of-thought, self-consistency, ReAct, schema-first extraction and 25 more, ranked on your data rather than on a blog post's opinion.
+Prompt Playoff picks the prompting technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one. Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25 more — ranked on your data, not on a blog post's opinion.
 
 ```bash
 # macOS
 git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && ./start.command
+
+# Windows
+git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && start.bat
 
 # Linux — or any machine with Python 3.11+
 pip install 'prompt-playoff[all]' && prompt-playoff serve
 ```
 
 <p align="center">
-  <a href="start.command"><img src="https://raw.githubusercontent.com/KazKozDev/book-translator/main/assets/badges/macos.png" alt="macOS" height="36"></a>
-  <a href="#quick-start"><img src="https://raw.githubusercontent.com/KazKozDev/book-translator/main/assets/badges/linux.png" alt="Linux" height="36"></a>
+  <a href="start.command"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/macos.png" alt="macOS" height="36"></a>
+  <a href="start.bat"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/windows.png" alt="Windows" height="36"></a>
+  <a href="#quick-start"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/linux.png" alt="Linux" height="36"></a>
 </p>
-
-<p align="center">Double-click <code>start.command</code> on macOS. Elsewhere, install from PyPI and run the same server.</p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model, then showing how it ranked the techniques" width="100%">
@@ -25,7 +27,7 @@ pip install 'prompt-playoff[all]' && prompt-playoff serve
 
 ## Quick start
 
-1. Run the commands above. On macOS, `start.command` finds a Python 3.11+ interpreter, builds `.venv`, installs every optional extra, offers to install Ollama and pull `llama3.2:3b`, picks a free port in 8000–8020, and opens the browser. It rebuilds the environment when the checkout moved, because an editable install pinned to an old path imports fine and runs the wrong code.
+1. Run the commands above. The launchers prepare everything themselves — Python 3.11+, `.venv`, every optional extra, Ollama and `llama3.2:3b`, a free port, the browser.
 
 2. Keep Ollama running with at least one local model. Selection and compilation work without one; only measurement needs it.
 
@@ -39,7 +41,7 @@ pip install 'prompt-playoff[all]' && prompt-playoff serve
 
 ## Prompt builder UI for local models
 
-`prompt-playoff serve`, or the macOS launcher, opens the same engine in a browser: describe the task, and it selects the technique, writes the prompt for it, and offers to benchmark and optimize that prompt on the tabs above.
+`prompt-playoff serve`, or either launcher, opens the same four steps in a browser.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-ui.gif" alt="The Prompt Playoff web interface producing a schema-first prompt from a plain-language task, with the ranked alternatives below it" width="100%">
@@ -197,17 +199,17 @@ Four presets convert Hugging Face corpora instead: [MultiCoNER v2](https://hf.co
 
 ## How it differs from DSPy, promptfoo and PromptWizard
 
-**DSPy** optimizes the prompt inside a module you have already chosen: you write `dspy.ChainOfThought` or `dspy.ReAct` yourself, and the optimizer tunes that module's instructions and demonstrations. Prompt Playoff makes the choice you would otherwise make by hand, deterministically and with its reasons printed, and then hands the winner to DSPy if you want its search — `--backend dspy:mipro` and `dspy:gepa` run against this project's compiler and this project's graders.
+**DSPy** optimizes the prompt inside a module you have already chosen — you write `dspy.ChainOfThought` or `dspy.ReAct` yourself. Prompt Playoff makes that choice for you, deterministically and with its reasons printed, then hands the winner to DSPy's search if you want it.
 
-**promptfoo** measures prompts you have already written. It is a test harness, not a designer, and it does not tell you which technique the task needs. Prompt Playoff produces the prompt to be measured; `export-promptfoo` then writes a promptfoo project whose assertions call this project's graders, so both tools report the same `field_f1` rather than two metrics sharing a name.
+**promptfoo** measures prompts you have already written: a test harness, not a designer, and it does not tell you which technique the task needs. Prompt Playoff produces the prompt to be measured, and `export-promptfoo` hands it over.
 
-**PromptWizard** and other agent-driven optimizers ask an LLM to critique and rewrite instructions. Prompt Playoff does that too, but only during optimization: selection is scored constraints, grading is deterministic code, and no model is ever asked how good its own answer was.
+**PromptWizard** and other agent-driven optimizers ask an LLM to critique and rewrite instructions. Prompt Playoff does that too, but only during optimization — never to choose the technique, never to score an answer.
 
 ### When not to use it
 
 Do not use it for one prompt on one task that already works — selection needs something to rank against, and every number here comes from examples with expected answers. It pays for itself when several techniques are plausible, when you have a dataset with gold answers, when picking wrong is expensive, or when the choice has to be defended to somebody else.
 
-It is also the wrong tool for open-ended prose. There is no LLM judge in this project, so quality is measured as field overlap, grounding overlap, contract compliance and constraint coverage — not as whether the writing is good.
+It is also the wrong tool for open-ended prose: quality here is field overlap, grounding overlap, contract compliance and constraint coverage, not whether the writing is good.
 
 ## How it works
 
@@ -221,7 +223,7 @@ Deterministic **graders** score the result, and the measurement is stored where 
 Task → TaskProfile → Selector → Compiled prompt → Model calls → Graders → Measurement
 ```
 
-Adding a technique is one YAML file and no Python — see [docs/extending.md](docs/extending.md).
+One module per step, mapped in [docs/architecture.md](docs/architecture.md). Adding a technique is one YAML file and no Python — see [docs/extending.md](docs/extending.md).
 
 ```bash
 prompt-playoff new-technique structured.my-technique
@@ -229,21 +231,7 @@ prompt-playoff validate-registry     # placeholders, strategies, graders, render
 ```
 
 <details>
-<summary>Technical architecture</summary>
-
-### Important files
-
-- `start.command` — macOS launcher: interpreter discovery, environment rebuild, extras, Ollama, free port, browser.
-- `src/prompt_playoff/normalizer.py` — free-text description → `TaskProfile`, with the keyword fallback.
-- `src/prompt_playoff/selector.py` (466 lines) — hard constraints, ranking, and the reason for every accept and reject.
-- `src/prompt_playoff/compiler.py` (192 lines) — technique spec → prompt blocks and stages.
-- `src/prompt_playoff/strategies.py` (764 lines) — the seven execution strategies and their call sequencing.
-- `src/prompt_playoff/graders.py` (580 lines) — 21 deterministic graders: `field_f1`, `exact_match`, `json_schema`, `grounding_overlap`, `label_accuracy`, `unit_tests`, `tool_success` and the rest.
-- `src/prompt_playoff/optimizer.py` (968 lines) — native search loop, Pareto front, held-out verification, technique export.
-- `src/prompt_playoff/engine.py` (1116 lines) — the optional engine model, its cache, and its fail-closed authoring path.
-- `src/prompt_playoff/api.py` — the HTTP surface and the job queue behind it.
-
-### HTTP API
+<summary>HTTP API</summary>
 
 ```text
 GET   /v1/capabilities  /v1/techniques  /v1/datasets  /v1/lint  /v1/integrations
@@ -284,12 +272,13 @@ Native JSON Schema is used when the model declares `structured_output`. Otherwis
 <details>
 <summary>Requirements</summary>
 
-- **Python 3.11 or newer**, as declared by `pyproject.toml`.
-- **Ollama**, or an OpenAI-compatible endpoint, for anything that measures. Selection and compilation run without a model.
-- **A local model** such as `llama3.2:3b`. The macOS launcher offers to pull it when Ollama has none.
-- **Optional extras**, installed only when needed: `[cli]` for the terminal commands, `[serve]` for the HTTP API and web UI, `[dspy]` for the MIPROv2/GEPA/Bootstrap backends, `[tracing]` for Langfuse or Phoenix, `[huggingface]` for the corpus presets, `[all]` for everything. The base install is the registry, selector, normalizer and compiler alone.
+Python 3.11 or newer, and — for anything that measures — Ollama with a local model such as `llama3.2:3b`, or an OpenAI-compatible endpoint.
 
-`start.command` is a macOS launcher and depends on `open`, `lsof` and optionally Homebrew. Linux and Windows run the same server from the checkout; this repository has not been verified through a clean-machine end-to-end run on those systems.
+**Optional extras**, installed only when needed: `[cli]` for the terminal commands, `[serve]` for the HTTP API and web UI, `[dspy]` for the MIPROv2/GEPA/Bootstrap backends, `[tracing]` for Langfuse or Phoenix, `[huggingface]` for the corpus presets, `[all]` for everything. The base install is the registry, selector, normalizer and compiler alone.
+
+**macOS, Windows and Linux.** Linux has no launcher: install from PyPI and run `prompt-playoff serve`.
+
+CI runs the suite on Linux across 3.11, 3.12 and 3.13, and on Windows on 3.12 — where it also starts the server and fails the build unless `/health` answers. The launchers themselves are not exercised there, so the double-click path is verified by hand rather than by CI.
 
 </details>
 
@@ -301,7 +290,7 @@ Native JSON Schema is used when the model declares `structured_output`. Otherwis
 - `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
 - The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.
-- Graders are deterministic by design. There is no LLM judge, so open-ended generation is measured on grounding overlap and constraint coverage rather than on prose quality.
+- Graders are deterministic by design. There is no LLM judge, so open-ended generation cannot be scored on prose quality at all.
 - The promptfoo export covers a technique's first stage only. Multi-call techniques must be measured here.
 - Trace import reads from Langfuse only. Phoenix is write-only in this direction — spans go out, datasets do not come back.
 
@@ -317,19 +306,7 @@ docker run --rm -p 8000:8000 prompt-playoff
 
 Open `http://127.0.0.1:8000`; the non-root image health-checks `/health`.
 
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e '.[dev]'
-make test          # pytest
-make lint          # ruff
-make validate      # registry lint
-```
-
-The suite replaces every provider call with controlled test doubles, so it needs no network and no running model server, and the optional extras are skipped when absent. `make validate` checks every technique file for unknown placeholders, strategies and graders, then render-probes the prompt it compiles to. The current checkout:
-
-```text
-308 passed in 12.81s
-```
+For a local checkout, `make test`, `make lint` and `make validate` are the gate — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup and the exact commands CI runs. The suite replaces every provider call with controlled test doubles, so it needs no network and no running model server, and the optional extras are skipped when absent. `make validate` checks every technique file for unknown placeholders, strategies and graders, then render-probes the prompt it compiles to.
 
 </details>
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `start.bat`, the Windows counterpart of `start.command`: it finds a Python 3.11+ through the
+  `py` launcher, builds `.venv`, installs the extras and reports the ones that failed to build,
+  starts Ollama and offers to install it with winget, takes a free port in 8000–8020, and opens
+  the browser once `/health` answers. Windows is now in CI too — the suite on 3.12, plus a job
+  that starts the server and fails the build unless `/health` answers.
+
 ### Changed
 
 - Renamed the project from Prompt Selector to Prompt Playoff. Everything that carried the old

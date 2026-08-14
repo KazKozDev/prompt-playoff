@@ -17,6 +17,31 @@
 10. **Optimize** — optionally search for a better prompt with steps 6–9 as the
     fitness function.
 
+## Module map
+
+Each step of the pipeline is one module.
+
+- `src/prompt_playoff/normalizer.py` — free-text description → `TaskProfile`, with
+  the keyword fallback.
+- `src/prompt_playoff/selector.py` — hard constraints, ranking, and the reason for
+  every accept and reject.
+- `src/prompt_playoff/compiler.py` — technique spec → prompt blocks and stages.
+- `src/prompt_playoff/strategies.py` — the seven execution strategies and their
+  call sequencing.
+- `src/prompt_playoff/graders.py` — 21 deterministic graders: `field_f1`,
+  `exact_match`, `json_schema`, `grounding_overlap`, `label_accuracy`,
+  `unit_tests`, `tool_success` and the rest.
+- `src/prompt_playoff/optimizer.py` — native search loop, Pareto front, held-out
+  verification, technique export.
+- `src/prompt_playoff/engine.py` — the optional engine model, its cache, and its
+  fail-closed authoring path.
+- `src/prompt_playoff/api.py` — the HTTP surface and the job queue behind it.
+
+Outside the package: `start.command` is the macOS launcher — interpreter
+discovery, environment rebuild, extras, Ollama, free port, browser — and
+`start.bat` does the same work on Windows over the `py` launcher, winget and
+PowerShell.
+
 ## Why the selector is deterministic
 
 An LLM can parse a user's description, but should not be the authority that

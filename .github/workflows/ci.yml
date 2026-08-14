@@ -43,10 +43,17 @@ jobs:
           grep -F "pip install 'prompt-playoff[cli]'" message.txt
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
+        include:
+          # Windows differs where it can actually break: file locking goes
+          # through msvcrt instead of fcntl, paths are not POSIX, and the
+          # default text encoding is not UTF-8. One interpreter catches that.
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -83,6 +90,40 @@ jobs:
             sleep 0.1
           done
           prompt-playoff check --config tests/fixtures/check-ci.yaml --no-record
+
+  windows-serve:
+    # The README tells Windows users to double-click start.bat and get a web
+    # interface. That claim is only worth making if the server is known to come
+    # up there, so this starts it and requires an answer.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .[cli,serve]
+      - name: Serve, then require /health
+        shell: pwsh
+        run: |
+          $server = Start-Process -PassThru python `
+            -ArgumentList '-m', 'prompt_playoff', 'serve', '--port', '8123'
+          try {
+            $answered = $false
+            foreach ($attempt in 1..60) {
+              try {
+                Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8123/health' -TimeoutSec 2 |
+                  Out-Null
+                $answered = $true
+                break
+              } catch {
+                Start-Sleep -Milliseconds 500
+              }
+            }
+            if (-not $answered) { throw 'the server never answered /health' }
+          } finally {
+            Stop-Process -InputObject $server -Force
+          }
 
   integrations:
     runs-on: ubuntu-latest
