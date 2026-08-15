@@ -157,9 +157,11 @@ line:
 ```
 
 Only `id` and `input` are required. Omit `graders` and the runner picks them
-from the data: an `expected` object gets `field_f1` + `exact_match`, an
-`expected` string gets `label_accuracy`, a `response_schema` gets
-`json_validity` + `json_schema` + `schema_shape`. The technique's own validators
+from the data: an `expected` object gets `field_f1` + `exact_match`, a short
+`expected` string gets `label_accuracy` + `exact_match`, an `expected` string
+longer than eight words gets `token_f1` — prose is scored by word overlap
+because no honest paraphrase matches a reference verbatim — and a
+`response_schema` gets `json_validity` + `json_schema` + `schema_shape`. The technique's own validators
 are always added on top; a grader that cannot apply returns nothing rather than
 a zero.
 

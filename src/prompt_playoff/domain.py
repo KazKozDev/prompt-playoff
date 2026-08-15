@@ -125,6 +125,10 @@ class ModelProfile(BaseModel):
     # deliberately absent from every dump, API response, trace and job result.
     api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
     api_key_env: str | None = None
+    # Explicit, user-reviewed prices. Provider catalog prices change frequently,
+    # so an absent value means "unknown" rather than a guessed zero.
+    input_cost_per_million_usd: float | None = Field(default=None, ge=0)
+    output_cost_per_million_usd: float | None = Field(default=None, ge=0)
     notes: list[str] = Field(default_factory=list)
 
 

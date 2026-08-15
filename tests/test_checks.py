@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 
+import httpx
 import pytest
 import yaml
 from conftest import FakeProvider
@@ -132,3 +133,42 @@ def test_invalid_require_blocks_name_the_configuration_fix(tmp_path, requirement
     config.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     with pytest.raises(CheckConfigError, match=message):
         load_check_file(config)
+
+
+def test_cost_threshold_uses_explicit_model_prices(tmp_path):
+    config = _files(tmp_path, require={"mean_cost_usd_max": 0.001})
+    payload = yaml.safe_load(config.read_text(encoding="utf-8"))
+    payload["model"]["input_cost_per_million_usd"] = 1
+    payload["model"]["output_cost_per_million_usd"] = 10
+    config.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    result = asyncio.run(run_checks(config, provider_factory=lambda model: FakeProvider()))
+
+    assert result.exit_code == 0
+    assert result.checks[0].thresholds[0].measured == pytest.approx(0.0003)
+
+
+def test_failed_check_sends_redacted_webhook(tmp_path):
+    config = _files(tmp_path, require={"quality_min": 2})
+    payload = yaml.safe_load(config.read_text(encoding="utf-8"))
+    payload["notifications"] = {"webhook_urls": ["https://alerts.example/private/token?secret=yes"]}
+    config.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    received = []
+
+    def handler(request):
+        received.append(json.loads(request.content))
+        return httpx.Response(204)
+
+    result = asyncio.run(
+        run_checks(
+            config,
+            provider_factory=lambda model: FakeProvider(),
+            notification_transport=httpx.MockTransport(handler),
+        )
+    )
+
+    assert result.exit_code == 1
+    assert received[0]["event"] == "prompt_playoff.regression"
+    assert result.notifications[0].status == "sent"
+    assert "token" not in result.notifications[0].destination
+    assert "secret" not in result.notifications[0].destination

@@ -4,7 +4,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from prompt_playoff import __version__
+from prompt_playoff import __version__, api, providers
 from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
 from prompt_playoff.engine import EngineCache, TaskEngine
@@ -282,6 +282,34 @@ def test_capabilities_documents_the_extension_contract(client):
     assert "field_f1" in body["graders"]
     assert "majority_vote" in body["aggregators"]
     assert body["techniques"] >= 14
+
+
+def test_capabilities_carries_the_wording_every_report_labels_its_numbers_with(client):
+    body = client.get("/v1/capabilities").json()
+    assert body["grader_help"]["token_f1"] == "word overlap with the reference answer"
+    assert set(body["grader_help"]) == set(body["graders"])
+
+
+def test_ollama_models_endpoint_offers_what_the_daemon_has(client, monkeypatch):
+    async def fake_models(base_url=None):
+        assert base_url == "http://box.local:11434"
+        return [
+            providers.InstalledModel(model_id="qwen2.5:7b", parameter_size="7.6B", size_bytes=1)
+        ]
+
+    monkeypatch.setattr(api, "ollama_models", fake_models)
+    body = client.get("/v1/providers/ollama/models?base_url=http://box.local:11434").json()
+    assert body == [{"model_id": "qwen2.5:7b", "parameter_size": "7.6B", "size_bytes": 1}]
+
+
+def test_ollama_models_endpoint_says_how_to_start_a_daemon_that_is_down(client, monkeypatch):
+    async def fake_models(base_url=None):
+        raise providers.ProviderError("Ollama at http://127.0.0.1:11434 did not answer: refused.")
+
+    monkeypatch.setattr(api, "ollama_models", fake_models)
+    response = client.get("/v1/providers/ollama/models")
+    assert response.status_code == 502
+    assert "did not answer" in response.json()["detail"]
 
 
 def test_integrations_lists_every_backend_without_the_optional_extras(client):

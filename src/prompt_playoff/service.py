@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from prompt_playoff.compiler import PromptCompiler
+from prompt_playoff.dataset_store import DatasetStore
 from prompt_playoff.domain import (
     AuthorRequest,
     CompiledProgram,
@@ -26,6 +27,7 @@ from prompt_playoff.evals import (
     compare_techniques,
     load_jsonl,
 )
+from prompt_playoff.experiments import ExperimentStore
 from prompt_playoff.integrations.tracing import (
     NullTracer,
     Tracer,
@@ -33,6 +35,7 @@ from prompt_playoff.integrations.tracing import (
     tracer_from_env,
 )
 from prompt_playoff.measurements import MeasurementStore
+from prompt_playoff.model_profiles import ModelProfileStore
 from prompt_playoff.optimizer import BACKENDS, OptimizationResult, PromptOptimizer
 from prompt_playoff.providers import ModelProvider, provider_for
 from prompt_playoff.registry import Registry
@@ -46,13 +49,21 @@ class PromptSelectorService:
         registry: Registry,
         measurements: MeasurementStore | None = None,
         tracer: Tracer | None = None,
+        datasets: DatasetStore | None = None,
+        experiments: ExperimentStore | None = None,
+        profiles: ModelProfileStore | None = None,
     ) -> None:
         self.registry = registry
         self.measurements = measurements if measurements is not None else MeasurementStore()
         self.selector = Selector(registry, self.measurements)
         self.compiler = PromptCompiler()
         self.tracer = tracer if tracer is not None else tracer_from_env()
-        self.session_datasets: dict[str, list[BenchmarkExample]] = {}
+        self.dataset_store = datasets if datasets is not None else DatasetStore()
+        self.experiments = experiments if experiments is not None else ExperimentStore()
+        self.profiles = profiles if profiles is not None else ModelProfileStore()
+        #: Datasets the user brought in, whether saved to disk on a previous run
+        #: or added during this one. Shadow the packaged datasets by name.
+        self.user_datasets: dict[str, list[BenchmarkExample]] = self.dataset_store.load()
 
     def provider(self, task: TaskProfile, **metadata) -> ModelProvider:
         """Every provider goes through here, so tracing is never bypassed."""
@@ -168,17 +179,25 @@ class PromptSelectorService:
     # -- measurement -------------------------------------------------------- #
 
     def dataset(self, name: str) -> list[BenchmarkExample]:
-        if name in self.session_datasets:
-            return list(self.session_datasets[name])
+        if name in self.user_datasets:
+            return list(self.user_datasets[name])
         return load_jsonl(self.registry.dataset_path(name))
 
-    def add_session_dataset(self, name: str, examples: list[BenchmarkExample]) -> None:
-        """Register validated examples for this server process without writing user data."""
-        self.session_datasets[name] = list(examples)
+    def add_user_dataset(
+        self, name: str, examples: list[BenchmarkExample], persist: bool = False
+    ) -> Path | None:
+        """Register validated examples, optionally keeping them across restarts.
+
+        ``persist`` is the caller's decision rather than a default, because
+        writing rows to disk is not the same promise for public Hub data as it
+        is for a file the user dropped in from their own machine.
+        """
+        self.user_datasets[name] = list(examples)
+        return self.dataset_store.save(name, examples) if persist else None
 
     @property
     def dataset_names(self) -> list[str]:
-        return sorted({*self.registry.datasets, *self.session_datasets})
+        return sorted({*self.registry.datasets, *self.user_datasets})
 
     def resolve_dataset(
         self,
@@ -218,6 +237,7 @@ class PromptSelectorService:
         )
         if record:
             self.measurements.record(report.to_evidence())
+            self.experiments.add_benchmark(report, task)
         return report
 
     async def compare(
@@ -246,6 +266,7 @@ class PromptSelectorService:
         if record:
             for report in reports:
                 self.measurements.record(report.to_evidence())
+            self.experiments.add_comparison(comparison, reports, task)
         return comparison, reports
 
     async def optimize(
@@ -264,6 +285,7 @@ class PromptSelectorService:
         engine_model: ModelProfile | None = None,
         max_metric_calls: int | None = None,
         auto: str = "light",
+        record: bool = True,
         progress: ProgressCallback | None = None,
     ) -> OptimizationResult:
         """Search for a better prompt. `backend` picks the search algorithm only —
@@ -290,7 +312,7 @@ class PromptSelectorService:
                 engine_model=engine_profile,
                 compiler=self.compiler,
             )
-            return await optimizer.optimize(
+            result = await optimizer.optimize(
                 task=task,
                 technique=technique,
                 dataset=examples,
@@ -303,13 +325,16 @@ class PromptSelectorService:
                 dataset_name=name,
                 progress=progress,
             )
+            if record:
+                self.experiments.add_optimization(result, task)
+            return result
 
         if not backend.startswith("dspy:"):
             raise ValueError(f"Unknown backend {backend!r}. Known: {', '.join(BACKENDS)}")
 
         from prompt_playoff.integrations.dspy_backend import optimize_with_dspy
 
-        return await optimize_with_dspy(
+        result = await optimize_with_dspy(
             task=task,
             technique=technique,
             dataset=examples,
@@ -325,6 +350,9 @@ class PromptSelectorService:
             compiler=self.compiler,
             progress=progress,
         )
+        if record:
+            self.experiments.add_optimization(result, task)
+        return result
 
     def export_promptfoo(
         self,

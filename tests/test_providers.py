@@ -5,7 +5,64 @@ import pytest
 
 from prompt_playoff.domain import CompiledPrompt, Message, ModelProfile, ModelResult
 from prompt_playoff.integrations.tracing import TracingProvider
-from prompt_playoff.providers import OpenAICompatibleProvider, ProviderError, provider_for
+from prompt_playoff.providers import (
+    OpenAICompatibleProvider,
+    ProviderError,
+    ollama_models,
+    provider_for,
+)
+
+TAGS = {
+    "models": [
+        {
+            "name": "qwen2.5:7b",
+            "size": 4683087332,
+            "details": {"parameter_size": "7.6B", "family": "qwen2"},
+        },
+        {"name": "gemma4:31b-cloud", "size": 0, "details": {"parameter_size": "32.7B"}},
+        {"name": "llama3.2:3b", "size": 2019393189, "details": {}},
+    ]
+}
+
+
+@pytest.mark.asyncio
+async def test_ollama_models_lists_what_the_daemon_reports():
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=TAGS)
+
+    models = await ollama_models(transport=httpx.MockTransport(respond))
+    assert str(seen[0].url) == "http://127.0.0.1:11434/api/tags"
+    assert [item.model_id for item in models] == ["gemma4:31b-cloud", "llama3.2:3b", "qwen2.5:7b"]
+    assert models[1].parameter_size == ""
+    # A cloud model is held nowhere locally; reporting 0 as a size would be a claim.
+    assert models[0].size_bytes == 0
+    assert models[2].size_bytes == 4683087332
+
+
+@pytest.mark.asyncio
+async def test_ollama_models_honour_a_remote_base_url():
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"models": []})
+
+    assert (
+        await ollama_models("http://box.local:11434/", transport=httpx.MockTransport(respond)) == []
+    )
+    assert str(seen[0].url) == "http://box.local:11434/api/tags"
+
+
+@pytest.mark.asyncio
+async def test_ollama_models_say_how_to_fix_a_daemon_that_is_not_running():
+    def respond(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    with pytest.raises(ProviderError, match="ollama serve"):
+        await ollama_models(transport=httpx.MockTransport(respond))
 
 
 def test_openai_provider_reads_api_key_from_environment(monkeypatch):

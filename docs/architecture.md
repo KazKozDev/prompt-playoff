@@ -28,9 +28,9 @@ Each step of the pipeline is one module.
 - `src/prompt_playoff/compiler.py` — technique spec → prompt blocks and stages.
 - `src/prompt_playoff/strategies.py` — the seven execution strategies and their
   call sequencing.
-- `src/prompt_playoff/graders.py` — 21 deterministic graders: `field_f1`,
-  `exact_match`, `json_schema`, `grounding_overlap`, `label_accuracy`,
-  `unit_tests`, `tool_success` and the rest.
+- `src/prompt_playoff/graders.py` — 22 deterministic graders: `field_f1`,
+  `token_f1`, `exact_match`, `json_schema`, `grounding_overlap`,
+  `label_accuracy`, `unit_tests`, `tool_success` and the rest.
 - `src/prompt_playoff/optimizer.py` — native search loop, Pareto front, held-out
   verification, technique export.
 - `src/prompt_playoff/engine.py` — the optional engine model, its cache, and its
@@ -130,7 +130,7 @@ device, and the UI marks any recommendation resting on them as `prior only`.
 `Scorecard` fields are all derived from real calls:
 
 - `quality` — the highest-preference applicable grader (`field_f1` >
-  `exact_match` > `label_accuracy` > …).
+  `token_f1` > `exact_match` > `label_accuracy` > …).
 - `contract_pass_rate` — mean of the contract graders (`json_validity`,
   `json_schema`, `allowed_labels`, `tool_success`, …).
 - `stability` — with repeats, the share of repeats producing the modal answer.

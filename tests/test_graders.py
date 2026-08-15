@@ -1,7 +1,9 @@
 from prompt_playoff.domain import ExecutionTrace
 from prompt_playoff.graders import (
+    GRADER_HELP,
     GradeContext,
     default_graders,
+    describe,
     grader_names,
     run_graders,
     validate_schema,
@@ -114,6 +116,57 @@ def test_default_graders_follow_the_data(entity_schema):
     ]
     assert "field_f1" in default_graders({"a": []}, None, False)
     assert "label_accuracy" in default_graders("billing", None, False)
+
+
+SUMMARY = "The pilot cut queue time by 18% for 240 customers in Porto during March."
+
+
+def test_token_f1_scores_a_paraphrase_that_exact_match_calls_a_total_failure():
+    paraphrase = ctx(
+        "During March in Porto, the pilot reduced queue time 18% for 240 customers.",
+        expected=SUMMARY,
+    )
+    grades = run_graders(["token_f1", "exact_match"], paraphrase)
+    assert grades["exact_match"] == 0.0
+    assert grades["token_f1"] > 0.8
+
+
+def test_token_f1_separates_a_near_miss_from_an_unrelated_answer():
+    partial = run_graders(["token_f1"], ctx("The pilot cut queue time in Porto.", expected=SUMMARY))
+    unrelated = run_graders(["token_f1"], ctx("Rainfall figures for Kyoto.", expected=SUMMARY))
+    assert 0.0 < unrelated["token_f1"] < partial["token_f1"] < 1.0
+
+
+def test_token_f1_ignores_word_order_case_and_articles():
+    assert run_graders(["token_f1"], ctx("the CAT sat", expected="Cat sat"))["token_f1"] == 1.0
+
+
+def test_token_f1_penalises_padding_an_answer_with_the_reference():
+    padded = "word " * 200 + SUMMARY
+    assert run_graders(["token_f1"], ctx(padded, expected=SUMMARY))["token_f1"] < 0.2
+
+
+def test_token_f1_needs_a_string_reference():
+    assert run_graders(["token_f1"], ctx("anything", expected={"a": ["b"]})) == {}
+
+
+def test_default_graders_never_score_prose_by_exact_match():
+    assert default_graders(SUMMARY, None, False) == ["token_f1"]
+    assert "exact_match" not in default_graders(SUMMARY, None, False)
+
+
+def test_every_grader_says_what_it_measures_in_words():
+    """A grader with no plain-language line would surface to a reader as a bare id."""
+    assert set(GRADER_HELP) == set(grader_names())
+    # Fragments, not sentences: each one has to drop into a table cell and into
+    # the middle of a sentence without being rewritten.
+    assert all(text[0].islower() and not text.endswith(".") for text in GRADER_HELP.values())
+
+
+def test_describe_falls_back_to_the_name_rather_than_going_blank():
+    assert describe("token_f1") == "word overlap with the reference answer"
+    assert describe("some_future_grader") == "some_future_grader"
+    assert describe(None) == "no grader could score this data"
 
 
 def test_unknown_grader_names_are_skipped_not_fatal():

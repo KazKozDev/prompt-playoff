@@ -58,6 +58,7 @@ class ExampleRun(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     calls: int
+    cost_usd: float | None = None
     aggregation: dict[str, Any] = Field(default_factory=dict)
     schema_errors: list[str] = Field(default_factory=list)
     error: str | None = None
@@ -80,6 +81,8 @@ class Scorecard(BaseModel):
     mean_prompt_tokens: float
     mean_completion_tokens: float
     mean_calls: float
+    mean_cost_usd: float | None = None
+    total_cost_usd: float | None = None
     grades: dict[str, float] = Field(default_factory=dict)
     quality_grader: str | None = None
     failures: int = 0
@@ -214,7 +217,7 @@ class BenchmarkRunner:
                 seeded = _with_seed(program, repeat)
                 try:
                     trace = await strategy.execute(seeded, task, self.provider, timeout_seconds)
-                    run = self._grade(example, trace, grader_names, repeat)
+                    run = self._grade(example, trace, grader_names, repeat, task)
                 except ProviderError as exc:
                     run = ExampleRun(
                         example_id=example.id,
@@ -276,6 +279,7 @@ class BenchmarkRunner:
         trace: ExecutionTrace,
         grader_names: list[str],
         repeat: int,
+        task: TaskProfile,
     ) -> ExampleRun:
         ctx = GradeContext(
             output=trace.output,
@@ -297,6 +301,12 @@ class BenchmarkRunner:
             prompt_tokens=trace.prompt_tokens,
             completion_tokens=trace.completion_tokens,
             calls=len(trace.calls),
+            cost_usd=_cost_usd(
+                trace.prompt_tokens,
+                trace.completion_tokens,
+                task.model.input_cost_per_million_usd,
+                task.model.output_cost_per_million_usd,
+            ),
             aggregation=trace.aggregation,
             schema_errors=schema_errors,
         )
@@ -335,6 +345,7 @@ def build_scorecard(runs: list[ExampleRun], repeats: int) -> Scorecard:
         else 0.0
     )
 
+    costs = [run.cost_usd for run in runs if run.cost_usd is not None]
     return Scorecard(
         quality=round(quality, 4),
         reliability=reliability,
@@ -346,11 +357,24 @@ def build_scorecard(runs: list[ExampleRun], repeats: int) -> Scorecard:
         mean_prompt_tokens=round(mean([run.prompt_tokens for run in runs]), 2),
         mean_completion_tokens=round(mean([run.completion_tokens for run in runs]), 2),
         mean_calls=round(mean([run.calls for run in runs]), 2),
+        mean_cost_usd=round(mean(costs), 8) if len(costs) == len(runs) else None,
+        total_cost_usd=round(sum(costs), 8) if len(costs) == len(runs) else None,
         grades=grades,
         quality_grader=quality_grader,
         failures=sum(1 for run in runs if run.error),
         runs=len(runs),
     )
+
+
+def _cost_usd(
+    prompt_tokens: int,
+    completion_tokens: int,
+    input_rate: float | None,
+    output_rate: float | None,
+) -> float | None:
+    if input_rate is None or output_rate is None:
+        return None
+    return round((prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000, 8)
 
 
 def _stability(runs: list[ExampleRun], repeats: int) -> float:

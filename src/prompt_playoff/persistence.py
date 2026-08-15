@@ -48,6 +48,10 @@ def advisory_lock(path: Path) -> Iterator[None]:
 
 
 def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+
+
+def atomic_write_text(path: Path, text: str) -> None:
     """Replace only after durable output exists, leaving the old file intact on failure."""
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(
@@ -56,8 +60,7 @@ def atomic_write_json(path: Path, payload: Any) -> None:
     temporary_path = Path(temporary)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
+            handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary_path, path)

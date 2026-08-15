@@ -116,3 +116,6 @@ def isolated_measurements(tmp_path, monkeypatch):
     monkeypatch.setenv("PROMPT_PLAYOFF_MEASUREMENTS", str(tmp_path / "measurements.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_ENGINE_CACHE", str(tmp_path / "engine-cache.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_JOBS_PATH", str(tmp_path / "jobs.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_DATASETS", str(tmp_path / "datasets"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_PROFILES_PATH", str(tmp_path / "model-profiles.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_EXPERIMENTS_PATH", str(tmp_path / "experiments.json"))

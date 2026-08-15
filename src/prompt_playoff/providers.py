@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import time
+from datetime import UTC, datetime
 from typing import Protocol
 
 import httpx
+from pydantic import BaseModel
 
 from prompt_playoff.domain import CompiledPrompt, ModelProfile, ModelResult
 
@@ -21,9 +24,117 @@ class ModelProvider(Protocol):
     ) -> ModelResult: ...
 
 
+OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434"
+
+
+class InstalledModel(BaseModel):
+    """One model an Ollama server already holds, as the daemon reports it."""
+
+    model_id: str
+    #: "3.2B", "31B" — the daemon's own wording, blank when it does not say.
+    parameter_size: str = ""
+    size_bytes: int = 0
+
+
+class ConnectionCheck(BaseModel):
+    ok: bool
+    provider: str
+    model_id: str
+    endpoint: str
+    latency_seconds: float
+    checked_at: str
+    detail: str
+
+
+async def ollama_models(
+    base_url: str | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+    timeout_seconds: float = 10,
+) -> list[InstalledModel]:
+    """What this Ollama has pulled, so a model can be picked instead of typed.
+
+    A mistyped model id is otherwise found only when a benchmark starts and the
+    first call fails — after the run has been set up and paid for.
+    """
+    root = (base_url or OLLAMA_DEFAULT_URL).rstrip("/")
+    async with httpx.AsyncClient(timeout=timeout_seconds, transport=transport) as client:
+        try:
+            response = await client.get(f"{root}/api/tags")
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ProviderError(
+                f"Ollama at {root} did not answer: {_reason(exc)}. Start it with `ollama serve`, "
+                "or set the base URL of the machine running it."
+            ) from exc
+
+    entries = response.json().get("models") or []
+    models = [
+        InstalledModel(
+            model_id=str(entry.get("name") or entry.get("model") or ""),
+            parameter_size=str((entry.get("details") or {}).get("parameter_size") or ""),
+            size_bytes=int(entry.get("size") or 0),
+        )
+        for entry in entries
+        if isinstance(entry, dict)
+    ]
+    return sorted((model for model in models if model.model_id), key=lambda item: item.model_id)
+
+
+async def check_model_connection(
+    model: ModelProfile,
+    transport: httpx.AsyncBaseTransport | None = None,
+    timeout_seconds: float = 10,
+) -> ConnectionCheck:
+    """Verify credentials, endpoint reachability, and model availability without generation."""
+    started = time.perf_counter()
+    if model.provider == "ollama":
+        endpoint = (model.base_url or OLLAMA_DEFAULT_URL).rstrip("/")
+        models = await ollama_models(endpoint, transport=transport, timeout_seconds=timeout_seconds)
+        available = {item.model_id for item in models}
+        if model.model_id not in available:
+            raise ProviderError(
+                f"Ollama answered, but model {model.model_id!r} is not installed. "
+                f"Available: {', '.join(sorted(available)) or 'none'}"
+            )
+        detail = f"Ollama is reachable and {model.model_id!r} is installed"
+    else:
+        endpoint = (model.base_url or PROVIDER_BASE_URLS.get(model.provider) or "").rstrip("/")
+        if not endpoint:
+            raise ProviderError(f"Provider {model.provider!r} needs model.base_url")
+        api_key, _ = resolve_api_key(model)
+        headers = {"Authorization": f"Bearer {api_key}"}
+        if model.provider == "anthropic":
+            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        async with httpx.AsyncClient(timeout=timeout_seconds, transport=transport) as client:
+            try:
+                response = await client.get(f"{endpoint}/v1/models", headers=headers)
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ProviderError(
+                    f"Provider connection check failed at {endpoint}: {_reason(exc)}"
+                ) from exc
+        ids = {
+            str(item.get("id"))
+            for item in (response.json().get("data") or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+        if ids and model.model_id not in ids:
+            raise ProviderError(f"Provider answered, but model {model.model_id!r} was not listed")
+        detail = f"Provider credentials and model catalog are reachable for {model.model_id!r}"
+    return ConnectionCheck(
+        ok=True,
+        provider=model.provider,
+        model_id=model.model_id,
+        endpoint=endpoint,
+        latency_seconds=round(time.perf_counter() - started, 4),
+        checked_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        detail=detail,
+    )
+
+
 class OllamaProvider:
     def __init__(self, base_url: str | None = None) -> None:
-        self.base_url = (base_url or "http://127.0.0.1:11434").rstrip("/")
+        self.base_url = (base_url or OLLAMA_DEFAULT_URL).rstrip("/")
 
     async def generate(
         self,

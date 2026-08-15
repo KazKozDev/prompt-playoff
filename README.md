@@ -178,6 +178,43 @@ Exit code `0` means every bound passed, `1` means at least one regression, `2` m
 
 For wider matrices, `export-promptfoo` writes a promptfoo project whose assertions call this project's graders, so both tools report the same `field_f1` rather than two metrics sharing a name — [docs/integrations.md](docs/integrations.md).
 
+## From a winning prompt to production monitoring
+
+The web UI keeps an append-only experiment history for every recorded benchmark,
+comparison, and optimization. It graphs quality across versions and compares two
+runs with direction-aware degradation markers for quality, reliability, latency,
+tokens, failures, and configured USD cost. The history stores aggregate metrics
+and configuration/prompt hashes, not raw model answers.
+
+Model profiles save endpoint, model, capabilities, and reviewed input/output
+prices. API keys remain request-scoped or environment-backed and are never saved
+with a profile. Use **Check connection** in Settings, or:
+
+```bash
+prompt-playoff save-profile production --provider openai --model gpt-x \
+  --input-cost 1.25 --output-cost 10
+prompt-playoff check-connection --provider openai --model gpt-x
+```
+
+The authored-prompt screen exports Python and TypeScript clients that call
+`/v1/run`; orchestration therefore remains identical for single, multi-stage,
+self-consistency, map-reduce, tool-loop, program-of-thought, and tree-search
+techniques. The CLI equivalent accepts a saved `TaskProfile` JSON:
+
+```bash
+prompt-playoff export-runtime --task-file examples/task_profile.json \
+  --technique structured.schema-first --language python
+```
+
+For scheduled checks, `monitor` repeats the same fail-closed gate. Set
+`PROMPT_PLAYOFF_WEBHOOK_URL`, or add `notifications.webhook_urls` to
+`prompt-playoff.yaml`; failed thresholds and setup errors send a structured JSON
+webhook with the destination path and query redacted from command output.
+
+```bash
+prompt-playoff monitor --interval-seconds 300
+```
+
 ## Build datasets from traces and public corpora
 
 ```bash

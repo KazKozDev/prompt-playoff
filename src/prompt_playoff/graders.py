@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -48,6 +49,7 @@ RELIABILITY_GRADERS = {
 QUALITY_PREFERENCE = (
     "unit_tests",
     "field_f1",
+    "token_f1",
     "exact_match",
     "label_accuracy",
     "numeric_close",
@@ -59,6 +61,46 @@ QUALITY_PREFERENCE = (
     "json_schema",
     "json_validity",
 )
+
+
+#: What each grader measures, in words a reader who has never opened this file
+#: can act on. A grader name is an implementation detail; the number it produces
+#: is a claim about someone's prompt, and it has to be readable as one. Every
+#: surface that shows a grader — the CLI, the web report, the import preview —
+#: takes its wording from here, so the explanation cannot drift from the code.
+#: Each entry completes "this number measures …", so the wording drops into a
+#: table cell, a sentence or a tooltip without being rephrased at each site.
+GRADER_HELP: dict[str, str] = {
+    "agreement": "how often repeated samples gave the same answer",
+    "allowed_labels": "whether the answer is one of the labels the task allows",
+    "contains_all": "share of the required facts that appear in the answer",
+    "coverage": "share of the expected items found, extras ignored",
+    "deduplication": "share of list entries that are not repeats",
+    "exact_match": "whether the answer matches the reference character for character",
+    "field_f1": "per-item overlap with the reference, extras penalised",
+    "glossary_consistency": "share of terms translated the way the glossary says",
+    "grounding_overlap": "share of the answer's words taken from the evidence",
+    "json_schema": "whether the JSON matches the required schema",
+    "json_validity": "whether the whole answer parses as JSON",
+    "label_accuracy": "whether the label matches the reference label",
+    "length_limit": "whether the answer fits the length the task allows",
+    "no_prose": "whether the answer is JSON only, with no commentary around it",
+    "numeric_close": "whether the answer contains the expected number",
+    "omission_check": "whether the answer is neither truncated nor padded out",
+    "python_syntax": "whether every code block in the answer parses",
+    "regex_match": "whether the answer matches the required pattern",
+    "schema_shape": "share of the required keys that are present",
+    "token_f1": "word overlap with the reference answer",
+    "tool_success": "share of tool calls that returned a result, not an error",
+    "unit_tests": "share of the task's tests the generated code passes",
+}
+
+
+def describe(name: str | None) -> str:
+    """One plain sentence for a grader, for any surface a person reads."""
+    if not name:
+        return "no grader could score this data"
+    return GRADER_HELP.get(name, name)
 
 
 GraderT = TypeVar("GraderT", bound=Grader)
@@ -208,6 +250,34 @@ def field_f1(ctx: GradeContext) -> float | None:
     recall = true_positive / len(expected_items) if expected_items else 0.0
     if precision + recall == 0:
         return 0.0
+    return round(2 * precision * recall / (precision + recall), 4)
+
+
+@grader("token_f1")
+def token_f1(ctx: GradeContext) -> float | None:
+    """F1 over the words shared by the answer and a free-text reference.
+
+    The grader for prose. ``exact_match`` scores an honest paraphrase 0 — no
+    summary or translation reproduces a reference character for character — so
+    on a free-text answer it reports a property of the metric, not of the
+    prompt. This is the measure SQuAD reports beside its exact match number:
+    words are compared as a multiset after lowercasing and dropping articles,
+    so word order is free but repeating a word earns credit only as often as
+    the reference repeats it.
+    """
+    if ctx.expected is None or isinstance(ctx.expected, (dict, list)):
+        return None
+    reference = _token_counts(str(ctx.expected))
+    answer = _token_counts(ctx.output)
+    if not reference and not answer:
+        return 1.0
+    if not reference or not answer:
+        return 0.0
+    overlap = sum((answer & reference).values())
+    if overlap == 0:
+        return 0.0
+    precision = overlap / sum(answer.values())
+    recall = overlap / sum(reference.values())
     return round(2 * precision * recall / (precision + recall), 4)
 
 
@@ -399,18 +469,35 @@ def agreement(ctx: GradeContext) -> float | None:
 # --------------------------------------------------------------------------- #
 
 
+#: Above this many words a reference answer is prose rather than a label, and a
+#: character-for-character comparison against it can only ever return 0.
+FREE_TEXT_WORDS = 8
+
+
+def is_free_text(expected: Any) -> bool:
+    """Whether this reference answer is prose, so it needs a word-overlap score."""
+    return isinstance(expected, str) and len(expected.split()) > FREE_TEXT_WORDS
+
+
 def default_graders(
     expected: Any | None,
     response_schema: dict[str, Any] | None,
     strict_json: bool,
 ) -> list[str]:
-    """Pick graders that can actually produce a number for this example."""
+    """Pick graders that can actually produce a number for this example.
+
+    The choice follows the shape of the answer, not only its type. A one-word
+    label and a paragraph are both strings, but scoring the paragraph by exact
+    match reports 0 for every run and says nothing about the prompt.
+    """
     names: list[str] = []
     if response_schema is not None or strict_json:
         names += ["json_validity", "json_schema", "schema_shape"]
     if expected is not None:
         if isinstance(expected, (dict, list)):
             names += ["field_f1", "exact_match"]
+        elif is_free_text(expected):
+            names += ["token_f1"]
         else:
             names += ["label_accuracy", "exact_match"]
     return list(dict.fromkeys(names))
@@ -543,6 +630,17 @@ _STOPWORDS = frozenset(
     "a an the of to in on for and or but is are was were be been it its this that with as at by "
     "from not no if then than so such which who whom what when where how".split()
 )
+
+
+#: Articles only, as SQuAD's own normalisation does. Dropping the rest of the
+#: stopwords would reward an answer for skipping the connective tissue that
+#: makes a summary readable.
+_ARTICLES = frozenset(("a", "an", "the"))
+_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _token_counts(text: str) -> Counter[str]:
+    return Counter(word for word in _TOKEN.findall(text.lower()) if word not in _ARTICLES)
 
 
 def _content_words(text: str) -> set[str]:

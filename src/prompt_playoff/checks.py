@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import types
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
+import httpx
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -27,7 +30,13 @@ from prompt_playoff.registry import Registry
 ProviderFactory = Callable[[ModelProfile], ModelProvider]
 
 _NUMERIC_SCORECARD_FIELDS = {
-    name for name, field in Scorecard.model_fields.items() if field.annotation in {float, int}
+    name
+    for name, field in Scorecard.model_fields.items()
+    if field.annotation in {float, int}
+    or (
+        isinstance(field.annotation, types.UnionType)
+        and any(item in {float, int} for item in get_args(field.annotation))
+    )
 }
 VALID_REQUIRE_KEYS = tuple(
     sorted(f"{field}_{bound}" for field in _NUMERIC_SCORECARD_FIELDS for bound in ("min", "max"))
@@ -43,6 +52,8 @@ class CheckModelConfig(BaseModel):
     capabilities: list[Capability] = Field(default_factory=lambda: [Capability.system_messages])
     base_url: str | None = None
     api_key_env: str | None = None
+    input_cost_per_million_usd: float | None = Field(default=None, ge=0)
+    output_cost_per_million_usd: float | None = Field(default=None, ge=0)
 
     def profile(self) -> ModelProfile:
         return ModelProfile(
@@ -53,6 +64,8 @@ class CheckModelConfig(BaseModel):
             local=self.provider == "ollama",
             base_url=self.base_url,
             api_key_env=self.api_key_env,
+            input_cost_per_million_usd=self.input_cost_per_million_usd,
+            output_cost_per_million_usd=self.output_cost_per_million_usd,
         )
 
 
@@ -89,6 +102,13 @@ class CheckFile(BaseModel):
     version: Literal[1]
     model: CheckModelConfig
     checks: list[CheckSpec] = Field(min_length=1)
+    notifications: NotificationConfig = Field(default_factory=lambda: NotificationConfig())
+
+
+class NotificationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    webhook_urls: list[str] = Field(default_factory=list, max_length=5)
 
 
 class ThresholdResult(BaseModel):
@@ -115,6 +135,14 @@ class CheckRun(BaseModel):
     config: str
     checks: list[CheckResult]
     updated: bool = False
+    notifications: list[NotificationDelivery] = Field(default_factory=list)
+
+
+class NotificationDelivery(BaseModel):
+    channel: Literal["webhook"] = "webhook"
+    status: Literal["sent", "failed"]
+    destination: str
+    error: str | None = None
 
 
 class CheckConfigError(ValueError):
@@ -142,6 +170,7 @@ async def run_checks(
     update: bool = False,
     provider_factory: ProviderFactory = provider_for,
     measurements: MeasurementStore | None = None,
+    notification_transport: httpx.AsyncBaseTransport | None = None,
 ) -> CheckRun:
     config = load_check_file(path)
     try:
@@ -190,9 +219,16 @@ async def run_checks(
             if record:
                 assert store is not None
                 store.record(report.to_evidence())
-            values = {
-                name: float(getattr(report.scorecard, name)) for name in _NUMERIC_SCORECARD_FIELDS
-            }
+            values = {}
+            for name in _NUMERIC_SCORECARD_FIELDS:
+                value = getattr(report.scorecard, name)
+                if value is not None:
+                    values[name] = float(value)
+            missing = sorted({key.rsplit("_", 1)[0] for key in spec.require} - set(values))
+            if missing:
+                raise CheckConfigError(
+                    f"Cannot enforce {', '.join(missing)} because model pricing is not configured"
+                )
             measured_by_check.append(values)
             thresholds = [_compare(key, required, values) for key, required in spec.require.items()]
             status = "passed" if all(item.passed for item in thresholds) else "failed"
@@ -227,14 +263,62 @@ async def run_checks(
                 threshold.difference = 0.0
                 threshold.breach = 0.0
                 threshold.passed = True
-        return CheckRun(
+        result = CheckRun(
             status="passed", exit_code=0, config=str(path), checks=results, updated=True
         )
-    if has_errors:
-        return CheckRun(status="error", exit_code=2, config=str(path), checks=results)
-    if has_failures:
-        return CheckRun(status="failed", exit_code=1, config=str(path), checks=results)
-    return CheckRun(status="passed", exit_code=0, config=str(path), checks=results)
+    elif has_errors:
+        result = CheckRun(status="error", exit_code=2, config=str(path), checks=results)
+    elif has_failures:
+        result = CheckRun(status="failed", exit_code=1, config=str(path), checks=results)
+    else:
+        result = CheckRun(status="passed", exit_code=0, config=str(path), checks=results)
+    if result.exit_code and not update:
+        urls = list(config.notifications.webhook_urls)
+        if environment_url := os.getenv("PROMPT_PLAYOFF_WEBHOOK_URL"):
+            urls.append(environment_url)
+        result.notifications = await _send_webhooks(
+            result, list(dict.fromkeys(urls)), notification_transport
+        )
+    return result
+
+
+async def _send_webhooks(
+    result: CheckRun,
+    urls: list[str],
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> list[NotificationDelivery]:
+    deliveries: list[NotificationDelivery] = []
+    payload = {
+        "event": "prompt_playoff.regression",
+        "status": result.status,
+        "exit_code": result.exit_code,
+        "config": result.config,
+        "checks": [item.model_dump(mode="json") for item in result.checks],
+    }
+    async with httpx.AsyncClient(timeout=10, transport=transport) as client:
+        for url in urls:
+            destination = _redact_destination(url)
+            try:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                deliveries.append(NotificationDelivery(status="sent", destination=destination))
+            except (httpx.HTTPError, ValueError) as exc:
+                deliveries.append(
+                    NotificationDelivery(
+                        status="failed",
+                        destination=destination,
+                        error=str(exc) or type(exc).__name__,
+                    )
+                )
+    return deliveries
+
+
+def _redact_destination(url: str) -> str:
+    try:
+        parsed = httpx.URL(url)
+        return str(parsed.copy_with(path="/…", query=None, fragment=None))
+    except Exception:
+        return "invalid webhook URL"
 
 
 def _compare(key: str, required: float, values: dict[str, float]) -> ThresholdResult:

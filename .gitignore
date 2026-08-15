@@ -18,6 +18,7 @@ uv.lock
 benchmark-results/*.json
 benchmark-results/*.lock
 benchmark-results/*.corrupt-*
+benchmark-results/datasets/
 !benchmark-results/.gitkeep
 
 # Third-party papers: indexed in references/README.md, fetched with `make papers`

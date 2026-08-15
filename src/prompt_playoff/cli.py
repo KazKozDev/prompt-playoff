@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -14,6 +15,7 @@ from rich.table import Table
 
 from prompt_playoff import __version__
 from prompt_playoff.checks import CheckConfigError, CheckRun, run_checks
+from prompt_playoff.deployment import export_runtime
 from prompt_playoff.domain import (
     CompileRequest,
     Constraints,
@@ -26,10 +28,12 @@ from prompt_playoff.domain import (
     TaskType,
 )
 from prompt_playoff.evals import BenchmarkReport, load_jsonl
-from prompt_playoff.graders import grader_names
+from prompt_playoff.graders import describe, grader_names
 from prompt_playoff.lint import format_issues, has_errors, lint_registry, registry_summary
+from prompt_playoff.model_profiles import ModelProfileStore
 from prompt_playoff.normalizer import parse_capabilities
 from prompt_playoff.optimizer import BACKENDS
+from prompt_playoff.providers import ProviderError, check_model_connection
 from prompt_playoff.registry import Registry
 from prompt_playoff.service import PromptSelectorService
 from prompt_playoff.strategies import aggregator_names, strategy_names
@@ -192,7 +196,14 @@ def _print_report(report: BenchmarkReport) -> None:
     table.add_column("Metric")
     table.add_column("Measured", justify="right")
     table.add_column("Declared", justify="right")
-    table.add_row("quality", f"{card.quality:.3f}", f"{report.declared.get('quality', 0):.3f}")
+    # The headline number is only meaningful next to what it measured: 0.00 from
+    # a character-for-character comparison of two summaries is a fact about the
+    # metric, and a reader has to be able to see that without leaving the table.
+    table.add_row(
+        f"quality — {describe(card.quality_grader)}",
+        f"{card.quality:.3f}",
+        f"{report.declared.get('quality', 0):.3f}",
+    )
     table.add_row(
         "reliability", f"{card.reliability:.3f}", f"{report.declared.get('reliability', 0):.3f}"
     )
@@ -207,10 +218,11 @@ def _print_report(report: BenchmarkReport) -> None:
 
     grades = Table(title="Graders")
     grades.add_column("Grader")
+    grades.add_column("What it measures")
     grades.add_column("Mean", justify="right")
     for name, value in sorted(card.grades.items()):
         marker = " (headline quality)" if name == card.quality_grader else ""
-        grades.add_row(name + marker, f"{value:.3f}")
+        grades.add_row(name + marker, describe(name), f"{value:.3f}")
     console.print(grades)
 
     if report.prior is not None:
@@ -557,6 +569,37 @@ def check_command(
         _print_check_run(result)
     if result.exit_code:
         raise typer.Exit(code=result.exit_code)
+
+
+@app.command("monitor")
+def monitor_command(
+    config: Annotated[Path, typer.Option()] = Path("prompt-playoff.yaml"),
+    interval_seconds: Annotated[int, typer.Option(min=10)] = 300,
+    stop_on_failure: Annotated[bool, typer.Option()] = False,
+    no_record: Annotated[bool, typer.Option("--no-record")] = False,
+) -> None:
+    """Run regression checks on a schedule and send configured webhooks."""
+    console.print(f"Monitoring {config} every {interval_seconds}s; press Ctrl-C to stop.")
+    try:
+        while True:
+            started = time.strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                result = asyncio.run(run_checks(config, record=not no_record))
+            except CheckConfigError as exc:
+                console.print(f"[red]{started} · configuration error · {exc}[/red]")
+                if stop_on_failure:
+                    raise typer.Exit(code=2) from None
+            else:
+                color = "green" if result.exit_code == 0 else "red"
+                console.print(
+                    f"[{color}]{started} · {result.status} · "
+                    f"{len(result.notifications)} notification(s)[/{color}]"
+                )
+                if result.exit_code and stop_on_failure:
+                    raise typer.Exit(code=result.exit_code)
+            time.sleep(interval_seconds)
+    except KeyboardInterrupt:
+        console.print("\nMonitoring stopped.")
 
 
 @app.command("compare")
@@ -1173,6 +1216,100 @@ def show_technique(technique_id: Annotated[str, typer.Argument()]) -> None:
             "yaml",
         )
     )
+
+
+@app.command("profiles")
+def list_profiles() -> None:
+    """List reusable, secret-free model profiles."""
+    table = Table("ID", "Name", "Provider", "Model", "Input $/1M", "Output $/1M")
+    for item in ModelProfileStore().list():
+        profile = item.profile
+        table.add_row(
+            item.id,
+            item.name,
+            profile.provider,
+            profile.model_id,
+            str(profile.input_cost_per_million_usd or "—"),
+            str(profile.output_cost_per_million_usd or "—"),
+        )
+    console.print(table)
+
+
+@app.command("save-profile")
+def save_profile(
+    name: Annotated[str, typer.Argument()],
+    model: Annotated[str, typer.Option()],
+    provider: Annotated[str, typer.Option()] = "ollama",
+    base_url: Annotated[str | None, typer.Option()] = None,
+    input_cost: Annotated[
+        float | None, typer.Option(min=0, help="USD per 1M input tokens.")
+    ] = None,
+    output_cost: Annotated[
+        float | None, typer.Option(min=0, help="USD per 1M output tokens.")
+    ] = None,
+) -> None:
+    """Save model metadata and reviewed prices without storing an API key."""
+    saved = ModelProfileStore().save(
+        name,
+        ModelProfile(
+            provider=provider,
+            model_id=model,
+            local=provider == "ollama",
+            base_url=base_url,
+            input_cost_per_million_usd=input_cost,
+            output_cost_per_million_usd=output_cost,
+        ),
+    )
+    console.print(f"[green]Saved[/green] {saved.id}; credentials remain environment-only.")
+
+
+@app.command("check-connection")
+def check_connection(
+    model: Annotated[str, typer.Option()],
+    provider: Annotated[str, typer.Option()] = "ollama",
+    base_url: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Check endpoint, credentials, and model availability without generation."""
+    try:
+        result = asyncio.run(
+            check_model_connection(
+                ModelProfile(
+                    provider=provider,
+                    model_id=model,
+                    local=provider == "ollama",
+                    base_url=base_url,
+                )
+            )
+        )
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from None
+    console.print(f"[green]Connected[/green] in {result.latency_seconds:.2f}s · {result.detail}")
+
+
+@app.command("export-runtime")
+def export_runtime_command(
+    task_file: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    technique: Annotated[str, typer.Option()],
+    language: Annotated[str, typer.Option()] = "python",
+    output: Annotated[Path | None, typer.Option()] = None,
+) -> None:
+    """Export a complete Python or TypeScript client for the selected strategy."""
+    if language not in {"python", "typescript"}:
+        console.print("--language must be python or typescript")
+        raise typer.Exit(code=2)
+    task = TaskProfile.model_validate_json(task_file.read_text(encoding="utf-8"))
+    Registry.load().technique(technique)
+    bundle = export_runtime(
+        task=task,
+        technique_id=technique,
+        language=language,  # type: ignore[arg-type]
+    )
+    destination = output or Path(bundle.filename)
+    destination.write_text(bundle.content, encoding="utf-8")
+    config_path = destination.with_name(bundle.config_filename)
+    config_path.write_text(bundle.config, encoding="utf-8")
+    console.print(f"[green]Exported[/green] {destination} and {config_path}")
 
 
 @app.command()

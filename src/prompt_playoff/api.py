@@ -11,26 +11,38 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, model_validator
 
 from prompt_playoff import __version__
+from prompt_playoff.deployment import DeploymentBundle, export_runtime
 from prompt_playoff.domain import (
     AuthorRequest,
     CompiledProgram,
     CompileRequest,
     DescriptionRequest,
     ExecutionTrace,
+    Exemplar,
     MeasuredEvidence,
     ModelProfile,
     RunRequest,
     SelectionResult,
     TaskProfile,
+    TaskType,
     TechniqueSpec,
 )
 from prompt_playoff.engine import PromptAuthoringError
 from prompt_playoff.evals import BenchmarkExample, load_jsonl_text
-from prompt_playoff.graders import grader_names
+from prompt_playoff.experiments import ExperimentComparison, ExperimentRecord
+from prompt_playoff.graders import GRADER_HELP, grader_names
+from prompt_playoff.integrations import hub
 from prompt_playoff.jobs import Job, JobStore
 from prompt_playoff.lint import lint_registry, registry_summary
+from prompt_playoff.model_profiles import SavedModelProfile
 from prompt_playoff.optimizer import BACKENDS
-from prompt_playoff.providers import ProviderError
+from prompt_playoff.providers import (
+    ConnectionCheck,
+    InstalledModel,
+    ProviderError,
+    check_model_connection,
+    ollama_models,
+)
 from prompt_playoff.registry import Registry, RegistryError
 from prompt_playoff.service import PromptSelectorService
 from prompt_playoff.strategies import aggregator_names, strategy_names
@@ -104,6 +116,32 @@ class OptimizeRequest(BenchmarkRequest):
         return self
 
 
+class HubSearchRequest(BaseModel):
+    description: str = Field(min_length=1, max_length=4000)
+    task_type: TaskType | None = None
+    #: Used only to phrase the search terms; never sees the dataset rows.
+    engine_model: ModelProfile | None = None
+    limit: int = Field(default=12, ge=1, le=30)
+
+
+class HubSearchResponse(BaseModel):
+    queries: list[str]
+    #: "engine" when the model named the search terms, "keywords" when it could not.
+    source: str
+    candidates: list[hub.HubCandidate]
+    #: Read before the list itself: what these results are worth.
+    notes: list[str] = Field(default_factory=list)
+
+
+class HubImportRequest(BaseModel):
+    dataset: str = Field(min_length=1, max_length=200)
+    config: str = Field(min_length=1, max_length=200)
+    split: str = Field(min_length=1, max_length=100)
+    input_column: str = Field(min_length=1, max_length=200)
+    expected_column: str | None = Field(default=None, max_length=200)
+    limit: int = Field(default=100, ge=2, le=hub.MAX_IMPORT_ROWS)
+
+
 class PromptfooExportRequest(BaseModel):
     task: TaskProfile
     technique_ids: list[str] = Field(min_length=1, max_length=8)
@@ -111,6 +149,27 @@ class PromptfooExportRequest(BaseModel):
     examples: list[BenchmarkExample] = Field(default_factory=list)
     models: list[ModelProfile] = Field(default_factory=list)
     directory: str = "promptfoo"
+
+
+class SaveModelProfileRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    profile: ModelProfile
+    id: str | None = Field(default=None, max_length=64)
+
+
+class ExperimentCompareRequest(BaseModel):
+    before_id: str
+    after_id: str
+    technique_id: str | None = None
+
+
+class DeploymentExportRequest(BaseModel):
+    task: TaskProfile
+    technique_id: str
+    language: str = Field(pattern="^(python|typescript)$")
+    response_schema: dict[str, Any] | None = None
+    variables: dict[str, str] = Field(default_factory=dict)
+    exemplars: list[Exemplar] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -162,6 +221,9 @@ def capabilities(request: Request) -> dict[str, Any]:
         **registry_summary(registry),
         "aggregators": aggregator_names(),
         "graders": grader_names(),
+        #: What each grader measures, so a report can label its numbers in words
+        #: instead of leaving the reader to look up a grader name.
+        "grader_help": GRADER_HELP,
         "strategies": strategy_names(),
     }
 
@@ -192,6 +254,43 @@ def models(request: Request) -> list[ModelProfile]:
         _service(request).registry.models.values(),
         key=lambda item: (item.provider, item.model_id),
     )
+
+
+@app.get("/v1/providers/ollama/models", response_model=list[InstalledModel])
+async def installed_ollama_models(base_url: str | None = None) -> list[InstalledModel]:
+    """The models the local Ollama actually has, for the model field to offer."""
+    try:
+        return await ollama_models(base_url)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/v1/providers/check", response_model=ConnectionCheck)
+async def check_provider(payload: ModelProfile) -> ConnectionCheck:
+    try:
+        return await check_model_connection(payload)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/v1/model-profiles", response_model=list[SavedModelProfile])
+def list_model_profiles(request: Request) -> list[SavedModelProfile]:
+    return _service(request).profiles.list()
+
+
+@app.post(
+    "/v1/model-profiles", response_model=SavedModelProfile, status_code=status.HTTP_201_CREATED
+)
+def save_model_profile(payload: SaveModelProfileRequest, request: Request) -> SavedModelProfile:
+    try:
+        return _service(request).profiles.save(payload.name, payload.profile, payload.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/v1/model-profiles/{profile_id}")
+def delete_model_profile(profile_id: str, request: Request) -> dict[str, bool]:
+    return {"deleted": _service(request).profiles.delete(profile_id)}
 
 
 @app.get("/v1/datasets")
@@ -236,7 +335,9 @@ async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) 
     stem = Path(file.filename or "dataset").stem
     slug = re.sub(r"[^a-z0-9._-]+", "-", stem.lower()).strip("-._") or "dataset"
     name = f"uploaded:{slug}"
-    _service(request).add_session_dataset(name, examples)
+    # Not persisted: this is the user's own material, arriving from their
+    # machine, and writing it out is a promise they have not been asked for.
+    _service(request).add_user_dataset(name, examples)
     return {
         "name": name,
         "filename": file.filename,
@@ -246,7 +347,100 @@ async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) 
     }
 
 
-@app.get("/v1/datasets/{name}", response_model=list[BenchmarkExample])
+# --------------------------------------------------------------------------- #
+# Hugging Face Hub: find examples that look like the user's own inputs
+#
+# The three calls are deliberately separate. Searching is cheap and wrong often
+# enough that the user has to see the candidates; previewing shows the columns a
+# guess was made from; only the import spends bandwidth and changes state.
+# --------------------------------------------------------------------------- #
+
+
+@app.post("/v1/datasets/hub/search", response_model=HubSearchResponse)
+async def hub_search(payload: HubSearchRequest) -> HubSearchResponse:
+    # Short leash on the model: naming three search terms is a small ask, and a
+    # user waiting on a click would rather have the keyword list than the best
+    # possible phrasing from an engine that is swapping or down.
+    queries, source = await hub.search_queries(
+        payload.description, payload.task_type, payload.engine_model, timeout_seconds=20
+    )
+    if not queries:
+        raise HTTPException(
+            status_code=422,
+            detail="No search terms could be built from that description. Add a few English "
+            "words describing the material, or upload your own examples instead.",
+        )
+    try:
+        candidates = await hub.search(queries, payload.task_type, limit=payload.limit)
+    except hub.HubError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    note = hub.generic_result_note(queries, candidates, payload.task_type)
+    return HubSearchResponse(
+        queries=queries,
+        source=source,
+        candidates=candidates,
+        notes=[note] if note else [],
+    )
+
+
+@app.get("/v1/datasets/hub/preview", response_model=hub.HubPreview)
+async def hub_preview(
+    dataset: str, config: str | None = None, split: str | None = None
+) -> hub.HubPreview:
+    try:
+        return await hub.preview(dataset, config, split)
+    except hub.HubError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/v1/datasets/hub/import", status_code=status.HTTP_201_CREATED)
+async def hub_import(request: Request, payload: HubImportRequest) -> dict[str, Any]:
+    """Convert Hub rows into examples and keep them for this server session."""
+    try:
+        rows, columns = await hub.fetch_rows(
+            payload.dataset, payload.config, payload.split, payload.limit
+        )
+    except hub.HubError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    names = [column.name for column in columns]
+    for role, column in (("input", payload.input_column), ("expected", payload.expected_column)):
+        if column and names and column not in names:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{payload.dataset} has no {role} column {column!r}. Columns: "
+                + ", ".join(names),
+            )
+
+    raw = hub.to_examples(
+        rows, columns, payload.dataset, payload.input_column, payload.expected_column, payload.limit
+    )
+    if not raw:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No usable rows in {payload.dataset}: every row was missing its "
+            f"{payload.input_column!r} value or its answer.",
+        )
+    examples = [BenchmarkExample.model_validate(item) for item in raw]
+    name = f"hf:{payload.dataset}"
+    # Persisted: these rows are public, and re-importing them means repeating a
+    # download and the column decisions the user just made by hand.
+    saved = _service(request).add_user_dataset(name, examples, persist=True)
+    return {
+        "name": name,
+        "dataset": payload.dataset,
+        "config": payload.config,
+        "split": payload.split,
+        "examples": len(examples),
+        "has_expected": sum(1 for item in examples if item.expected is not None),
+        "skipped": len(rows) - len(examples),
+        "saved_to": str(saved) if saved else None,
+    }
+
+
+# `:path` because an imported Hub dataset is named after its repo, and a repo id
+# carries a slash. Declared after the /hub/ routes, which therefore still win.
+@app.get("/v1/datasets/{name:path}", response_model=list[BenchmarkExample])
 def dataset_examples(name: str, request: Request) -> list[BenchmarkExample]:
     try:
         return _service(request).dataset(name)
@@ -386,11 +580,37 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
             engine_model=payload.engine_model,
             max_metric_calls=payload.max_metric_calls,
             auto=payload.auto,
+            record=payload.record,
             progress=lambda event: store.note(job.id, event),
         )
         return result.model_dump(mode="json")
 
     return store.start(job, work)
+
+
+@app.get("/v1/experiments", response_model=list[ExperimentRecord])
+def list_experiments(request: Request) -> list[ExperimentRecord]:
+    return _service(request).experiments.list()
+
+
+@app.post("/v1/experiments/compare", response_model=ExperimentComparison)
+def compare_experiments(
+    payload: ExperimentCompareRequest, request: Request
+) -> ExperimentComparison:
+    try:
+        return _service(request).experiments.compare(
+            payload.before_id, payload.after_id, payload.technique_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/v1/experiments/{experiment_id}", response_model=ExperimentRecord)
+def get_experiment(experiment_id: str, request: Request) -> ExperimentRecord:
+    record = _service(request).experiments.get(experiment_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown experiment")
+    return record
 
 
 @app.post("/v1/export/promptfoo")
@@ -415,6 +635,22 @@ def export_promptfoo(payload: PromptfooExportRequest, request: Request) -> dict[
         "warnings": result.warnings,
         "next": f"cd {payload.directory} && promptfoo eval && promptfoo view",
     }
+
+
+@app.post("/v1/export/runtime", response_model=DeploymentBundle)
+def export_deployment(payload: DeploymentExportRequest, request: Request) -> DeploymentBundle:
+    try:
+        _service(request).resolve_technique(payload.task, payload.technique_id)
+        return export_runtime(
+            task=payload.task,
+            technique_id=payload.technique_id,
+            language=payload.language,  # type: ignore[arg-type]
+            response_schema=payload.response_schema,
+            variables=payload.variables,
+            exemplars=payload.exemplars,
+        )
+    except (ValueError, RegistryError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/v1/integrations")

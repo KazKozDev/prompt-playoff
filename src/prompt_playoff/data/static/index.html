@@ -57,8 +57,46 @@
     .advanced-panel { padding:0; }
     .advanced-panel > details > summary { padding:17px 18px; }
     .advanced-panel .advanced-content { padding:0 18px 18px; border-top:1px solid var(--border); }
-    .result { border-top:1px solid var(--border); padding:16px 0; }
-    .result:first-child { border-top:0; padding-top:0; }
+    /* Three tiers: the examples both actions share, then one group per action
+       holding only the fields that action controls. The rules between them are
+       what say which field feeds which button. */
+    .tune-status { margin:14px 0 0; }
+    .tune-group { margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+    .tune-title { margin:0; color:var(--accent); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+    .tune-lead { margin:5px 0 0; color:var(--muted); font-size:12.5px; line-height:1.45; }
+    .field-hint code { color:#d1d5db; font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    .estimate { margin-top:13px; }
+    .estimate:empty { display:none; }
+    .estimate strong { color:#d1d5db; font-weight:600; }
+    /* A label's own text becomes the control's accessible name, which would
+       rename the button it sits above. This only looks like one. */
+    .field-label { display:block; margin:12px 0 5px; color:var(--muted); font-size:13px; }
+    /* Hub candidates. Everything here is text the Hub returned, so it stays
+       visually quieter than the app's own copy and is always escaped. */
+    .hub-results:not(:empty) { margin-top:10px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); }
+    .hub-queries { padding:9px 11px; border-bottom:1px solid var(--border); color:var(--muted); font-size:11.5px; line-height:1.5; }
+    .hub-queries code { color:#d1d5db; font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .hub-card { padding:10px 11px; border-top:1px solid var(--border); }
+    .hub-card:first-child { border-top:0; }
+    .hub-card.open { background:#1b1f28; }
+    .hub-name { display:block; color:var(--text); font-size:12.5px; font-weight:700; overflow-wrap:anywhere; }
+    .hub-facts { margin-top:3px; color:var(--muted); font-size:11.5px; }
+    .hub-summary { margin:5px 0 0; color:var(--muted); font-size:11.5px; line-height:1.45; }
+    button.hub-pick { width:auto; margin:7px 0 0; padding:4px 9px; font-size:11.5px; }
+    .hub-detail { margin-top:9px; padding-top:9px; border-top:1px solid var(--border); }
+    .hub-detail label { margin:9px 0 4px; font-size:11.5px; }
+    .hub-detail select, .hub-detail input { padding:6px 8px; font-size:12px; }
+    .hub-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .hub-sample { margin-top:9px; padding:8px 9px; border-radius:7px; background:#0b0e13; color:#d1d5db; font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; max-height:150px; overflow:auto; }
+    .hub-note { margin:9px 0 0; color:#fde68a; font-size:11.5px; line-height:1.45; }
+    .hub-link { color:var(--muted); font-size:11.5px; text-underline-offset:3px; }
+    .hub-link:hover { color:var(--accent); }
+    /* Rows sit flush against one another, so the selection ring has no room
+       outside the row box: it landed on the neighbour, and above the first
+       alternative it struck through the disclosure summary. The box is bled
+       sideways into the panel's padding and the ring drawn inside it. */
+    .result { border-top:1px solid var(--border); padding:16px 10px; margin:0 -10px; }
+    .result:first-child { border-top:0; margin-top:-16px; }
     .topline { display:flex; gap:10px; justify-content:space-between; align-items:flex-start; }
     .rank { color:var(--accent); font-weight:800; font-size:13px; }
     .meta { color:var(--muted); font-size:12.5px; margin-top:4px; }
@@ -70,7 +108,7 @@
     .evidence > summary { cursor:pointer; color:var(--muted); font-size:12.5px; font-weight:600; }
     .evidence[open] > summary { color:var(--text); }
     .other-methods { margin-top:17px; padding-top:15px; border-top:1px solid var(--border); }
-    .other-methods .result { padding-left:2px; }
+    .other-methods .result { padding-left:12px; }
     .use-btn[aria-current="true"] { display:none; }
     ul { color:#d1d5db; line-height:1.5; padding-left:19px; font-size:14px; margin:10px 0 0; }
     .warning { border-left:3px solid var(--accent); padding:8px 12px; margin-top:12px; color:#fde68a; background:#2a2413; border-radius:0 8px 8px 0; font-size:14px; }
@@ -124,7 +162,7 @@
     .pill.prior { color:var(--muted); }
     pre { background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:12px; overflow-x:auto; font-size:12.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; margin:0 0 10px; }
     .stage-title { font-size:12px; color:var(--accent); text-transform:uppercase; letter-spacing:.08em; margin:14px 0 6px; font-weight:700; }
-    .ready-heading { font-size:clamp(23px,3vw,30px); }
+    .ready-heading { font-size:19px; }
     button.copy-all-btn { width:auto; margin:0; padding:8px 11px; background:var(--accent); color:#111; border-color:var(--accent); font-size:12px; }
 
     /* Authored prompt view. The prompt text carries the page; labels stay grey. */
@@ -156,6 +194,8 @@
     th, td { text-align:right; padding:7px 8px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
     th:first-child, td:first-child { text-align:left; }
     th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+    /* Prose in a table of numbers: reads left to right, and stays quieter than the score. */
+    th.what, td.what { text-align:left; color:var(--muted); font-weight:400; }
     .delta.up { color:var(--good); }
     .delta.down { color:var(--bad); }
     .tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
@@ -307,13 +347,18 @@
     .technique-index-return { display:block; width:fit-content; margin:20px 0 0 auto; color:var(--muted); font-size:12.5px; line-height:1.4; text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-index-return:hover { color:var(--text); text-decoration-color:var(--muted); }
     .technique-index-return:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--accent); }
-    .selected { outline:2px solid var(--accent); outline-offset:6px; border-radius:6px; }
+    .selected { outline:2px solid var(--accent); outline-offset:-8px; border-radius:14px; }
     .header-actions { display:flex; align-items:center; justify-content:space-between; gap:8px 20px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
     .header-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     button.header-action { display:inline-block; width:auto; max-width:100%; margin:0; padding:6px 12px; border:1px solid var(--border); border-radius:9px; background:transparent; color:var(--muted); font-family:inherit; font-size:14px; font-weight:600; line-height:1.35; text-decoration:none; overflow-wrap:anywhere; }
     button.header-action:hover { border-color:var(--accent); color:var(--text); }
     button.header-action.active { background:var(--accent); color:#111; border-color:var(--accent); }
     .doc-frame { display:block; width:100%; min-height:420px; border:0; background:transparent; color-scheme:dark; }
+    .history-chart { width:100%; height:150px; margin:16px 0; border:1px solid var(--border); border-radius:12px; background:rgba(255,255,255,.015); }
+    .history-chart polyline { fill:none; stroke:var(--accent); stroke-width:3; vector-effect:non-scaling-stroke; }
+    .history-chart circle { fill:var(--accent); }
+    .history-chart text { fill:var(--muted); font-size:9px; }
+    .export-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
     @media (max-width:900px) {
       .layout { grid-template-columns:minmax(0,1fr); }
       .layout > * { min-width:0; }
@@ -347,13 +392,14 @@
     <nav class="header-actions" aria-label="Application links and settings">
       <div class="header-group">
         <button type="button" class="header-action" data-global-tab="selector" aria-pressed="false">Selector</button>
+        <button type="button" class="header-action" data-global-tab="settings" aria-pressed="false">LLM</button>
+        <button type="button" class="header-action" data-global-tab="history" aria-pressed="false">History</button>
       </div>
       <div class="header-group">
         <button type="button" class="header-action" data-global-tab="help" aria-pressed="false">Help</button>
         <button type="button" class="header-action" data-global-tab="evaluation" aria-pressed="false">Evaluation</button>
         <button type="button" class="header-action" data-global-tab="techniques" aria-pressed="false">Techniques</button>
         <button type="button" class="header-action" data-global-tab="logs" aria-pressed="false">Logs</button>
-        <button type="button" class="header-action" data-global-tab="settings" aria-pressed="false">Settings</button>
       </div>
     </nav>
   </header>
@@ -385,31 +431,61 @@
 
       <section class="panel advanced-panel">
         <details class="advanced-disclosure" id="test-details">
-          <summary>Test and improve this prompt</summary>
+          <summary>Measure and improve this prompt</summary>
           <div class="advanced-content">
-            <label for="dataset">Dataset</label>
-            <select id="dataset"></select>
-            <div class="upload-row">
-              <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-label="JSONL dataset file" aria-describedby="upload-status">
-              <button id="upload-btn" class="ghost upload-btn" type="button" disabled>Upload</button>
-            </div>
-            <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
-            <div class="row">
-              <div>
-                <label for="repeats">Repeats</label>
-                <input id="repeats" type="number" value="1" min="1" max="10">
+            <div class="meta tune-status" id="chosen">Create a prompt first, then pick a method — both steps below measure the method you picked.</div>
+
+            <div class="tune-group">
+              <h3 class="tune-title">Examples</h3>
+              <p class="tune-lead">Both steps below run your prompt over these and score the answers.</p>
+
+              <label for="dataset-file">Your own examples (JSONL)</label>
+              <div class="upload-row">
+                <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-describedby="upload-status">
+                <button id="upload-btn" class="ghost upload-btn" type="button" disabled>Upload</button>
               </div>
-              <div>
-                <label for="rounds">Optimizer rounds</label>
-                <input id="rounds" type="number" value="2" min="1" max="6">
-              </div>
+              <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
+              <p class="field-hint">One example per line: <code>{"id":"1","input":"…","expected":"…"}</code>. Up to 10 MiB, kept until the server restarts.</p>
+
+              <div class="field-label">No examples of your own?</div>
+              <button id="hub-btn" class="ghost" type="button">Search Hugging Face</button>
+              <p class="field-hint">Looks for public datasets whose material resembles your task, then imports the rows you pick and keeps them on disk. Needs an internet connection; nothing else here does.</p>
+              <div id="hub-status" class="upload-status" role="status" aria-live="polite"></div>
+              <div id="hub-results" class="hub-results"></div>
+
+              <label for="dataset">Measure against</label>
+              <select id="dataset"></select>
+              <p class="field-hint">The bundled sets are there to try this out. A score only says something about your prompt when the examples look like your real inputs.</p>
+
+              <label for="repeats">Runs per example</label>
+              <input id="repeats" type="number" value="1" min="1" max="10">
+              <p class="field-hint">More than one shows how much the answers move between identical runs.</p>
             </div>
-            <label for="backend">Optimizer search</label>
-            <select id="backend"></select>
-            <div class="meta" id="chosen">No technique chosen yet.</div>
-            <button id="bench-btn" type="button" disabled>Benchmark this prompt</button>
-            <button id="compare-btn" class="ghost" type="button" disabled>Compare all recommended</button>
-            <button id="optimize-btn" class="ghost" type="button" disabled>Optimize the prompt</button>
+
+            <div class="tune-group">
+              <h3 class="tune-title">Measure</h3>
+              <p class="tune-lead">Score the prompt as it stands, or every recommended method side by side.</p>
+
+              <div class="meta estimate" id="measure-estimate"></div>
+              <button id="bench-btn" type="button" disabled>Benchmark this prompt</button>
+              <button id="compare-btn" class="ghost" type="button" disabled>Compare all recommended</button>
+            </div>
+
+            <div class="tune-group">
+              <h3 class="tune-title">Improve</h3>
+              <p class="tune-lead">Rewrite the prompt, score every version, keep the best one.</p>
+
+              <label for="rounds">Rounds</label>
+              <input id="rounds" type="number" value="2" min="1" max="6">
+              <p class="field-hint">Each round after the first writes three more versions and scores them all.</p>
+
+              <label for="backend">How to search</label>
+              <select id="backend"></select>
+
+              <div class="meta estimate" id="optimize-estimate"></div>
+              <button id="optimize-btn" type="button" disabled>Optimize the prompt</button>
+            </div>
+
             <div class="progress" id="progress"></div>
           </div>
         </details>
@@ -436,12 +512,14 @@ const state = {
   task:null, recs:[], chosen:null, program:null, tab:'prompt', lastResultTab:'prompt', report:null,
   comparison:null, optimization:null, inputSource:'task',
   techniqueCatalog:new Map(), catalogStatus:'loading', catalogError:'', copyPayloads:new Map(),
-  techniqueExamples:new Map(),
+  datasetSizes:new Map(), hub:null,
+  techniqueExamples:new Map(), graderHelp:{},
+  installed:{ engine:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
-  openLogs:new Set(), logsInitialized:false,
+  openLogs:new Set(), logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
   settings:{
     engine:{provider:'ollama', model_id:'', base_url:'', api_key:''},
-    evaluation:{provider:'ollama', model_id:'llama3.2:3b', base_url:'', api_key:'', model_class:'small', capabilities:['structured_output','system_messages']}
+    evaluation:{provider:'ollama', model_id:'llama3.2:3b', base_url:'', api_key:'', model_class:'small', capabilities:['structured_output','system_messages'], input_cost_per_million_usd:'', output_cost_per_million_usd:''}
   }
 };
 
@@ -457,6 +535,8 @@ function modelProfile() {
   };
   if (setting.base_url.trim()) profile.base_url = setting.base_url.trim();
   if (setting.api_key) profile.api_key = setting.api_key;
+  if (setting.input_cost_per_million_usd !== '') profile.input_cost_per_million_usd = Number(setting.input_cost_per_million_usd);
+  if (setting.output_cost_per_million_usd !== '') profile.output_cost_per_million_usd = Number(setting.output_cost_per_million_usd);
   if (setting.provider === 'custom' && !profile.base_url) throw new Error('Base URL is required for a custom evaluation provider.');
   return profile;
 }
@@ -496,14 +576,61 @@ async function apiError(res) {
 async function loadDatasets(selectedName) {
   try {
     const list = await api('/v1/datasets');
+    state.datasetSizes = new Map(list.map(d => [d.name, d.examples]));
     $('dataset').innerHTML = list.map(d => `<option value="${esc(d.name)}">${esc(d.name)} — ${d.examples} examples</option>`).join('');
     if (selectedName && list.some(d => d.name === selectedName)) $('dataset').value = selectedName;
+    updateEstimates();
     return list;
   } catch (e) {
+    state.datasetSizes = new Map();
     $('dataset').innerHTML = '<option>no datasets</option>';
+    updateEstimates();
     if (selectedName) throw e;
     return [];
   }
+}
+
+// The split is computed server-side with Python's round(), which sends halves
+// to the even neighbour; Math.round sends them up. Match it so the example
+// counts shown here are the ones the optimizer will actually use.
+function roundHalfToEven(value) {
+  const nearest = Math.round(value);
+  if (Math.abs(value - Math.trunc(value)) !== 0.5) return nearest;
+  return nearest % 2 === 0 ? nearest : nearest - 1;
+}
+
+// What a click costs is invisible until it is running, and the numbers here
+// reach the thousands. Spell them out while the fields can still be changed.
+function updateEstimates() {
+  const examples = state.datasetSizes.get($('dataset').value);
+  const measure = $('measure-estimate');
+  const optimize = $('optimize-estimate');
+  if (!Number.isFinite(examples) || examples < 1) {
+    measure.textContent = optimize.textContent = '';
+    return;
+  }
+  const count = (value, word) => `<strong>${plural(value, word)}</strong>`;
+  const repeats = Math.max(1, Number($('repeats').value) || 1);
+  const rounds = Math.max(1, Number($('rounds').value) || 1);
+  const perCall = Number(state.program && state.program.expected_calls) || 1;
+  const calls = perCall > 1 ? `, ${perCall} model calls each` : '';
+
+  const single = examples * repeats;
+  const methods = state.recs.length;
+  measure.innerHTML = `Benchmark: ${count(single, 'run')}${calls}.`
+    + (methods > 1 ? ` Compare all ${methods}: ${count(single * methods, 'run')}.` : '');
+
+  // Mirrors the optimizer defaults: a 34% held-out split, baseline plus one
+  // bootstrapped candidate scored in round 1, three fresh ones per later round,
+  // then baseline and winner re-scored on the held-out part.
+  const holdout = Math.max(1, roundHalfToEven(examples * 0.34));
+  const train = Math.max(1, examples - holdout);
+  const versions = 2 + 3 * (rounds - 1);
+  const runs = versions * train * repeats + 2 * holdout * repeats;
+  optimize.innerHTML = `Optimize: about ${count(runs, 'run')}${calls}`
+    + ` — up to ${versions} versions over ${plural(train, 'training example')},`
+    + ` then baseline and winner on ${plural(holdout, 'held-out example')}.`
+    + ' Writing each version costs one more call to the prompt engine.';
 }
 
 // Uploaded datasets enter the same named-dataset path used by every measure
@@ -547,14 +674,189 @@ $('upload-btn').addEventListener('click', async () => {
   }
 });
 
+// ---- finding examples on the Hugging Face Hub ------------------------------
+// Three deliberate clicks: search, open a candidate, import it. Nothing is
+// fetched or selected on the user's behalf, because the Hub's answer to a short
+// query is often wrong and only the person who wrote the task can tell.
+function hubMessage(text, kind) {
+  const node = $('hub-status');
+  node.textContent = text;
+  node.className = 'upload-status' + (kind ? ` ${kind}` : '');
+}
+
+function hubNumber(value) {
+  return Number(value || 0).toLocaleString('en-US');
+}
+
+$('hub-btn').addEventListener('click', async () => {
+  const description = $('description').value.trim();
+  if (!description) {
+    hubMessage('Describe the task above first — the search is built from your words.', 'error-text');
+    $('description').focus();
+    return;
+  }
+  const btn = $('hub-btn');
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+  btn.setAttribute('aria-busy', 'true');
+  hubMessage('Asking the Hugging Face Hub…');
+  $('hub-results').innerHTML = '';
+  try {
+    const found = await api('/v1/datasets/hub/search', {
+      description,
+      // Known only after a prompt exists; the search works without it, just wider.
+      task_type: (state.task && state.task.task_type) || null,
+      engine_model: engineProfile()
+    });
+    state.hub = { ...found, open:null, preview:null };
+    hubMessage(found.candidates.length
+      ? `${plural(found.candidates.length, 'candidate')} — check that the examples look like your inputs before importing.`
+      : 'Nothing matched. Try naming the material in English, or upload your own examples.');
+    renderHubResults();
+  } catch (e) {
+    hubMessage(e.message, 'error-text');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Search Hugging Face';
+    btn.removeAttribute('aria-busy');
+  }
+});
+
+function renderHubResults() {
+  const node = $('hub-results');
+  if (!state.hub || !state.hub.candidates.length) { node.innerHTML = ''; return; }
+  const { queries, source, candidates, open, notes } = state.hub;
+  const how = source === 'engine' ? 'written by the prompt engine' : 'taken from your wording';
+  // Above the cards: a list that answers nothing the user asked still looks
+  // like six good datasets, and the cards themselves cannot say so.
+  node.innerHTML = (notes || []).map(note => `<div class="warning">${esc(note)}</div>`).join('')
+    + `<div class="hub-queries">Searched for ${queries.map(q => `<code>${esc(q)}</code>`).join(', ')} — ${how}.</div>`
+    + candidates.map(item => hubCard(item, item.dataset === open)).join('');
+  node.querySelectorAll('.hub-pick').forEach(button => {
+    button.addEventListener('click', () => openHubCandidate(button.dataset.dataset));
+  });
+  wireHubDetail();
+}
+
+function hubCard(item, open) {
+  const facts = [
+    `${hubNumber(item.downloads)} downloads`,
+    item.likes ? `${hubNumber(item.likes)} likes` : '',
+    item.size_category,
+    ...item.task_categories.slice(0, 2)
+  ].filter(Boolean);
+  return `<div class="hub-card${open ? ' open' : ''}">
+    <span class="hub-name">${esc(item.dataset)}</span>
+    <div class="hub-facts">${facts.map(esc).join(' · ')}</div>
+    ${item.summary ? `<p class="hub-summary">${esc(item.summary)}</p>` : ''}
+    <a class="hub-link" href="${esc(item.url)}" target="_blank" rel="noreferrer noopener">Open on huggingface.co ↗</a><br>
+    <button class="ghost hub-pick" type="button" data-dataset="${esc(item.dataset)}">${open ? 'Hide columns' : 'Look at the columns'}</button>
+    ${open ? hubDetail() : ''}
+  </div>`;
+}
+
+async function openHubCandidate(dataset) {
+  if (state.hub.open === dataset) {
+    state.hub.open = state.hub.preview = null;
+    renderHubResults();
+    return;
+  }
+  state.hub.open = dataset;
+  state.hub.preview = null;
+  renderHubResults();
+  hubMessage(`Reading the columns of ${dataset}…`);
+  try {
+    state.hub.preview = await api(`/v1/datasets/hub/preview?dataset=${encodeURIComponent(dataset)}`);
+    hubMessage('');
+  } catch (e) {
+    state.hub.open = null;
+    hubMessage(e.message, 'error-text');
+  }
+  renderHubResults();
+}
+
+function hubDetail() {
+  const preview = state.hub.preview;
+  if (!preview) return '<div class="hub-detail meta">Reading its columns…</div>';
+  const options = (values, selected) => values
+    .map(value => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(value)}</option>`).join('');
+  const columns = preview.columns.map(column => column.name);
+  const sample = preview.rows[0] || {};
+  const rowText = Object.entries(sample)
+    .map(([key, value]) => `${key}: ${String(value === null ? '' : value).slice(0, 220)}`)
+    .join('\n');
+  return `<div class="hub-detail">
+    <div class="hub-row">
+      <div><label for="hub-config">Config</label><select id="hub-config">${options(preview.configs, preview.config)}</select></div>
+      <div><label for="hub-split">Split</label><select id="hub-split">${options(preview.splits, preview.split)}</select></div>
+    </div>
+    <div class="hub-row">
+      <div><label for="hub-input">Column to send</label><select id="hub-input">${options(columns, preview.suggested_input)}</select></div>
+      <div><label for="hub-expected">Right answer</label><select id="hub-expected"><option value="">— none —</option>${options(columns, preview.suggested_expected)}</select></div>
+    </div>
+    ${rowText ? `<div class="hub-sample">${esc(rowText)}</div>` : ''}
+    ${preview.notes.map(note => `<p class="hub-note">${esc(note)}</p>`).join('')}
+    <label for="hub-limit">How many examples to import</label>
+    <input id="hub-limit" type="number" value="60" min="2" max="500">
+    <button id="hub-import" type="button">Import these examples</button>
+  </div>`;
+}
+
+function wireHubDetail() {
+  const importBtn = $('hub-import');
+  if (!importBtn) return;
+  // Config and split change what the columns are, so re-read them rather than
+  // importing against a preview that describes a different split.
+  ['hub-config', 'hub-split'].forEach(id => $(id).addEventListener('change', async () => {
+    hubMessage('Reading that split…');
+    try {
+      state.hub.preview = await api('/v1/datasets/hub/preview'
+        + `?dataset=${encodeURIComponent(state.hub.open)}`
+        + `&config=${encodeURIComponent($('hub-config').value)}`
+        + `&split=${encodeURIComponent($('hub-split').value)}`);
+      hubMessage('');
+    } catch (e) { hubMessage(e.message, 'error-text'); }
+    renderHubResults();
+  }));
+  importBtn.addEventListener('click', async () => {
+    const preview = state.hub.preview;
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importing…';
+    hubMessage(`Importing rows from ${state.hub.open}…`);
+    try {
+      const imported = await api('/v1/datasets/hub/import', {
+        dataset: state.hub.open,
+        config: $('hub-config').value || preview.config,
+        split: $('hub-split').value || preview.split,
+        input_column: $('hub-input').value,
+        expected_column: $('hub-expected').value || null,
+        limit: Number($('hub-limit').value)
+      });
+      delete datasetCache[imported.name];
+      await loadDatasets(imported.name);
+      state.hub.open = state.hub.preview = null;
+      renderHubResults();
+      const graded = imported.has_expected
+        ? `${imported.has_expected} carry a right answer`
+        : 'none carry a right answer, so quality cannot be scored';
+      const kept = imported.saved_to ? ` Saved to ${imported.saved_to}, so it survives a restart.` : '';
+      hubMessage(`${imported.name} imported — ${plural(imported.examples, 'example')}, ${graded}. Selected for measurement.${kept}`, 'success');
+    } catch (e) {
+      hubMessage(e.message, 'error-text');
+      importBtn.disabled = false;
+      importBtn.textContent = 'Import these examples';
+    }
+  });
+}
+
 // Backends whose dependency is missing are shown but disabled, so the option
 // list explains what is possible rather than failing at click time.
 async function loadBackends() {
   const labels = {
-    'native': 'native — greedy reflective loop',
-    'dspy:mipro': 'DSPy MIPROv2 — Bayesian joint search',
-    'dspy:gepa': 'DSPy GEPA — reflective Pareto evolution',
-    'dspy:bootstrap': 'DSPy BootstrapFewShot — demos only'
+    'native': 'Built in — rewrite, score, keep the winner',
+    'dspy:mipro': 'DSPy MIPROv2 — searches wording and examples together',
+    'dspy:gepa': 'DSPy GEPA — grows several prompts and keeps the best trade-offs',
+    'dspy:bootstrap': 'DSPy BootstrapFewShot — only picks worked examples'
   };
   const options = (ids, dspyOk) => ids.map(id => {
     const ok = !id.startsWith('dspy:') || dspyOk;
@@ -596,6 +898,23 @@ async function loadTechniqueCatalog() {
   }
   refreshMethodBodies();
   if (state.tab === 'techniques') renderDetailPanel('techniques');
+}
+
+// A grader name means nothing to someone reading their first report, so every
+// number is labelled with what it measured. The wording is the server's, shared
+// with the CLI, so the two cannot describe the same number differently.
+async function loadGraderHelp() {
+  try {
+    const capabilities = await api('/v1/capabilities');
+    state.graderHelp = capabilities.grader_help || {};
+  } catch (e) {
+    state.graderHelp = {};
+  }
+  if (state.report) renderDetail();
+}
+
+function graderMeaning(name) {
+  return name ? (state.graderHelp[name] || name) : 'no grader could score this data';
 }
 
 function refreshMethodBodies() {
@@ -885,7 +1204,7 @@ function renderRecommendations(data) {
     renderReadinessNotice();
     chooseTechnique(b.dataset.technique);
   }));
-  $('compare-btn').disabled = data.recommendations.length < 2;
+  refreshActions();
 }
 
 // ---- step 2: validate the method, then have the engine author the prompt ---
@@ -966,15 +1285,14 @@ async function chooseTechnique(id, focusReady = false) {
     button.disabled = current;
     button.setAttribute('aria-current', current ? 'true' : 'false');
   });
-  $('chosen').textContent = `Chosen: ${id}`;
-  $('bench-btn').disabled = false;
-  $('optimize-btn').disabled = false;
+  refreshActions();
   showDetailMessage('prompt', '<div class="empty">The engine is writing your prompt from the selected method…</div>');
   try {
     const compiled = await compileTechnique(id);
     if (compileVersion !== state.compileVersion) return;
     state.program = compiled.program;
     state.tab = 'prompt';
+    updateEstimates();
     renderDetail();
     if (focusReady) {
       const ready = $('ready-title');
@@ -1072,26 +1390,109 @@ function settingsCard(role, title, eyebrow, description) {
     <label for="${prefix}-provider">Provider</label>
     <select id="${prefix}-provider" data-settings-role="${role}" data-field="provider">${providerOptions(setting.provider)}</select>
     <label for="${prefix}-model">Model ID</label>
-    <input id="${prefix}-model" data-settings-role="${role}" data-field="model_id" value="${esc(setting.model_id)}" placeholder="${modelPlaceholder}" spellcheck="false"${role === 'evaluation' ? ' required' : ''}>
+    <input id="${prefix}-model" data-settings-role="${role}" data-field="model_id" value="${esc(setting.model_id)}" placeholder="${modelPlaceholder}" spellcheck="false"${role === 'evaluation' ? ' required' : ''}${setting.provider === 'ollama' ? ` list="${prefix}-installed"` : ''}>
+    ${setting.provider === 'ollama' ? `<datalist id="${prefix}-installed">${installedOptions(role)}</datalist><p class="field-hint" data-installed-hint="${role}">${esc(installedHint(role))}</p>` : ''}
     ${role === 'engine' ? '<p class="field-hint">Leave blank to use the evaluation model for prompt authoring too.</p>' : ''}
     <label for="${prefix}-base-url">Base URL</label>
     <input id="${prefix}-base-url" data-settings-role="${role}" data-field="base_url" value="${esc(setting.base_url)}" placeholder="Provider default" spellcheck="false"${custom ? ' required' : ''} aria-describedby="${prefix}-url-hint">
     <p class="field-hint" id="${prefix}-url-hint">${custom ? 'Required for a custom OpenAI-compatible provider.' : 'Optional. Leave blank to use the provider default.'}</p>
     <label for="${prefix}-api-key">API key</label>
     <input id="${prefix}-api-key" type="password" data-settings-role="${role}" data-field="api_key" value="" autocomplete="off" spellcheck="false" placeholder="Uses environment key when blank">
-    ${role === 'evaluation' ? `<div class="row"><div><label for="${prefix}-class">Model class</label><select id="${prefix}-class" data-settings-role="evaluation" data-field="model_class">${['small','medium','large','reasoning'].map(value => `<option${setting.model_class === value ? ' selected' : ''}>${value}</option>`).join('')}</select></div></div><label>Declared capabilities</label><div class="checks">${checkedCapabilities(setting)}</div>` : ''}
+    ${role === 'evaluation' ? `<div class="row"><div><label for="${prefix}-class">Model class</label><select id="${prefix}-class" data-settings-role="evaluation" data-field="model_class">${['small','medium','large','reasoning'].map(value => `<option${setting.model_class === value ? ' selected' : ''}>${value}</option>`).join('')}</select></div></div>
+      <div class="row"><div><label for="${prefix}-input-price">Input $ / 1M tokens</label><input id="${prefix}-input-price" type="number" min="0" step="0.001" data-settings-role="evaluation" data-field="input_cost_per_million_usd" value="${esc(setting.input_cost_per_million_usd)}" placeholder="Unknown"></div><div><label for="${prefix}-output-price">Output $ / 1M tokens</label><input id="${prefix}-output-price" type="number" min="0" step="0.001" data-settings-role="evaluation" data-field="output_cost_per_million_usd" value="${esc(setting.output_cost_per_million_usd)}" placeholder="Unknown"></div></div>
+      <p class="field-hint">Prices are explicit because provider tariffs change. Blank means cost is unknown, never zero.</p>
+      <label>Declared capabilities</label><div class="checks">${checkedCapabilities(setting)}</div>` : ''}
     <div class="settings-summary"><span><strong>Active</strong> · <code data-settings-summary="${role}">${esc(safeSettingsSummary(role))}</code></span><span class="key-status${setting.api_key ? ' set' : ''}" data-key-status="${role}">${setting.api_key ? 'API key set' : 'No page key'}</span></div>
   </section>`;
 }
 
+// What Ollama actually has, asked of the server rather than typed from memory.
+// A model id is only wrong at the first call of a benchmark, which is after the
+// run has been set up and paid for.
+// Cached per role: the two cards can point at different machines, and a list
+// fetched for one of them is not an answer about the other.
+async function loadInstalledModels(role) {
+  const setting = state.settings[role];
+  const installed = state.installed[role];
+  const url = setting.base_url.trim();
+  if (setting.provider !== 'ollama') return;
+  // Also the loop guard: this ends in a re-render, which asks again.
+  if (installed.url === url && installed.status !== 'idle') return;
+  Object.assign(installed, { status: 'loading', url, error: '' });
+  refreshInstalledHints();
+  try {
+    const query = url ? `?base_url=${encodeURIComponent(url)}` : '';
+    installed.models = await api(`/v1/providers/ollama/models${query}`);
+    installed.status = 'ready';
+  } catch (e) {
+    installed.models = [];
+    installed.status = 'error';
+    installed.error = e.message;
+  }
+  refreshInstalledHints();
+}
+
+function installedOptions(role) {
+  return state.installed[role].models.map(item => {
+    // A cloud model's entry is a few hundred bytes of manifest, not weights, so
+    // anything that would render as "0.0 GB" is a stub and says nothing.
+    const gigabytes = item.size_bytes / 1e9;
+    const facts = [item.parameter_size, gigabytes >= 0.05 ? `${gigabytes.toFixed(1)} GB` : '']
+      .filter(Boolean).join(' · ');
+    // The label sits beside the value in the dropdown, so it carries only what
+    // the value does not already say.
+    return `<option value="${esc(item.model_id)}"${facts ? ` label="${esc(facts)}"` : ''}>`;
+  }).join('');
+}
+
+function installedHint(role) {
+  const { status, models, error } = state.installed[role];
+  if (status === 'loading') return 'Asking Ollama which models it has…';
+  if (status === 'error') return error;
+  if (status === 'ready') return models.length
+    ? `${models.length} models on this Ollama — start typing to pick one, or write any id.`
+    : 'This Ollama has no models yet. Pull one with `ollama pull llama3.2:3b`.';
+  return '';
+}
+
+function refreshInstalledHints() {
+  document.querySelectorAll('[data-installed-hint]').forEach(node => {
+    node.textContent = installedHint(node.dataset.installedHint);
+  });
+  ['engine', 'evaluation'].forEach(role => {
+    const list = document.getElementById(`settings-${role}-installed`);
+    if (list) list.innerHTML = installedOptions(role);
+  });
+}
+
 function renderSettings() {
-  return `<h2>Settings</h2>
+  const profileOptions = state.profiles.map(item => `<option value="${esc(item.id)}">${esc(item.name)} · ${esc(item.profile.provider)}/${esc(item.profile.model_id)}</option>`).join('');
+  return `<h2>LLM</h2>
     <p class="settings-intro">Keep prompt authorship separate from evaluation. The prompt engine writes the final prompt; the evaluation model runs and measures it during benchmarks, comparisons, and optimization.</p>
     <div class="settings-grid">
       ${settingsCard('engine', 'Prompt engine', 'Writes the prompt', 'Authors the final prompt from the selected technique. It can be a stronger model than the one under evaluation.')}
       ${settingsCard('evaluation', 'Evaluation model', 'Runs the tests', 'Executes prompts and provides the measurements used by benchmark, comparison, and optimization.')}
     </div>
+    <section class="settings-card" style="margin-top:18px">
+      <div class="settings-role">Reusable connections</div><h3>Saved evaluation profiles</h3>
+      <p class="settings-description">Save endpoint, model, capabilities, and prices. API keys are never written to disk.</p>
+      <label for="profile-name">Profile name</label><input id="profile-name" placeholder="Production model">
+      <div class="row"><button type="button" class="ghost profile-save">Save current</button><button type="button" class="ghost provider-check">Check connection</button></div>
+      <label for="profile-select">Saved profiles</label><select id="profile-select"><option value="">Choose a profile</option>${profileOptions}</select>
+      <div class="row"><button type="button" class="ghost profile-load">Load selected</button><button type="button" class="ghost profile-delete">Delete selected</button></div>
+      <div class="upload-status" data-profile-status role="status" aria-live="polite"></div>
+    </section>
     <aside class="settings-security"><strong>API key safety:</strong> keys stay only in this page's current in-memory state. They are never saved to local or session storage, and are sent only to the local Prompt Playoff backend when it makes provider calls.</aside>`;
+}
+
+async function loadProfiles() {
+  try { state.profiles = await api('/v1/model-profiles'); }
+  catch { state.profiles = []; }
+}
+
+function savedProfileSetting(item) {
+  const p = item.profile;
+  return {provider:p.provider, model_id:p.model_id, base_url:p.base_url || '', api_key:'', model_class:p.model_class, capabilities:p.capabilities || [], input_cost_per_million_usd:p.input_cost_per_million_usd ?? '', output_cost_per_million_usd:p.output_cost_per_million_usd ?? ''};
 }
 
 function hydrateSettingsSecrets() {
@@ -1140,10 +1541,18 @@ function updateSetting(event) {
   }
   refreshSettingsIndicators(role);
   if (role === 'evaluation' && !state.settings.engine.model_id.trim()) refreshSettingsIndicators('engine');
+  // Switching provider changes which fields exist, so the card is rebuilt; the
+  // rebuild is also what asks the new provider for its models.
+  if (target.dataset.field === 'provider') renderDetailPanel('settings');
 }
 
 document.addEventListener('input', updateSetting);
 document.addEventListener('change', updateSetting);
+// A base URL is asked about once the user has finished typing it, not per keystroke.
+document.addEventListener('change', event => {
+  const field = event.target.closest('[data-settings-role][data-field="base_url"]');
+  if (field) loadInstalledModels(field.dataset.settingsRole);
+});
 const detailTabs = [
     ['prompt', 'Authored prompt'],
     ['report', 'Benchmark'],
@@ -1158,7 +1567,7 @@ document.querySelectorAll('[data-global-tab]').forEach(button =>
     if (tab === 'selector' || state.tab === tab) selectTab(state.lastResultTab);
     else selectTab(tab);
   }));
-const detailPanels = ['prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'settings', 'help', 'evaluation'];
+const detailPanels = ['prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation'];
 const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluation'] };
 
 function detailBody(tab) {
@@ -1169,6 +1578,7 @@ function detailBody(tab) {
   if (tab === 'optimization' && state.optimization) body = renderOptimization(state.optimization);
   if (tab === 'techniques') body = renderTechniqueCatalog();
   if (tab === 'logs') body = renderLogs();
+  if (tab === 'history') body = renderHistory();
   if (tab === 'settings') body = renderSettings();
   if (docPages[tab]) {
     const [src, title] = docPages[tab];
@@ -1209,7 +1619,11 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   if (!panel) return;
   panel.innerHTML = body;
   panel.dataset.rendered = 'true';
-  if (tab === 'settings') hydrateSettingsSecrets();
+  if (tab === 'settings') {
+    hydrateSettingsSecrets();
+    ['engine', 'evaluation'].forEach(loadInstalledModels);
+    wireProfileControls(panel);
+  }
   if (docPages[tab]) {
     const frame = panel.querySelector('.doc-frame');
     if (frame) frame.addEventListener('load', () => fitDocFrame(frame));
@@ -1222,12 +1636,13 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
       else state.openLogs.delete(item.dataset.jobId);
     }));
   }
+  if (tab === 'history') wireHistoryControls(panel);
 }
 
 function activateDetailTab() {
   ensureDetailShell();
   if (resultTabs.includes(state.tab)) state.lastResultTab = state.tab;
-  const globalView = ['techniques', 'logs', 'settings', 'help', 'evaluation'].includes(state.tab);
+  const globalView = ['techniques', 'logs', 'history', 'settings', 'help', 'evaluation'].includes(state.tab);
   const tabsBar = $('detail').querySelector('.tabs');
   if (tabsBar) tabsBar.hidden = globalView;
   // Recommendations belong to the authored prompt, not to the measurements taken on it.
@@ -1271,6 +1686,36 @@ function selectTab(tab) {
   if (panel && panel.dataset.rendered !== 'true') renderDetailPanel(tab);
   activateDetailTab();
   if (tab === 'logs') refreshLogs();
+  if (tab === 'history') refreshHistory();
+}
+
+function wireProfileControls(panel) {
+  const status = panel.querySelector('[data-profile-status]');
+  panel.querySelector('.profile-save')?.addEventListener('click', async () => {
+    try {
+      const name = panel.querySelector('#profile-name').value.trim();
+      if (!name) throw new Error('Enter a profile name.');
+      await api('/v1/model-profiles', {name, profile:modelProfile()});
+      await loadProfiles(); renderDetailPanel('settings');
+    } catch (e) { status.textContent = e.message; }
+  });
+  panel.querySelector('.profile-load')?.addEventListener('click', () => {
+    const item = state.profiles.find(p => p.id === panel.querySelector('#profile-select').value);
+    if (!item) { status.textContent = 'Choose a saved profile.'; return; }
+    state.settings.evaluation = savedProfileSetting(item); state.task = null; renderDetailPanel('settings');
+  });
+  panel.querySelector('.profile-delete')?.addEventListener('click', async () => {
+    const id = panel.querySelector('#profile-select').value;
+    if (!id) { status.textContent = 'Choose a saved profile.'; return; }
+    await api(`/v1/model-profiles/${encodeURIComponent(id)}`, {}, 'DELETE');
+    await loadProfiles(); renderDetailPanel('settings');
+  });
+  panel.querySelector('.provider-check')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true; status.textContent = 'Checking endpoint, credentials, and model…';
+    try { const result = await api('/v1/providers/check', modelProfile()); status.textContent = `Connected in ${result.latency_seconds.toFixed(2)}s · ${result.detail}`; }
+    catch (e) { status.textContent = e.message; }
+    finally { event.currentTarget.disabled = false; }
+  });
 }
 
 async function refreshLogs(manual=false) {
@@ -1328,6 +1773,65 @@ function renderLogs() {
   return toolbar + jobs;
 }
 
+async function refreshHistory() {
+  try { state.experiments = await api('/v1/experiments'); }
+  catch (e) { state.experiments = []; state.experimentComparison = {error:e.message}; }
+  if (state.tab === 'history') renderDetailPanel('history');
+}
+
+function experimentMetric(record) {
+  return record.metrics[record.winner] || Object.values(record.metrics)[0] || null;
+}
+
+function historyChart(records) {
+  const points = records.slice().reverse().map((record, index, all) => {
+    const metric = experimentMetric(record); const value = metric ? metric.quality : 0;
+    const x = all.length === 1 ? 300 : 36 + index * 528 / (all.length - 1);
+    const y = 120 - Math.max(0, Math.min(1, value)) * 90;
+    return {x, y, value, version:record.version};
+  });
+  if (!points.length) return '';
+  return `<svg class="history-chart" viewBox="0 0 600 140" role="img" aria-label="Quality history">
+    <polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}"></polyline>
+    ${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="5"><title>v${p.version}: ${p.value.toFixed(3)}</title></circle>`).join('')}
+    <text x="10" y="18">quality 1.0</text><text x="10" y="132">0.0</text>
+  </svg>`;
+}
+
+function historyDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString([], {month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+
+function renderExperimentComparison(result) {
+  if (!result) return '';
+  if (result.error) return `<div class="error">${esc(result.error)}</div>`;
+  const rows = result.deltas.map(item => `<tr><td>${esc(item.metric)}</td><td>${item.before == null ? 'unknown' : Number(item.before).toFixed(5)}</td><td>${item.after == null ? 'unknown' : Number(item.after).toFixed(5)}</td><td class="delta ${item.degraded === false ? 'up' : item.degraded === true ? 'down' : ''}">${item.delta == null ? '—' : `${item.delta > 0 ? '+' : ''}${Number(item.delta).toFixed(5)}`}</td></tr>`).join('');
+  return `<div class="stage-title">Version comparison · ${esc(result.technique_id)}</div><table><thead><tr><th>Metric</th><th>Before</th><th>After</th><th>Delta</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderHistory() {
+  if (!state.experiments.length) return `<h2>Experiment history</h2><div class="empty">No recorded benchmarks, comparisons, or optimizations yet.</div>`;
+  const options = state.experiments.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');
+  const rows = state.experiments.map(item => { const m = experimentMetric(item); return `<tr><td>v${item.version}</td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${esc(item.dataset)}</td><td>${m ? m.quality.toFixed(3) : '—'}</td><td>${m ? m.mean_latency_seconds.toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${m.mean_cost_usd.toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
+  return `<h2>Experiment history</h2><p class="meta">Versioned aggregate measurements; prompts and raw model answers are not stored here.</p>
+    ${historyChart(state.experiments)}
+    <div class="row"><div><label for="history-before">Before</label><select id="history-before">${options}</select></div><div><label for="history-after">After</label><select id="history-after">${options}</select></div></div>
+    <button type="button" class="ghost history-compare">Compare versions</button>
+    ${renderExperimentComparison(state.experimentComparison)}
+    <table><thead><tr><th>Version</th><th>Recorded</th><th>Kind</th><th>Model</th><th>Dataset</th><th>Quality</th><th>Latency s</th><th>Mean cost</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function wireHistoryControls(panel) {
+  const before = panel.querySelector('#history-before'); const after = panel.querySelector('#history-after');
+  if (before && state.experiments[1]) before.value = state.experiments[1].id;
+  panel.querySelector('.history-compare')?.addEventListener('click', async () => {
+    try { state.experimentComparison = await api('/v1/experiments/compare', {before_id:before.value, after_id:after.value}); }
+    catch (e) { state.experimentComparison = {error:e.message}; }
+    renderDetailPanel('history');
+  });
+}
+
 // One prompt per screen: the text is the product, so everything around it stays
 // quiet. The only accent on this view is the copy button that gets it out.
 function renderProgram(p) {
@@ -1377,7 +1881,7 @@ function renderProgram(p) {
         <h2 class="ready-heading" id="ready-title" tabindex="-1">${readyForTask ? 'Your prompt' : 'Your prompt template'}</h2>
         <p class="prompt-lead">${lead}${esc(callLine)}</p>
       </div>
-      <button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button>
+      <div class="export-actions"><button type="button" class="copy-btn" data-runtime-export="python">Export Python</button><button type="button" class="copy-btn" data-runtime-export="typescript">Export TypeScript</button><button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button></div>
     </div>
     <div class="copy-status" data-copy-status="compiled" role="status" aria-live="polite"></div>
     ${stages}
@@ -1406,8 +1910,37 @@ function showProgress(p) {
   else if (p.phase) $('progress').textContent = `${p.phase} · round ${p.round || '-'} · ${p.candidate || p.generated + ' candidates'}`;
 }
 
+function techniqueTitle(id) {
+  const rec = state.recs.find(item => item.technique_id === id);
+  if (rec) return rec.title;
+  const entry = state.techniqueCatalog.get(id);
+  return (entry && entry.title) || id;
+}
+
+// A greyed-out button has to say why it is grey. The shared line covers the
+// gate both halves depend on; each button carries its own reason on hover.
+function setAction(id, disabled, reason) {
+  const button = $(id);
+  button.disabled = disabled;
+  if (disabled && reason) button.title = reason;
+  else button.removeAttribute('title');
+}
+
+function refreshActions(running = false) {
+  const noMethod = 'Create a prompt above first — this measures the method you picked.';
+  const inFlight = 'A run is already in progress.';
+  setAction('bench-btn', running || !state.chosen, running ? inFlight : noMethod);
+  setAction('optimize-btn', running || !state.chosen, running ? inFlight : noMethod);
+  setAction('compare-btn', running || state.recs.length < 2,
+    running ? inFlight : 'Comparing needs at least two recommended methods.');
+  $('chosen').innerHTML = state.chosen
+    ? `Ready to measure <strong>${esc(techniqueTitle(state.chosen))}</strong>.`
+    : 'Create a prompt first, then pick a method — both steps below measure the method you picked.';
+  updateEstimates();
+}
+
 function busy(on) {
-  ['bench-btn', 'compare-btn', 'optimize-btn'].forEach(id => { $(id).disabled = on || (id !== 'compare-btn' && !state.chosen); });
+  refreshActions(on);
   if (!on) $('progress').textContent = '';
 }
 
@@ -1462,24 +1995,26 @@ function delta(value, betterWhenLower) {
 function renderReport(r) {
   const c = r.scorecard;
   const rows = [
-    ['quality (' + (c.quality_grader || 'n/a') + ')', c.quality, r.declared.quality],
+    ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality],
     ['reliability', c.reliability, r.declared.reliability],
     ['contract pass rate', c.contract_pass_rate, null],
     ['stability across repeats', c.stability, null],
     ['mean latency (s)', c.mean_latency_seconds, null],
     ['p95 latency (s)', c.p95_latency_seconds, null],
     ['mean tokens', c.mean_total_tokens, null],
+    ['mean cost (USD)', c.mean_cost_usd, null],
+    ['total cost (USD)', c.total_cost_usd, null],
     ['mean calls', c.mean_calls, null],
     ['failures', c.failures, null]
-  ].map(([label, measured, declared]) => `<tr><td>${esc(label)}</td><td>${Number(measured).toFixed(3)}</td><td>${declared == null ? '—' : Number(declared).toFixed(3)}</td></tr>`).join('');
-  const graders = Object.entries(c.grades).map(([k, v]) => `<tr><td>${esc(k)}${k === c.quality_grader ? ' <span class="pill">headline</span>' : ''}</td><td>${v.toFixed(3)}</td><td>—</td></tr>`).join('');
+  ].map(([label, measured, declared]) => `<tr><td>${esc(label)}</td><td>${measured == null ? 'unknown' : Number(measured).toFixed(6)}</td><td>${declared == null ? '—' : Number(declared).toFixed(3)}</td></tr>`).join('');
+  const graders = Object.entries(c.grades).map(([k, v]) => `<tr><td>${esc(k)}${k === c.quality_grader ? ' <span class="pill">headline</span>' : ''}</td><td class="what">${esc(graderMeaning(k))}</td><td>${v.toFixed(3)}</td></tr>`).join('');
   const worst = [...r.runs].sort((a, b) => Math.min(...Object.values(a.grades), 1) - Math.min(...Object.values(b.grades), 1)).slice(0, 3)
     .map(run => `<div class="meta"><strong>${esc(run.example_id)}</strong> ${esc(JSON.stringify(run.grades))} ${esc(run.error || run.schema_errors.join('; '))}</div><pre>${esc(run.output.slice(0, 400))}</pre>`).join('');
   return `<h2>Measured on ${esc(r.model_id)}</h2>
     <div class="meta">${esc(r.technique_id)} · ${esc(r.dataset)} · ${r.examples} examples × ${r.repeats} repeats · ${esc(r.strategy)}</div>
     <table><thead><tr><th>Metric</th><th>Measured</th><th>Declared</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="stage-title">graders</div>
-    <table><tbody>${graders}</tbody></table>
+    <table><thead><tr><th>Grader</th><th class="what">What it measures</th><th>Mean</th></tr></thead><tbody>${graders}</tbody></table>
     ${r.prior != null ? `<div class="warning">Registry prior was ${r.prior.toFixed(2)}; measured quality is ${c.quality.toFixed(2)}. Ranking now uses the measured value.</div>` : ''}
     <div class="stage-title">weakest examples</div>${worst}`;
 }
@@ -1491,11 +2026,11 @@ function renderComparison(c) {
     <td>${e.scorecard.quality.toFixed(3)}</td>
     <td>${e.scorecard.reliability.toFixed(3)}</td>
     <td>${e.scorecard.mean_latency_seconds.toFixed(2)}</td>
-    <td>${e.scorecard.mean_total_tokens.toFixed(0)}</td>
+    <td>${e.scorecard.mean_total_tokens.toFixed(0)}</td><td>${e.scorecard.mean_cost_usd == null ? 'unknown' : `$${e.scorecard.mean_cost_usd.toFixed(6)}`}</td>
     <td>${e.scorecard.mean_calls.toFixed(1)}</td></tr>`).join('');
   return `<h2>Measured comparison</h2>
     <div class="meta">${esc(c.dataset)} on ${esc(c.model_id)} · priorities q${c.priorities.quality.toFixed(2)} r${c.priorities.reliability.toFixed(2)} l${c.priorities.latency.toFixed(2)} t${c.priorities.token_cost.toFixed(2)}</div>
-    <table><thead><tr><th>Technique</th><th>Weighted</th><th>Quality</th><th>Reliability</th><th>Latency s</th><th>Tokens</th><th>Calls</th></tr></thead><tbody>${rows}</tbody></table>
+    <table><thead><tr><th>Technique</th><th>Weighted</th><th>Quality</th><th>Reliability</th><th>Latency s</th><th>Tokens</th><th>Cost</th><th>Calls</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="warning">${esc(c.note)}</div>`;
 }
 
@@ -1505,8 +2040,9 @@ function renderOptimization(o) {
     ['quality', b.quality, w.quality, false],
     ['reliability', b.reliability, w.reliability, false],
     ['mean tokens', b.mean_total_tokens, w.mean_total_tokens, true],
-    ['mean latency (s)', b.mean_latency_seconds, w.mean_latency_seconds, true]
-  ].map(([label, base, best, lower]) => `<tr><td>${esc(label)}</td><td>${base.toFixed(3)}</td><td>${best.toFixed(3)}</td>${delta(best - base, lower)}</tr>`).join('');
+    ['mean latency (s)', b.mean_latency_seconds, w.mean_latency_seconds, true],
+    ['mean cost (USD)', b.mean_cost_usd, w.mean_cost_usd, true]
+  ].map(([label, base, best, lower]) => `<tr><td>${esc(label)}</td><td>${base == null ? 'unknown' : base.toFixed(6)}</td><td>${best == null ? 'unknown' : best.toFixed(6)}</td>${base == null || best == null ? '<td>—</td>' : delta(best - base, lower)}</tr>`).join('');
   const rounds = o.rounds.map(r => `<div class="meta">round ${r.round}: ${r.evaluated.map(c => `${esc(c.id)} ${c.score != null ? c.score.toFixed(3) : '—'}`).join(' · ')}</div>`).join('');
   const stages = (o.compiled_prompt.stages || []).map(s => `<div class="stage-title">optimized — stage ${esc(s.stage)}</div><pre>${esc(s.user)}</pre>`).join('');
   return `<h2>Optimized against measured results</h2>
@@ -1540,6 +2076,12 @@ function copyStatusNode(key) {
   return [...document.querySelectorAll('[data-copy-status]')].find(node => node.dataset.copyStatus === statusKey);
 }
 
+function downloadText(filename, content, type='text/plain') {
+  const url = URL.createObjectURL(new Blob([content], {type}));
+  const link = document.createElement('a'); link.href = url; link.download = filename;
+  document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+}
+
 // Delegation keeps copy and retry controls functional after recommendation,
 // disclosure, tab, and source-toggle rerenders.
 document.addEventListener('click', async event => {
@@ -1548,6 +2090,23 @@ document.addEventListener('click', async event => {
     retry.disabled = true;
     retry.textContent = 'Loading…';
     await loadTechniqueCatalog();
+    return;
+  }
+
+  const runtimeExport = event.target.closest('[data-runtime-export]');
+  if (runtimeExport) {
+    runtimeExport.disabled = true;
+    const original = runtimeExport.textContent;
+    try {
+      const bundle = await api('/v1/export/runtime', {
+        task:await taskProfile(), technique_id:state.program.technique_id,
+        language:runtimeExport.dataset.runtimeExport
+      });
+      downloadText(bundle.filename, bundle.content);
+      window.setTimeout(() => downloadText(bundle.config_filename, bundle.config, 'application/json'), 150);
+      runtimeExport.textContent = 'Exported';
+    } catch (e) { runtimeExport.textContent = 'Export failed'; runtimeExport.title = e.message; }
+    finally { window.setTimeout(() => { runtimeExport.disabled = false; runtimeExport.textContent = original; }, 1800); }
     return;
   }
 
@@ -1581,9 +2140,17 @@ document.addEventListener('click', async event => {
   }
 });
 
+['dataset', 'repeats', 'rounds'].forEach(id => {
+  $(id).addEventListener('input', updateEstimates);
+  $(id).addEventListener('change', updateEstimates);
+});
+
 loadTechniqueCatalog();
+loadGraderHelp();
 loadDatasets();
 loadBackends();
+loadProfiles();
+refreshActions();
 renderDetail();
 </script>
 </body>
