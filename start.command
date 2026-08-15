@@ -31,13 +31,13 @@ fail() {
 }
 
 banner() {
-    local i art hue
+    local i art hue base
 
-    # Grey, stepping down from light to deep across both words, so the logo
-    # reads as a single mark rather than two coloured ones. The steps stay in
-    # the middle of the greyscale: a Terminal window is white by default and
-    # black by preference, and only the middle is legible on both. The glyphs
-    # are heavy already, so no bold on top.
+    # Two words, two colours: PROMPT in dark blue, PLAYOFF in dark gold, each
+    # stepping down from light to deep so the word reads as one mark. The steps
+    # stay mid-range: a Terminal window is white by default and black by
+    # preference, and only the middle is legible on both. The glyphs are heavy
+    # already, so no bold on top.
     art=(
         '██████╗  ██████╗   ██████╗  ███╗   ███╗ ██████╗  ████████╗'
         '██╔══██╗ ██╔══██╗ ██╔═══██╗ ████╗ ████║ ██╔══██╗ ╚══██╔══╝'
@@ -53,14 +53,17 @@ banner() {
         '██║      ███████╗ ██║  ██║    ██║    ╚██████╔╝ ██║      ██║'
         '╚═╝      ╚══════╝ ╚═╝  ╚═╝    ╚═╝     ╚═════╝  ╚═╝      ╚═╝'
     )
-    hue=(250 250 246 246 243 243 0 246 246 243 243 240 240)
+    hue=(27 27 26 26 25 25 0 178 178 172 172 136 136)
+    # The same two colours in the eight every terminal has, for the ones that
+    # cannot do 256.
+    base=(34 34 34 34 34 34 0 33 33 33 33 33 33)
 
     printf '\n\n\n'
     for i in $(seq 0 $(( ${#art[@]} - 1 ))); do
         if [ "$COLORS" -ge 256 ]; then
             printf '\033[38;5;%sm  %s%s\n' "${hue[$i]}" "${art[$i]}" "$RESET"
         else
-            printf '  %s\n' "${art[$i]}"
+            printf '\033[%sm  %s%s\n' "${base[$i]}" "${art[$i]}" "$RESET"
         fi
     done
     printf '\n\n'
