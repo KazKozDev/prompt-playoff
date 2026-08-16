@@ -1,0 +1,109 @@
+id: reasoning.instance-adaptive-cot
+version: 1.0.0
+title: Instance-adaptive zero-shot CoT
+family: adaptive-reasoning
+description: Judge what this particular instance needs before reasoning, and spend steps only where the
+  instance warrants them.
+strong_tasks:
+- classification
+- coding
+acceptable_tasks:
+- research
+- structured_extraction
+avoid_tasks:
+- creative_writing
+suits:
+- computational
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.81
+  reliability: 0.82
+  latency_efficiency: 0.76
+  token_efficiency: 0.72
+  simplicity: 0.78
+recipe:
+  system: Match the reasoning to the instance. A trivial instance answered at length is a worse answer.
+  instructions:
+  - Judge what this instance requires before reasoning.
+  - Reason only where the instance requires it.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'A fixed amount of reasoning is wrong for most instances — it pads the easy ones and cuts the
+      hard ones short.
+
+      So first classify this instance in one line: `direct` (the answer follows from the input without
+      intermediate steps), or `stepwise` (it does not), and name the one thing that makes it so.
+
+
+      - `direct`: give the answer. Do not manufacture steps to justify it.
+
+      - `stepwise`: name the specific difficulty — an ambiguity, a dependency, a computation — and take
+      only the steps that resolve it. Stop as soon as it is resolved.
+
+
+      Then give the final answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-classify the instance as stepwise and reason it through.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.74
+  task:classification: 0.83
+  task:coding: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+- token-efficient
+source:
+  paper: Instance-adaptive Zero-shot Chain-of-Thought Prompting
+  authors: Yuan et al.
+  url: https://arxiv.org/abs/2409.03460
+  year: 2024

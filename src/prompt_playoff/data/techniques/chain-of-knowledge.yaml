@@ -1,0 +1,129 @@
+id: grounding.chain-of-knowledge
+version: 1.0.0
+title: Chain of knowledge
+family: dynamic-grounding
+description: Name the knowledge domains the question spans, draw the evidence from each separately, then
+  reconcile them before answering.
+strong_tasks:
+- research
+acceptable_tasks:
+- classification
+- summarization
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- multi_step
+- high_stakes
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.85
+  reliability: 0.84
+  latency_efficiency: 0.4
+  token_efficiency: 0.38
+  simplicity: 0.55
+recipe:
+  system: Different parts of the question rest on different bodies of knowledge; keep them apart until
+    they are reconciled.
+  instructions:
+  - Identify the knowledge domains the question spans.
+  - Gather the evidence from each separately.
+  - Reconcile them before answering.
+  blocks:
+  - name: procedure
+    title: IDENTIFY THE DOMAINS
+    body: 'Break the question into the distinct bodies of knowledge it draws on — a factual record, a
+      body of rules, a technical standard, a body of practice.
+
+      Name each one, and under it write the evidence it supplies for this question. Keep them separate:
+      evidence from one domain does not carry over to another.
+
+      Do not answer the question here.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: reconcile_task
+    title: NOW RECONCILE
+    body: 'The evidence, by domain:
+
+
+      {previous}
+
+
+      Check it for conflicts. Where two domains disagree, say which one governs the question and why —
+      a rule beats a practice, a record beats a recollection — rather than averaging them.
+
+      Then answer, marking which domain each part of the answer rests on. Where the evidence in a
+      domain was thin, say so instead of leaning on the others to cover it.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - grounding_overlap
+  fallback: Re-gather evidence for the domain whose conflict could not be resolved.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: gather
+    blocks:
+    - procedure
+    - input
+    system: Gather the evidence by domain. Do not answer.
+    carries_schema: false
+  - name: reconcile
+    blocks:
+    - input
+    - reconcile_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:research: 0.85
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Chain-of-Knowledge: Grounding Large Language Models via Dynamic Knowledge Adapting over Heterogeneous
+    Sources'
+  authors: Li et al.
+  url: https://arxiv.org/abs/2305.13269
+  year: 2023

@@ -1,0 +1,120 @@
+id: summarization.chain-of-density
+version: 1.0.0
+title: Chain of density
+family: densification
+description: Write a deliberately sparse summary, then rewrite it at the same length with the salient
+  entities it missed folded in.
+strong_tasks:
+- summarization
+acceptable_tasks:
+- research
+avoid_tasks:
+- classification
+- coding
+- translation
+suits:
+- long_input
+- exact_format
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.88
+  reliability: 0.8
+  latency_efficiency: 0.44
+  token_efficiency: 0.4
+  simplicity: 0.6
+recipe:
+  variables:
+    sentence_count: '4'
+  system: Raise the density of the summary without letting it grow.
+  instructions:
+  - Write a sparse summary first.
+  - Fold in missing entities without adding length.
+  blocks:
+  - name: procedure
+    title: FIRST PASS
+    body: 'Write a summary of the input in exactly {sentence_count} sentences. This first pass is
+      deliberately sparse: cover the overall shape and accept that specific entities are missing.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: densify
+    title: NOW DENSIFY
+    body: 'Your previous summary:
+
+
+      {previous}
+
+
+      List the 1-3 entities present in the input and absent from that summary that a reader would most
+      miss — names, figures, dates, mechanisms.
+
+      Then rewrite the summary in exactly {sentence_count} sentences, of the same length as before,
+      with those entities included. Make room by cutting filler, hedges and phrases that carry no
+      information. Never drop an entity that was already there, and never state anything the input
+      does not.
+
+      Give the rewritten summary alone as the final output.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  validators:
+  - length_limit
+  - omission_check
+  - grounding_overlap
+  fallback: Keep the previous summary when densification lost an entity it already had.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: sparse
+    blocks:
+    - procedure
+    - input
+    system: Write the sparse first pass only.
+    carries_schema: false
+  - name: dense
+    blocks:
+    - input
+    - densify
+    - contract_native
+    - contract_embedded
+benchmark_priors:
+  default: 0.72
+  task:summarization: 0.88
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'From Sparse to Dense: GPT-4 Summarization with Chain of Density Prompting'
+  authors: Adams et al.
+  url: https://arxiv.org/abs/2309.04269
+  year: 2023

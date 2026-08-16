@@ -1,0 +1,113 @@
+id: reasoning.narrative-of-thought
+version: 1.0.0
+title: Narrative of thought
+family: temporal-reasoning
+description: Retell the events as a story in the order they must have happened, then read the ordering
+  back out of the narrative.
+strong_tasks:
+- research
+- structured_extraction
+acceptable_tasks:
+- summarization
+- creative_writing
+avoid_tasks:
+- coding
+- classification
+suits:
+- multi_step
+- underspecified
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.8
+  reliability: 0.79
+  latency_efficiency: 0.68
+  token_efficiency: 0.55
+  simplicity: 0.76
+recipe:
+  system: Establish the order of events by telling them as a story before stating the order.
+  instructions:
+  - List the events mentioned.
+  - Retell them as a narrative in temporal order.
+  - Read the ordering back out of the narrative.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Events are rarely narrated in the order they happened, and reordering them by inspection is
+      error-prone. Use narrative to do it instead.
+
+
+      1. List every event the input mentions, in the order the text happens to mention them.
+
+      2. Retell them as a short connected story, in the order they must actually have occurred. Use
+      explicit temporal connectives — before, after, meanwhile, by then. The story is a tool: it may
+      not add events, actors or outcomes the input does not contain.
+
+      3. Read the ordering back out of the story, as a list from earliest to latest.
+
+
+      Where two events cannot be ordered from what the input says, place them together and mark them
+      `unordered` rather than guessing.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - grounding_overlap
+  fallback: Retell the segment around the pair whose order the answer got wrong.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.72
+  task:research: 0.81
+  task:structured_extraction: 0.79
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Narrative-of-Thought: Improving Temporal Reasoning of Large Language Models via Recounted Narratives'
+  authors: Zhang et al.
+  url: https://arxiv.org/abs/2406.18070
+  year: 2024

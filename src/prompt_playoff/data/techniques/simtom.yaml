@@ -1,0 +1,128 @@
+id: reasoning.simtom
+version: 1.0.0
+title: SimToM (simulated theory of mind)
+family: perspective-taking
+description: Cut the context down to what one participant actually observed, then answer the question from
+  that reduced context alone.
+strong_tasks:
+- research
+- classification
+acceptable_tasks:
+- creative_writing
+- summarization
+avoid_tasks:
+- coding
+- translation
+suits:
+- underspecified
+- multi_step
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.83
+  reliability: 0.85
+  latency_efficiency: 0.44
+  token_efficiency: 0.46
+  simplicity: 0.6
+recipe:
+  system: Answer from what one participant knows, not from what the narrator knows.
+  instructions:
+  - Restate the context as only that participant observed it.
+  - Answer from that reduced context alone.
+  blocks:
+  - name: procedure
+    title: TAKE THE PERSPECTIVE
+    body: 'Identify the participant the question is about.
+
+      Then rewrite the context as it stands for them: keep every event they witnessed or were told
+      about, and drop every event that happened out of their sight, however important it is to what
+      really occurred.
+
+      Rewrite it as a plain account, not as a list of exclusions. Do not answer the question here.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: answer_task
+    title: NOW ANSWER FROM THAT PERSPECTIVE
+    body: 'What that participant knows:
+
+
+      {previous}
+
+
+      Answer the question from that account alone. Anything you dropped is unavailable to them, so it
+      cannot enter the answer — even where it means their belief is mistaken.
+
+      Where the question asks what actually happened rather than what they believe, say which of the two
+      you are answering.
+
+      Give the answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Rebuild the perspective for the event the answer turned on.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: filter
+    blocks:
+    - procedure
+    - input
+    system: Produce the participant's view of the context only. Do not answer.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - answer_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.73
+  task:research: 0.83
+  task:classification: 0.81
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Think Twice: Perspective-Taking Improves Large Language Models'' Theory-of-Mind Capabilities'
+  authors: Wilf et al.
+  url: https://arxiv.org/abs/2311.10227
+  year: 2023

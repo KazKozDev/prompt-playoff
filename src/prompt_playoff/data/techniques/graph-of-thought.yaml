@@ -1,0 +1,127 @@
+id: reasoning.graph-of-thought
+version: 1.0.0
+title: Graph of thoughts
+family: aggregation
+description: Develop several partial solutions independently, then merge the parts that hold instead of
+  picking one branch whole.
+strong_tasks:
+- research
+- creative_writing
+acceptable_tasks:
+- coding
+- summarization
+avoid_tasks:
+- classification
+suits:
+- multi_step
+- open_ended
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.89
+  reliability: 0.76
+  latency_efficiency: 0.3
+  token_efficiency: 0.26
+  simplicity: 0.4
+recipe:
+  variables:
+    branch_count: '3'
+  system: Solutions are assembled from parts of several attempts, not chosen from among them.
+  instructions:
+  - Develop independent partial solutions.
+  - Merge the parts that survive scrutiny.
+  blocks:
+  - name: procedure
+    title: BRANCH
+    body: 'Produce {branch_count} distinct partial solutions to this task. Distinct means they proceed
+      from different framings, not the same approach reworded.
+
+      Label them A, B, C. For each, state what it establishes and where it is weakest. Do not choose
+      between them.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: aggregate
+    title: NOW MERGE
+    body: 'The partial solutions:
+
+
+      {previous}
+
+
+      Build the answer by taking the strongest part of each and combining them. Name which branch each
+      retained part came from.
+
+      Where two branches contradict each other, resolve it against the input and say which one lost —
+      do not carry both. Where all of them are weak on a point, say so rather than papering over it.
+
+      Give the merged answer as the final output.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Fall back to the single strongest branch when the merge contradicts itself.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: branch
+    blocks:
+    - procedure
+    - input
+    system: Produce the partial solutions only. Do not choose between them.
+    temperature: 0.8
+    carries_schema: false
+  - name: merge
+    blocks:
+    - input
+    - aggregate
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:research: 0.85
+  task:creative_writing: 0.83
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Graph of Thoughts: Solving Elaborate Problems with Large Language Models'
+  authors: Besta et al.
+  url: https://arxiv.org/abs/2308.09687
+  year: 2023

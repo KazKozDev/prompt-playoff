@@ -1,0 +1,101 @@
+id: direct.emotional-stimuli
+version: 1.0.0
+title: Emotional stimuli prompting
+family: motivational-framing
+description: Append a short statement of why the answer matters, which measurably shifts effort without
+  changing the task.
+strong_tasks:
+- creative_writing
+- summarization
+acceptable_tasks:
+- research
+- classification
+- translation
+avoid_tasks: []
+suits:
+- open_ended
+- high_stakes
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: false
+characteristics:
+  quality: 0.72
+  reliability: 0.7
+  latency_efficiency: 0.93
+  token_efficiency: 0.92
+  simplicity: 0.97
+recipe:
+  system: The answer carries weight. Treat it accordingly.
+  instructions:
+  - Answer as work that will be relied on.
+  - Check it before submitting it.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: TASK
+    body: '{input}
+
+      '
+  - name: criteria
+    title: WHY THIS MATTERS
+    body: 'This answer will be used directly, not reviewed first. Someone will act on it.
+
+      Take it seriously and be sure of it before you commit: check the parts you are least confident
+      about, and say plainly where something is uncertain rather than smoothing it over. A hedged answer
+      that is honest is more use here than a confident one that is wrong.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Drop the framing and answer the task plainly.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.67
+  task:creative_writing: 0.77
+  task:summarization: 0.72
+evidence_level: documented
+tags:
+- prompt-report
+- token-efficient
+- small-model-friendly
+source:
+  paper: Large Language Models Understand and Can Be Enhanced by Emotional Stimuli
+  authors: Li et al.
+  url: https://arxiv.org/abs/2307.11760
+  year: 2023

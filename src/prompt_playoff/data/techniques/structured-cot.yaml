@@ -1,0 +1,100 @@
+id: coding.structured-cot
+version: 1.0.0
+title: Structured chain of thought
+family: program-structure
+description: Reason in the control structures the code will use — sequence, branch, loop — before writing
+  any of it.
+strong_tasks:
+- coding
+acceptable_tasks:
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- translation
+- summarization
+suits:
+- multi_step
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.85
+  reliability: 0.84
+  latency_efficiency: 0.7
+  token_efficiency: 0.6
+  simplicity: 0.75
+recipe:
+  system: Plan in control structures, then write the code that realises them.
+  instructions:
+  - Express the plan as sequence, branch and loop structures.
+  - Write the implementation from that plan.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Implement what the input asks for.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Plain prose reasoning does not carry program structure. Plan in the structures the solution
+      will actually use, written as an indented outline built from exactly three kinds of line:
+
+
+      - a sequence step: one operation, stated imperatively
+
+      - a branch: `if <condition>:` with its cases indented beneath
+
+      - a loop: `for <element> in <collection>:` or `while <condition>:` with its body indented
+
+
+      Every input case the task mentions must appear under some branch. Then write the implementation
+      so that its structure matches the outline line for line.
+
+      '
+  - name: criteria
+    title: CONSTRAINTS
+    body: 'Handle the edge cases the task names — empty input, out-of-range values, malformed values —
+      in explicit branches rather than by assuming they do not occur. Do not add capability the task
+      did not ask for.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  validators:
+  - python_syntax
+  - unit_tests
+  fallback: Rewrite the outline for the branch whose case failed, then re-implement it.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.7
+  task:coding: 0.86
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Structured Chain-of-Thought Prompting for Code Generation
+  authors: Li et al.
+  url: https://arxiv.org/abs/2305.06599
+  year: 2023

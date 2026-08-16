@@ -1,0 +1,118 @@
+id: structured.chain-of-table
+version: 1.0.0
+title: Chain of table
+family: tabular-transform
+description: Answer a question about tabular data by applying named table operations one at a time and
+  showing the table after each.
+strong_tasks:
+- structured_extraction
+- research
+acceptable_tasks:
+- classification
+- summarization
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- long_input
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.86
+  reliability: 0.88
+  latency_efficiency: 0.58
+  token_efficiency: 0.44
+  simplicity: 0.62
+recipe:
+  system: Transform the table step by step and show it after every operation.
+  instructions:
+  - Choose one table operation at a time.
+  - Show the resulting table after each.
+  - Read the answer off the final table.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Answer the question from the tabular data supplied.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Do not scan the table and answer. Evolve it until the answer is visible in it.
+
+
+      At each step choose exactly one operation from this set and nothing else:
+
+
+      - `select_rows(condition)` — keep the rows that satisfy the condition
+
+      - `select_columns(names)` — keep those columns
+
+      - `add_column(name, derivation)` — add a column computed from existing ones
+
+      - `sort(column, direction)` — order the rows
+
+      - `group_by(column, aggregation)` — collapse rows into groups
+
+
+      Write the operation, then the resulting table in full as markdown. Repeat until the remaining table
+      answers the question directly — typically two to four operations.
+
+      Then state the answer, which must be a value visible in the final table.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - field_f1
+  fallback: Re-apply the operation that dropped the rows the answer needed.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.75
+  task:structured_extraction: 0.87
+  task:research: 0.82
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Chain-of-Table: Evolving Tables in the Reasoning Chain for Table Understanding'
+  authors: Wang et al.
+  url: https://arxiv.org/abs/2401.04398
+  year: 2024

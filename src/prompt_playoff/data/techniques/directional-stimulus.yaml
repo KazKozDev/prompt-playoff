@@ -1,0 +1,120 @@
+id: direct.directional-stimulus
+version: 1.0.0
+title: Directional stimulus prompting
+family: hint-conditioning
+description: Extract the keywords the answer must be built around, then generate conditioned on those
+  rather than on the input at large.
+strong_tasks:
+- summarization
+- creative_writing
+acceptable_tasks:
+- translation
+- research
+avoid_tasks:
+- coding
+suits:
+- exact_format
+- long_input
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+min_calls: 2
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.82
+  reliability: 0.83
+  latency_efficiency: 0.46
+  token_efficiency: 0.48
+  simplicity: 0.68
+recipe:
+  variables:
+    hint_count: '6'
+  system: Generate against the extracted hints, not against a general impression of the input.
+  instructions:
+  - Extract the keywords the output must cover.
+  - Generate conditioned on those keywords.
+  blocks:
+  - name: procedure
+    title: EXTRACT THE STIMULUS
+    body: 'Read the input and extract up to {hint_count} keywords or short phrases that the output has to
+      be built around — the specific entities, figures and turns the input would be misrepresented
+      without.
+
+      Take them verbatim from the input. List them on one line, comma-separated. Do not write the output
+      yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: generate_task
+    title: NOW GENERATE
+    body: 'The extracted hints:
+
+
+      {previous}
+
+
+      Produce the output conditioned on those hints: every one must appear or be directly accounted for,
+      and they set what the output is about.
+
+      Do not simply list them, and do not pad around them. A hint that turns out not to belong should be
+      dropped with a one-line note rather than forced in.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  validators:
+  - contains_all
+  - grounding_overlap
+  - length_limit
+  fallback: Re-extract the hints and regenerate when the output covered none of them.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: stimulus
+    blocks:
+    - procedure
+    - input
+    system: Extract the hints only. Do not generate the output.
+    carries_schema: false
+  - name: generate
+    blocks:
+    - input
+    - generate_task
+    - contract_native
+    - contract_embedded
+benchmark_priors:
+  default: 0.72
+  task:summarization: 0.83
+  task:creative_writing: 0.79
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Guiding Large Language Models via Directional Stimulus Prompting
+  authors: Li et al.
+  url: https://arxiv.org/abs/2302.11520
+  year: 2023

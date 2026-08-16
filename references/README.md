@@ -20,7 +20,7 @@ This index is committed instead; `make papers` fetches them again.
 
 ## What this is for
 
-The registry ships 14 techniques. Adding one is a single YAML file
+The registry ships 61 techniques. Adding one is a single YAML file
 ([docs/extending.md](../docs/extending.md)), so these surveys are the shortlist
 of what to add next — and, more importantly, the source for the
 `benchmark_priors` and `evidence_level` fields, which should point at published

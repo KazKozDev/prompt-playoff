@@ -1,0 +1,107 @@
+id: reasoning.analogical
+version: 1.0.0
+title: Analogical prompting
+family: self-generated-exemplars
+description: Have the model recall its own solved analogues of the problem before answering, so the
+  demonstrations are tailored rather than fixed.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- classification
+- structured_extraction
+avoid_tasks: []
+suits:
+- underspecified
+- computational
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.85
+  reliability: 0.78
+  latency_efficiency: 0.55
+  token_efficiency: 0.38
+  simplicity: 0.7
+recipe:
+  system: Recall comparable problems you can already solve before attempting this one.
+  instructions:
+  - Recall two solved problems of the same kind.
+  - Name what carries over from them.
+  - Answer the task using that.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'First recall two distinct problems you already know how to solve that are structurally
+      similar to this one — not similar in surface topic, similar in what has to be worked out. State
+      each one and its solution briefly.
+
+      Then state what those two solutions have in common that applies here.
+
+      Then solve the task itself. Recalling an analogue that turns out not to apply is a reason to
+      discard it, not to force the task to fit it.
+
+      '
+  - name: domain_note
+    title: DOMAIN
+    when: has_domain
+    body: 'Draw the analogues from {domain} where one fits; from anywhere if none does.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Discard the recalled analogues and solve the task directly.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.74
+  task:coding: 0.84
+  task:research: 0.79
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Large Language Models as Analogical Reasoners
+  authors: Yasunaga et al.
+  url: https://arxiv.org/abs/2310.01714
+  year: 2023

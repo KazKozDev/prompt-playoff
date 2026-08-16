@@ -1,0 +1,136 @@
+id: reasoning.buffer-of-thoughts
+version: 1.0.0
+title: Buffer of thoughts
+family: template-reuse
+description: Distill the reusable solution template for this class of problem, then instantiate it on the
+  instance at hand.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- structured_extraction
+- classification
+avoid_tasks:
+- creative_writing
+suits:
+- multi_step
+- computational
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.85
+  reliability: 0.82
+  latency_efficiency: 0.42
+  token_efficiency: 0.44
+  simplicity: 0.56
+recipe:
+  system: Solve the class of problem first, then apply that solution to this instance.
+  instructions:
+  - Distill the problem class and its solution template.
+  - Instantiate the template on this instance.
+  blocks:
+  - name: procedure
+    title: DISTILL THE TEMPLATE
+    body: 'Do not solve this instance yet. Identify the class of problem it belongs to and write the
+      template that solves the class:
+
+
+      - the class in one line, stated by its structure rather than its subject matter
+
+      - the numbered steps that solve any instance of it
+
+      - the slots the template needs filled, named
+
+      - the conditions under which the template does not apply
+
+
+      Keep it general enough that a different instance of the same class would use it unchanged, and
+      specific enough to be followed without judgement calls.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: instantiate_task
+    title: NOW INSTANTIATE
+    body: 'The template you distilled:
+
+
+      {previous}
+
+
+      Fill its slots from the input, then follow its steps in order on this instance.
+
+      If the instance trips one of the conditions where the template does not apply, say so and solve it
+      directly instead — forcing an instance through a template that does not fit it is the failure mode
+      this method has.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Discard the template and solve the instance directly.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: distill
+    blocks:
+    - procedure
+    - input
+    system: Produce the reusable template only. Do not solve the instance.
+    carries_schema: false
+  - name: instantiate
+    blocks:
+    - input
+    - instantiate_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:coding: 0.85
+  task:research: 0.81
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Buffer of Thoughts: Thought-Augmented Reasoning with Large Language Models'
+  authors: Yang et al.
+  url: https://arxiv.org/abs/2406.04271
+  year: 2024
+  note: Adapted to a single request — the paper's persistent meta-buffer across problems is out of scope
+    for a stateless recipe.

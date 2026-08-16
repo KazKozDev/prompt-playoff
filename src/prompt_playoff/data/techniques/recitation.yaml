@@ -1,0 +1,104 @@
+id: grounding.recitation
+version: 1.0.0
+title: Recitation-augmented prompting
+family: memory-recitation
+description: Recite the passage the answer depends on from memory before answering, so the answer is read
+  off something stated rather than produced directly.
+strong_tasks:
+- research
+acceptable_tasks:
+- classification
+- summarization
+- structured_extraction
+avoid_tasks:
+- coding
+- translation
+suits:
+- verifiable
+- underspecified
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.78
+  reliability: 0.8
+  latency_efficiency: 0.7
+  token_efficiency: 0.56
+  simplicity: 0.82
+recipe:
+  system: Recite what you know on the point, then answer from the recitation.
+  instructions:
+  - Recite the relevant passage from memory.
+  - Answer from what was recited.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Before answering, recite from memory the passage this question bears on — the paragraph you
+      would expect to find it in, written out as a passage rather than as notes.
+
+      Then answer using that passage.
+
+      A recitation is a claim about what you know, so keep it to what you can actually recall. Where
+      recall is thin, say so on the spot instead of writing a fluent passage around the gap; a confident
+      recitation of something you do not know is worse than none.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Answer directly when the recitation cannot be given honestly.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.71
+  task:research: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Recitation-Augmented Language Models
+  authors: Sun et al.
+  url: https://arxiv.org/abs/2210.01296
+  year: 2022

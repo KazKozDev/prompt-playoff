@@ -1,0 +1,100 @@
+id: reasoning.scratchpad
+version: 1.0.0
+title: Scratchpad prompting
+family: intermediate-computation
+description: Give the model an explicit workspace to hold intermediate state, and require the state to be
+  rewritten in full after every step.
+strong_tasks:
+- coding
+- structured_extraction
+acceptable_tasks:
+- research
+- classification
+avoid_tasks:
+- creative_writing
+suits:
+- computational
+- multi_step
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.8
+  reliability: 0.84
+  latency_efficiency: 0.68
+  token_efficiency: 0.5
+  simplicity: 0.82
+recipe:
+  system: Keep the working state on the scratchpad and update it in full after every step.
+  instructions:
+  - Write the intermediate state to the scratchpad.
+  - Restate the whole state after each step.
+  - Read the answer off the final state.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Errors here come from carrying state in your head across steps. Keep it written down instead.
+
+
+      Open a block marked `<scratchpad>`. Write the starting state into it: every value, name and
+      partial result the task begins with.
+
+      Then work one step at a time. After each step, rewrite the complete state — not the delta, the
+      whole thing, including the parts that did not change. A value that never reappears has been lost.
+
+      Close the scratchpad, then give the answer read directly off the final state. The answer must be
+      present in that state, not derived afterwards.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - numeric_close
+  fallback: Restart the trace from the last state that was internally consistent.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.72
+  task:coding: 0.83
+  task:structured_extraction: 0.78
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Show Your Work: Scratchpads for Intermediate Computation with Language Models'
+  authors: Nye et al.
+  url: https://arxiv.org/abs/2112.00114
+  year: 2021

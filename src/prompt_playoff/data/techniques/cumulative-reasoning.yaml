@@ -1,0 +1,128 @@
+id: reasoning.cumulative
+version: 1.0.0
+title: Cumulative reasoning
+family: incremental-proof
+description: Propose one candidate proposition at a time, verify it against what is already established,
+  and keep only what passes.
+strong_tasks:
+- research
+- coding
+acceptable_tasks:
+- classification
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- multi_step
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.88
+  reliability: 0.9
+  latency_efficiency: 0.34
+  token_efficiency: 0.32
+  simplicity: 0.46
+recipe:
+  system: A proposition enters the argument only after it has been checked against the ones already in it.
+  instructions:
+  - Propose candidate propositions one at a time.
+  - Verify each against the established set.
+  - Conclude from the surviving set only.
+  blocks:
+  - name: procedure
+    title: PROPOSE
+    body: 'Build the argument one proposition at a time.
+
+      Start from the premises the input states, numbered. Then propose the next propositions that
+      follow from what is already established — one per line, each citing the numbers it depends on.
+
+      Propose candidates only. Do not judge them yet, and do not state the conclusion.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: verify_task
+    title: NOW VERIFY AND CONCLUDE
+    body: 'The proposed propositions:
+
+
+      {previous}
+
+
+      Take them in order. For each, decide against the input and the propositions already accepted:
+      `accept` or `reject`, with the reason in one clause. A proposition that depends on a rejected one
+      is rejected with it.
+
+      Then state the conclusion using the accepted set alone. If the accepted set does not reach a
+      conclusion, say what is missing rather than bridging the gap.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-propose from the last accepted proposition.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: propose
+    blocks:
+    - procedure
+    - input
+    system: Propose candidate propositions only. Judge nothing.
+    carries_schema: false
+  - name: verify
+    blocks:
+    - input
+    - verify_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.77
+  task:research: 0.87
+  task:coding: 0.84
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Cumulative Reasoning with Large Language Models
+  authors: Zhang et al.
+  url: https://arxiv.org/abs/2308.04371
+  year: 2023

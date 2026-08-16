@@ -1,0 +1,112 @@
+id: reasoning.code-prompting
+version: 1.0.0
+title: Code prompting
+family: code-representation
+description: Rewrite the natural-language problem as pseudo-code with its conditions made explicit, then
+  reason over that — without running anything.
+strong_tasks:
+- research
+- classification
+acceptable_tasks:
+- structured_extraction
+- coding
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- multi_step
+- computational
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.82
+  reliability: 0.83
+  latency_efficiency: 0.7
+  token_efficiency: 0.58
+  simplicity: 0.72
+recipe:
+  system: Make the conditions explicit as code, then answer by tracing them.
+  instructions:
+  - Rewrite the problem as pseudo-code with named variables and explicit conditions.
+  - Trace it by hand and answer from the trace.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Conditional statements in prose are easy to misread — negations, exceptions and "unless"
+      clauses get dropped. So first rewrite the problem as pseudo-code:
+
+
+      - one named variable per fact the input states, assigned its stated value
+
+      - one explicit `if` / `elif` / `else` for every condition, including the ones the input words as
+      an exception
+
+      - the question itself as the final expression to evaluate
+
+
+      Then trace that pseudo-code by hand, line by line, with the actual values. Do not execute it and
+      do not invent values the input did not give — where a variable is unset, say so and stop.
+
+      Give the answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-derive the condition that the failing branch depended on.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.74
+  task:research: 0.82
+  task:classification: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Code Prompting Elicits Conditional Reasoning Abilities in Text+Code LLMs
+  authors: Puerto et al.
+  url: https://arxiv.org/abs/2401.10065
+  year: 2024

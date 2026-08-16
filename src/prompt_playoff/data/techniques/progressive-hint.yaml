@@ -1,0 +1,118 @@
+id: reasoning.progressive-hint
+version: 1.0.0
+title: Progressive-hint prompting
+family: answer-convergence
+description: Answer once, then answer again with the first answer supplied as a hint, and keep only what
+  survives the second pass.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- classification
+- structured_extraction
+avoid_tasks:
+- creative_writing
+suits:
+- computational
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.86
+  reliability: 0.87
+  latency_efficiency: 0.42
+  token_efficiency: 0.44
+  simplicity: 0.62
+recipe:
+  system: A repeated answer is evidence; a changed answer is a correction. Never split the difference.
+  instructions:
+  - Answer the task once.
+  - Answer it again with the first answer in view.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task. Reason it through and commit to one answer.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: rehint
+    title: SECOND PASS
+    body: 'A previous attempt at this task produced:
+
+
+      {previous}
+
+
+      Treat that as a hint, not as the answer. Work the task through again from the input. Then either
+      confirm the previous answer, or replace it and state in one line what was wrong with it.
+
+      Do not average the two. Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Keep the first answer when the second pass gives no reason for changing it.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: attempt
+    blocks:
+    - role
+    - input
+    system: Answer the task. Commit to one answer.
+    carries_schema: false
+  - name: rehint
+    blocks:
+    - input
+    - rehint
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.76
+  task:coding: 0.87
+  task:research: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Progressive-Hint Prompting Improves Reasoning in Large Language Models
+  authors: Zheng et al.
+  url: https://arxiv.org/abs/2304.09797
+  year: 2023

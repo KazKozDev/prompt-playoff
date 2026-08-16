@@ -1,0 +1,126 @@
+id: verification.verify-and-edit
+version: 1.0.0
+title: Verify and edit
+family: rationale-repair
+description: Draft the reasoning, turn each shaky step into a question, answer those, and edit the steps
+  the answers contradict.
+strong_tasks:
+- research
+- structured_extraction
+acceptable_tasks:
+- classification
+- coding
+avoid_tasks:
+- creative_writing
+suits:
+- high_stakes
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.87
+  reliability: 0.91
+  latency_efficiency: 0.38
+  token_efficiency: 0.36
+  simplicity: 0.5
+recipe:
+  system: Edit the reasoning where it is wrong, and leave the rest alone.
+  instructions:
+  - Draft the reasoning as numbered steps.
+  - Turn the uncertain steps into questions and answer them.
+  - Edit only the steps the answers contradict.
+  blocks:
+  - name: procedure
+    title: DRAFT THE REASONING
+    body: 'Reason the task through in numbered steps, each a single factual claim or inference.
+
+      Then mark the steps you are least sure of — the ones that rest on a specific fact rather than on
+      the ones above them.
+
+      Do not give the final answer yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: edit_task
+    title: NOW VERIFY AND EDIT
+    body: 'The draft reasoning:
+
+
+      {previous}
+
+
+      For each step marked uncertain, write the question that would settle it — a question answerable on
+      its own, without the rest of the chain. Answer each one directly.
+
+      Then edit the draft: replace every step its answer contradicts, and leave every other step exactly
+      as it was. Editing a step that was not contradicted is a regression, not an improvement.
+
+      State which steps changed, then give the final answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Keep the draft step when its verifying question cannot be answered.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: draft
+    blocks:
+    - procedure
+    - input
+    system: Draft the reasoning and mark what is uncertain. Do not conclude.
+    carries_schema: false
+  - name: edit
+    blocks:
+    - input
+    - edit_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.77
+  task:research: 0.87
+  task:structured_extraction: 0.83
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Verify-and-Edit: A Knowledge-Enhanced Chain-of-Thought Framework'
+  authors: Zhao et al.
+  url: https://arxiv.org/abs/2305.03268
+  year: 2023

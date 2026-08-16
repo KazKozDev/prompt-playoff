@@ -1,0 +1,111 @@
+id: reasoning.layer-of-thought
+version: 1.0.0
+title: Layer of thoughts (LoT)
+family: constraint-filtering
+description: Apply the constraints one layer at a time, each narrowing the candidates the previous layer
+  left, so every exclusion has a named reason.
+strong_tasks:
+- research
+- classification
+acceptable_tasks:
+- structured_extraction
+- summarization
+avoid_tasks:
+- creative_writing
+suits:
+- long_input
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.81
+  reliability: 0.87
+  latency_efficiency: 0.66
+  token_efficiency: 0.56
+  simplicity: 0.74
+recipe:
+  system: Narrow the candidates one constraint at a time, and record what each one removed.
+  instructions:
+  - List the candidates and the constraints.
+  - Apply one constraint per layer, recording exclusions.
+  - Answer from what survives every layer.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Filtering everything at once loses track of why a candidate was dropped. Do it in layers.
+
+
+      1. List every candidate the input puts in play, and separately every constraint it imposes.
+
+      2. Order the constraints so the one that eliminates the most goes first.
+
+      3. Apply them one layer at a time. For each layer, write the constraint, the candidates that
+      survive it, and for each candidate removed, the reason in one clause.
+
+
+      A candidate may only be removed by a constraint the input actually states. If a layer leaves
+      nothing, stop and report which constraint emptied the set — do not relax it.
+
+      Answer from what survives the final layer.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-apply the layer that removed the candidate the answer needed.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.73
+  task:research: 0.82
+  task:classification: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Layer-of-Thoughts Prompting (LoT): Leveraging LLM-Based Retrieval with Constraint Hierarchies'
+  authors: Fung et al.
+  url: https://arxiv.org/abs/2405.11534
+  year: 2024

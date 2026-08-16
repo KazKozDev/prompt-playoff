@@ -1,0 +1,111 @@
+id: reasoning.graph-flattening
+version: 1.0.0
+title: Graph flattening
+family: graph-linearization
+description: Turn graph-shaped input into an ordered text form the model can read straight through, then
+  reason over that form.
+strong_tasks:
+- structured_extraction
+- research
+acceptable_tasks:
+- coding
+- summarization
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- long_input
+- multi_step
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.79
+  reliability: 0.83
+  latency_efficiency: 0.72
+  token_efficiency: 0.6
+  simplicity: 0.74
+recipe:
+  system: Linearize the graph first; reason over the linear form, not the diagram.
+  instructions:
+  - Flatten the graph into an ordered edge list.
+  - Reason over the flattened form.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Graph-shaped input read as prose loses structure — nodes get conflated and edges get dropped.
+      Flatten it before reasoning.
+
+
+      1. List every node once, with a short identifier.
+
+      2. List every edge as `source -> target: relation`, one per line, grouped by source and ordered so
+      that a node appears as a source only after it has appeared as a target, where the graph allows it.
+
+      3. Note any cycles explicitly, since they break that ordering.
+
+
+      Then answer using the flattened list alone. Every claim about connectivity, reachability or
+      ordering must be traceable to specific lines in it — cite them.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - field_f1
+  fallback: Re-flatten the region of the graph the failing claim depended on.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.71
+  task:structured_extraction: 0.81
+  task:research: 0.78
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: End-to-End Graph Flattening Method for Large Language Models
+  authors: Hong et al.
+  url: https://arxiv.org/abs/2402.13085
+  year: 2024

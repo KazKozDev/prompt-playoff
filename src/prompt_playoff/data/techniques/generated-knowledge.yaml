@@ -1,0 +1,124 @@
+id: grounding.generated-knowledge
+version: 1.0.0
+title: Generated knowledge prompting
+family: knowledge-elicitation
+description: Write out the facts the question depends on first, then answer from those statements rather
+  than from the question directly.
+strong_tasks:
+- research
+- classification
+acceptable_tasks:
+- summarization
+- structured_extraction
+avoid_tasks:
+- translation
+suits:
+- underspecified
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.83
+  reliability: 0.78
+  latency_efficiency: 0.44
+  token_efficiency: 0.42
+  simplicity: 0.66
+recipe:
+  system: State the knowledge the question rests on before using it.
+  instructions:
+  - Write the facts the question depends on.
+  - Answer from those statements.
+  blocks:
+  - name: procedure
+    title: STATE THE KNOWLEDGE
+    body: 'Before answering, write the facts this question depends on — four or five statements, one per
+      line, each standing on its own without the question for context.
+
+      State only what you would defend as true. Where a fact is contested or you are unsure of it, say
+      so on the line. Do not answer the question here.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: apply_task
+    title: NOW ANSWER
+    body: 'The knowledge you stated:
+
+
+      {previous}
+
+
+      Answer the question using those statements. Cite the ones each part of the answer rests on.
+
+      If a statement turns out not to bear on the question, drop it rather than working it in. If the
+      question needs something none of them covers, say what is missing.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Restate the knowledge for the point the answer could not support.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: elicit
+    blocks:
+    - procedure
+    - input
+    system: State the relevant knowledge only. Do not answer.
+    carries_schema: false
+  - name: answer
+    blocks:
+    - input
+    - apply_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.74
+  task:research: 0.83
+  task:classification: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Generated Knowledge Prompting for Commonsense Reasoning
+  authors: Liu et al.
+  url: https://arxiv.org/abs/2110.08387
+  year: 2021

@@ -1,0 +1,130 @@
+id: verification.reflexion
+version: 1.0.0
+title: Reflexion
+family: episodic-reflection
+description: Attempt the task, write a verbal post-mortem naming what went wrong and what to do
+  differently, then attempt it again with that note in hand.
+strong_tasks:
+- coding
+- agents
+acceptable_tasks:
+- research
+- structured_extraction
+avoid_tasks:
+- translation
+suits:
+- verifiable
+- multi_step
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.88
+  reliability: 0.85
+  latency_efficiency: 0.36
+  token_efficiency: 0.34
+  simplicity: 0.5
+recipe:
+  system: A second attempt is worth making only if it is told what the first one got wrong.
+  instructions:
+  - Attempt the task and state how it could fail.
+  - Write the lesson as an instruction to the next attempt.
+  - Redo the task under that instruction.
+  blocks:
+  - name: procedure
+    title: ATTEMPT
+    body: 'Attempt the task in full.
+
+      Then step back and evaluate your own attempt against what the task asked for. Name the specific
+      ways it falls short — a requirement not met, a case not handled, an assumption made without
+      warrant. Be concrete: "could be clearer" is not a finding.
+
+      Finish with a `LESSON:` line stating what the next attempt should do differently, as an
+      instruction rather than an observation.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: retry_task
+    title: NOW RETRY
+    body: 'Your previous attempt and what you learned from it:
+
+
+      {previous}
+
+
+      Do the task again from the beginning, following the lesson. This is a fresh attempt, not an edit
+      of the last one: reuse what was right, and do not carry over the parts the reflection identified
+      as wrong.
+
+      If the reflection was mistaken and the original attempt was sound, say so and keep it rather than
+      changing it for the sake of changing it.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - unit_tests
+  fallback: Keep the first attempt when the retry does not satisfy its own lesson.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: attempt
+    blocks:
+    - procedure
+    - input
+    system: Attempt the task, then reflect on it. Do not produce a final answer.
+    carries_schema: false
+  - name: retry
+    blocks:
+    - input
+    - retry_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.77
+  task:coding: 0.88
+  task:agents: 0.84
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Reflexion: Language Agents with Verbal Reinforcement Learning'
+  authors: Shinn et al.
+  url: https://arxiv.org/abs/2303.11366
+  year: 2023

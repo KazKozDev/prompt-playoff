@@ -1,0 +1,113 @@
+id: reasoning.logic-of-thought
+version: 1.0.0
+title: Logic of thought
+family: formal-logic
+description: Extract the propositions and their connectives, expand them under logical rules, and put the
+  derived facts back into the prompt before answering.
+strong_tasks:
+- research
+- classification
+acceptable_tasks:
+- structured_extraction
+- coding
+avoid_tasks:
+- creative_writing
+- translation
+- summarization
+suits:
+- multi_step
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.84
+  reliability: 0.86
+  latency_efficiency: 0.62
+  token_efficiency: 0.52
+  simplicity: 0.6
+recipe:
+  system: Derive what follows by rule before judging what is true.
+  instructions:
+  - Extract propositions and the connectives between them.
+  - Expand them under contraposition and transitivity.
+  - Answer using the stated and derived facts only.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Reasoning stated in prose loses implications that are formally available. Recover them first.
+
+
+      1. Extract each atomic proposition and give it a short symbol: `A`, `B`, `C`.
+
+      2. Write the relations the input states between them, using only `->` (implies), `&` (and), `|`
+      (or) and `¬` (not).
+
+      3. Expand that set under two rules, and no others: contraposition (`A -> B` gives `¬B -> ¬A`) and
+      transitivity (`A -> B` and `B -> C` give `A -> C`). Mark each new line `derived`.
+
+      4. Translate the extracted and derived lines back into plain sentences.
+
+
+      Then answer the question using those sentences alone. Something neither stated nor derived is not
+      available to you, however plausible — say the input does not settle it.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-extract the propositions the contested step depended on.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.75
+  task:research: 0.83
+  task:classification: 0.82
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Logic-of-Thought: Injecting Logic into Contexts for Full Reasoning in Large Language Models'
+  authors: Liu et al.
+  url: https://arxiv.org/abs/2409.17539
+  year: 2024

@@ -79,7 +79,7 @@ def test_home_exposes_the_complete_technique_catalog(client):
 
     assert 'data-global-tab="techniques"' in html
     assert "function renderTechniqueCatalog()" in html
-    assert len(techniques) == 29
+    assert len(techniques) == 61
     assert len(examples) == len(techniques)
     assert len({item["user_input"] for item in examples}) == len(techniques)
     assert {item["technique_id"] for item in examples} == {item["id"] for item in techniques}

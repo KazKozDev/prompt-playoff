@@ -1,0 +1,130 @@
+id: reasoning.faithful-cot
+version: 1.0.0
+title: Faithful chain of thought
+family: symbolic-translation
+description: Split the work in two — translate the problem into a symbolic chain, then derive the answer
+  from that chain alone, so the stated reasoning is the reasoning used.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- structured_extraction
+- classification
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- computational
+- verifiable
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.85
+  reliability: 0.89
+  latency_efficiency: 0.42
+  token_efficiency: 0.4
+  simplicity: 0.52
+recipe:
+  system: The reasoning that produces the answer must be the reasoning that was written down.
+  instructions:
+  - Translate the problem into a symbolic chain.
+  - Derive the answer from the chain and nothing else.
+  blocks:
+  - name: procedure
+    title: TRANSLATE
+    body: 'Translate the problem into a symbolic reasoning chain. Interleave two things and nothing
+      else:
+
+
+      - comment lines, each restating one subquestion the problem contains
+
+      - executable lines under each comment, assigning named variables from the values the input gives
+
+
+      Every quantity must trace to something the input states. Do not solve the problem in prose and
+      do not state the answer here.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: solve_task
+    title: NOW DERIVE
+    body: 'The symbolic chain:
+
+
+      {previous}
+
+
+      Evaluate it in order and report the value of each variable as you go. Use only what the chain
+      contains — no outside knowledge, no shortcuts to an answer the chain does not reach.
+
+      If the chain is wrong or incomplete, say which line is at fault rather than repairing it
+      silently. Otherwise give the final answer alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - numeric_close
+  fallback: Retranslate the subquestion whose line the derivation flagged.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: translate
+    blocks:
+    - procedure
+    - input
+    system: Produce the symbolic chain only. Do not evaluate it.
+    carries_schema: false
+  - name: derive
+    blocks:
+    - input
+    - solve_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.76
+  task:coding: 0.86
+  task:research: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Faithful Chain-of-Thought Reasoning
+  authors: Lyu et al.
+  url: https://arxiv.org/abs/2301.13379
+  year: 2023

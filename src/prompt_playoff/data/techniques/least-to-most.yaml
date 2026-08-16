@@ -1,0 +1,119 @@
+id: reasoning.least-to-most
+version: 1.0.0
+title: Least-to-most prompting
+family: decomposition
+description: List the subproblems from simplest to hardest, then solve them in that order, each answer
+  feeding the next.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- structured_extraction
+- summarization
+avoid_tasks:
+- creative_writing
+suits:
+- multi_step
+- computational
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.87
+  reliability: 0.83
+  latency_efficiency: 0.45
+  token_efficiency: 0.4
+  simplicity: 0.58
+recipe:
+  system: Solve the easiest part first and build on it. Never answer the whole problem in one leap.
+  instructions:
+  - List the subproblems in dependency order.
+  - Solve each one using the answers already established.
+  blocks:
+  - name: procedure
+    title: DECOMPOSE
+    body: 'List the subproblems this task breaks into, ordered so that each one depends only on the
+      subproblems above it. Start with the one that needs nothing else solved first.
+
+      Number them. Do not solve any of them yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: solve_task
+    title: NOW SOLVE THEM IN ORDER
+    body: 'The subproblems you listed:
+
+
+      {previous}
+
+
+      Solve them one at a time, in that order. Each answer may use the answers above it and nothing
+      else. Then give the final answer to the original task alone.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-solve the last subproblem in isolation and rebuild the answer from it.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: decompose
+    blocks:
+    - procedure
+    - input
+    system: List the subproblems in dependency order. Solve nothing.
+    carries_schema: false
+  - name: solve
+    blocks:
+    - input
+    - solve_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:coding: 0.86
+  task:research: 0.8
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: Least-to-Most Prompting Enables Complex Reasoning in Large Language Models
+  authors: Zhou et al.
+  url: https://arxiv.org/abs/2205.10625
+  year: 2022

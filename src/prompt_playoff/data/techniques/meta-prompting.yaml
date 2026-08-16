@@ -1,0 +1,132 @@
+id: agents.meta-prompting
+version: 1.0.0
+title: Meta-prompting
+family: expert-delegation
+description: Act as a conductor that assigns each part of the task to a named specialist, then integrates
+  their answers and resolves the disagreements.
+strong_tasks:
+- research
+- agents
+acceptable_tasks:
+- coding
+- creative_writing
+avoid_tasks:
+- translation
+suits:
+- multi_step
+- open_ended
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.87
+  reliability: 0.78
+  latency_efficiency: 0.32
+  token_efficiency: 0.3
+  simplicity: 0.42
+recipe:
+  system: You are a conductor. Break the task into expert assignments, then integrate what comes back.
+  instructions:
+  - Assign each part of the task to a named specialist.
+  - Answer as each specialist, in isolation.
+  - Integrate the answers and resolve the conflicts.
+  blocks:
+  - name: procedure
+    title: CONDUCT
+    body: 'You are a conductor, not the expert. Break the task into the parts that call for genuinely
+      different expertise — usually two to four.
+
+      For each, name the specialist and write the instruction you would hand them. The instruction must
+      stand on its own: a specialist sees only their own brief, not the task and not each other.
+
+      Then answer as each specialist in turn, under their own heading, staying strictly inside their
+      remit. A specialist who reaches outside it is answering the wrong question.
+
+      Do not integrate them yet.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: integrate_task
+    title: NOW INTEGRATE
+    body: 'The specialist answers:
+
+
+      {previous}
+
+
+      As the conductor, assemble the final answer from them. Where two specialists conflict, say which
+      one governs that part of the question and why — the conflict is information, not noise to be
+      averaged away.
+
+      Where a specialist''s brief turned out to be the wrong question, discard their answer and say so.
+      Where the assignments left a gap, name it rather than filling it silently.
+
+      Give the integrated answer as the final output.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - coverage
+  fallback: Re-brief the specialist whose answer the integration could not use.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: delegate
+    blocks:
+    - procedure
+    - input
+    system: Assign the briefs and answer as each specialist. Do not integrate.
+    carries_schema: false
+  - name: integrate
+    blocks:
+    - input
+    - integrate_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.76
+  task:research: 0.86
+  task:agents: 0.82
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Meta-Prompting: Enhancing Language Models with Task-Agnostic Scaffolding'
+  authors: Suzgun & Kalai
+  url: https://arxiv.org/abs/2401.12954
+  year: 2024

@@ -316,6 +316,245 @@ EXAMPLES: dict[str, TechniqueExample] = {
         "A single prompt explicitly elicits stepwise reasoning before the final result.",
         domain="arithmetic",
     ),
+    "reasoning.least-to-most": TechniqueExample(
+        TaskType.coding,
+        "A depot ships 3 crates per pallet, 7 pallets per truck, and pays €12 per truck plus €0.40 "
+        "per crate. Give the total cost of shipping 148 crates.",
+        "The subproblems have a strict dependency order, so the second stage can only solve them "
+        "in the order the first stage established.",
+        domain="logistics",
+    ),
+    "reasoning.analogical": TechniqueExample(
+        TaskType.coding,
+        "Design a rate limiter that tolerates short bursts but caps sustained throughput, and say "
+        "what it does when the clock jumps backwards.",
+        "The model must recall its own comparable problems before solving, so the demonstrations "
+        "are generated rather than supplied.",
+        domain="distributed systems",
+    ),
+    "reasoning.chain-of-symbol": TechniqueExample(
+        TaskType.agents,
+        "Box A sits on the left shelf, B is directly above A, C is to the right of B, and D is "
+        "below C. Give the order to remove them so nothing is lifted through another box.",
+        "Spatial relations stated in prose are condensed to symbols before any planning happens.",
+        domain="spatial planning",
+    ),
+    "reasoning.tabular-cot": TechniqueExample(
+        TaskType.coding,
+        "A meter reads 41,208 kWh on 1 March and 44,976 kWh on 1 June. At €0.28/kWh with a €9.50 "
+        "monthly standing charge, compute the quarterly bill.",
+        "Each arithmetic step lands in its own table row with the operation stated separately from "
+        "its result.",
+        domain="arithmetic",
+    ),
+    "summarization.chain-of-density": TechniqueExample(
+        TaskType.summarization,
+        "Summarize: ‘The 2024 pilot ran in Girona with 312 households. Uptake reached 68% by "
+        "week six, against a 45% target. Costs came in at €214 per household, above the €180 "
+        "forecast, driven mainly by installer scheduling. The council extended it to Figueres "
+        "in January.’",
+        "The first pass is deliberately sparse so the second can fold named entities in at the "
+        "same length.",
+        domain="program evaluation",
+    ),
+    "direct.role-prompting": TechniqueExample(
+        TaskType.creative_writing,
+        "Write the opening paragraph of a museum wall label for a 12th-century astrolabe, for "
+        "visitors who have never seen one.",
+        "The answer changes with the expertise assumed, which is exactly what the technique fixes.",
+        domain="museum curation",
+    ),
+    "reasoning.progressive-hint": TechniqueExample(
+        TaskType.coding,
+        "A tank fills at 14 L/min and drains at 9 L/min. It starts at 120 L and holds 400 L. How "
+        "long until it overflows if the drain fails after 20 minutes?",
+        "The second pass sees the first answer as a hint and must either confirm or replace it.",
+        domain="arithmetic",
+    ),
+    "coding.structured-cot": TechniqueExample(
+        TaskType.coding,
+        "Implement normalize_phone(text, country) returning E.164, handling local prefixes, "
+        "extensions, and unparseable input.",
+        "The plan is written as sequence, branch and loop structures before any code exists.",
+        domain="Python",
+    ),
+    "reasoning.graph-of-thought": TechniqueExample(
+        TaskType.research,
+        "Assess whether a mid-size grocery chain should build its own delivery fleet or contract "
+        "it out, given rural coverage obligations.",
+        "Three framings are developed independently and the answer is merged from parts of each.",
+        domain="operations strategy",
+    ),
+    "reasoning.code-prompting": TechniqueExample(
+        TaskType.research,
+        "A grant pays 60% of costs unless the applicant received support in the prior year, in "
+        "which case it pays 30% — but never below €2,000 for rural applicants. A rural applicant "
+        "with €9,000 costs took support last year. What is paid?",
+        "Nested conditions with an exception are rewritten as pseudo-code and traced by hand.",
+        domain="public policy",
+    ),
+    "coding.chain-of-code": TechniqueExample(
+        TaskType.coding,
+        "Given a list of customer complaints, count how many express frustration about delivery "
+        "timing rather than product quality.",
+        "The semantic test cannot be executed, so it is written as a call and its result marked "
+        "simulated.",
+        domain="Python",
+    ),
+    "reasoning.faithful-cot": TechniqueExample(
+        TaskType.coding,
+        "A cyclist rides 18 km at 24 km/h, rests 25 minutes, then rides 12 km at 16 km/h. Give "
+        "the average speed over the whole journey including the rest.",
+        "The symbolic chain is written first and the answer is derived from that chain alone.",
+        domain="arithmetic",
+    ),
+    "context.thread-of-thought": TechniqueExample(
+        TaskType.research,
+        "From this thread — a standup, two off-topic links, a deploy notice, a customer complaint, "
+        "and a rollback note — state whether the payment bug reached production.",
+        "The context is disordered, so each part is judged relevant or not before answering.",
+        domain="incident review",
+    ),
+    "reasoning.logic-of-thought": TechniqueExample(
+        TaskType.research,
+        "Every audited vendor is bonded. No bonded vendor is uninsured. Vendor K is uninsured. "
+        "Can Vendor K have been audited?",
+        "Contraposition is needed to reach the answer, which is what the expansion step recovers.",
+        domain="formal logic",
+    ),
+    "reasoning.narrative-of-thought": TechniqueExample(
+        TaskType.structured_extraction,
+        "The alarm was already ringing when Petra arrived, though the technician had reset it "
+        "after the outage that followed the storm. Order the events.",
+        "The text narrates events out of order, so the story is retold before the ordering is read "
+        "back out.",
+        domain="event ordering",
+    ),
+    "reasoning.layer-of-thought": TechniqueExample(
+        TaskType.research,
+        "From these eight candidate venues, find the ones seating over 200, available on a "
+        "Tuesday, within 3 km of the station, and with step-free access.",
+        "Four constraints are applied as successive layers so every exclusion carries a reason.",
+        domain="venue selection",
+    ),
+    "reasoning.cumulative": TechniqueExample(
+        TaskType.research,
+        "Given that the deploy preceded the error spike, the rollback did not clear it, and the "
+        "database migration ran an hour earlier, determine what the evidence supports.",
+        "Each proposition is verified against the accepted set before it enters the argument.",
+        domain="incident analysis",
+    ),
+    "reasoning.maieutic": TechniqueExample(
+        TaskType.classification,
+        "Claim: ‘The outage was caused by the config change.’ Decide whether the evidence supports "
+        "it, given that the change shipped at 14:02 and errors began at 13:40.",
+        "Both sides are argued in good faith and the decision turns on which set holds together.",
+        domain="incident analysis",
+    ),
+    "grounding.generated-knowledge": TechniqueExample(
+        TaskType.research,
+        "Explain why sourdough starters fail to rise in a cold kitchen and what actually fixes it.",
+        "The facts the answer rests on are stated first, then cited as the answer is built.",
+        domain="food science",
+    ),
+    "grounding.recitation": TechniqueExample(
+        TaskType.research,
+        "What does the Berne Convention say about the minimum term of copyright protection?",
+        "The relevant passage is recited from memory before the question is answered from it.",
+        domain="intellectual property",
+    ),
+    "grounding.chain-of-knowledge": TechniqueExample(
+        TaskType.research,
+        "May a tenant install a heat pump on a shared facade — considering the lease, the building "
+        "regulations, and local noise limits?",
+        "The question spans three separate bodies of knowledge that must be reconciled, not "
+        "merged.",
+        domain="property law",
+    ),
+    "verification.verify-and-edit": TechniqueExample(
+        TaskType.research,
+        "Explain why the Hanseatic League declined, then correct any step that does not hold.",
+        "Uncertain steps become standalone questions, and only the contradicted steps are "
+        "rewritten.",
+        domain="economic history",
+    ),
+    "reasoning.simtom": TechniqueExample(
+        TaskType.research,
+        "Ines put the invoice in the blue folder and left. Bram moved it to the drawer. Where will "
+        "Ines look for it, and where is it?",
+        "The context is first reduced to what one participant observed, which separates belief "
+        "from fact.",
+        domain="theory of mind",
+    ),
+    "direct.emotional-stimuli": TechniqueExample(
+        TaskType.creative_writing,
+        "Write a 120-word note telling a long-standing supplier that their contract will not be "
+        "renewed.",
+        "The framing raises the care taken without altering what the task asks for.",
+        domain="business writing",
+    ),
+    "reasoning.scratchpad": TechniqueExample(
+        TaskType.coding,
+        "Trace a stack machine through PUSH 4, PUSH 7, ADD, PUSH 3, MUL, DUP, SUB and report the "
+        "final stack.",
+        "The full machine state must be rewritten after every instruction rather than carried "
+        "implicitly.",
+        domain="virtual machines",
+    ),
+    "reasoning.instance-adaptive-cot": TechniqueExample(
+        TaskType.classification,
+        "Ticket: ‘Password reset email never arrives, but only for our @school.edu addresses.’",
+        "The instance looks trivial and is not, so classifying its difficulty changes how much "
+        "reasoning it gets.",
+        domain="support triage",
+    ),
+    "direct.directional-stimulus": TechniqueExample(
+        TaskType.summarization,
+        "Condense this quarterly report into three sentences for the board: revenue €4.2M "
+        "(up 11%), churn 3.1% (up from 2.4%), two enterprise logos lost, headcount flat.",
+        "Keywords are extracted first so generation is conditioned on them instead of on an "
+        "impression of the text.",
+        domain="corporate reporting",
+    ),
+    "structured.chain-of-table": TechniqueExample(
+        TaskType.structured_extraction,
+        "From a table of 40 orders with columns region, channel, units, and unit_price, find which "
+        "region had the highest revenue through the retail channel.",
+        "The table is transformed by named operations and shown after each, so the answer is "
+        "visible in it.",
+        domain="sales analytics",
+        response_schema=LABEL_SCHEMA,
+    ),
+    "verification.reflexion": TechniqueExample(
+        TaskType.coding,
+        "Write merge_intervals(intervals) that merges overlapping ranges, then critique and redo "
+        "it.",
+        "The first attempt is evaluated into an explicit lesson that the second attempt must "
+        "follow.",
+        domain="Python",
+    ),
+    "agents.meta-prompting": TechniqueExample(
+        TaskType.research,
+        "Should a 30-person company self-host its analytics stack? Weigh the engineering, legal, "
+        "and cost sides.",
+        "Each side is answered under its own brief in isolation, then the conductor resolves the "
+        "conflicts.",
+        domain="technology strategy",
+    ),
+    "reasoning.graph-flattening": TechniqueExample(
+        TaskType.structured_extraction,
+        "From a build graph where api depends on core and db, web depends on api, jobs depends on "
+        "db and core, and core depends on nothing, give a valid build order.",
+        "The graph is linearized into an ordered edge list before any reachability claim is made.",
+        domain="build systems",
+    ),
+    "reasoning.buffer-of-thoughts": TechniqueExample(
+        TaskType.coding,
+        "Find the number of ways to make €2.35 from coins of 5, 10, 20, 50 and 100 cents.",
+        "The reusable template for coin-change problems is distilled before it is filled in for "
+        "this instance.",
+        domain="combinatorics",
+    ),
 }
 
 

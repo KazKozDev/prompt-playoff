@@ -61,7 +61,7 @@ Schema-first output (structured.schema-first)
   • Executes as single (1 call minimum).
 ```
 
-The registry ships **29 techniques** across 7 execution strategies — 13 `single`, 11 `multi_stage`, and one each of `self_consistency`, `map_reduce`, `tool_loop`, `program_of_thought` and `tree_search`. 22 of them carry the paper they come from, and the catalog links it.
+The registry ships **61 techniques** across 7 execution strategies — 30 `single`, 26 `multi_stage`, and one each of `self_consistency`, `map_reduce`, `tool_loop`, `program_of_thought` and `tree_search`. 54 of them carry the paper they come from, and the catalog links it.
 
 Compilation then turns the task into the prompt *that technique implies* — its own blocks, stages and call count. Schema-first and map-reduce do not produce the same prompt with a different label on it:
 
@@ -262,7 +262,7 @@ The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a j
 ## Limitations
 
 - Ranking still uses declared priors for any (technique, task, model) triple you have not benchmarked. The UI and the CLI mark those `prior only`.
-- Of the 29 techniques, 6 carry `benchmarked` evidence, 16 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
+- Of the 61 techniques, 6 carry `benchmarked` evidence, 48 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
 - `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
 - The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.

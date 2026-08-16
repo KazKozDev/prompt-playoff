@@ -1,0 +1,110 @@
+id: direct.role-prompting
+version: 1.0.0
+title: Role prompting
+family: persona
+description: Assign the expertise the task needs and let it fix the vocabulary, the standards and what
+  counts as a complete answer.
+strong_tasks:
+- creative_writing
+- research
+acceptable_tasks:
+- summarization
+- classification
+- translation
+avoid_tasks: []
+suits:
+- underspecified
+- open_ended
+required_capabilities:
+- system_messages
+model_classes:
+- small
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: true
+validation_fit: false
+characteristics:
+  quality: 0.72
+  reliability: 0.74
+  latency_efficiency: 0.92
+  token_efficiency: 0.9
+  simplicity: 0.96
+recipe:
+  system: Answer as the practitioner this task calls for, at the standard that practitioner is held to.
+  instructions:
+  - Adopt the expertise the task requires.
+  - Apply that field's conventions and standards.
+  blocks:
+  - name: role
+    title: ROLE
+    body: 'Take the role of the practitioner this task belongs to, and say in one line which role you
+      have taken. Use that field''s vocabulary and conventions, and hold the answer to the standard
+      that field would apply to it.
+
+      The role is a standard to meet, not a voice to perform. Do not narrate being the expert.
+
+      '
+  - name: domain_note
+    title: DOMAIN
+    when: has_domain
+    body: 'The task sits in {domain}. Take the role from there.
+
+      '
+  - name: input
+    title: TASK
+    body: '{input}
+
+      '
+  - name: criteria
+    title: METHOD
+    body: 'Give the answer that practitioner would give: the judgement, the caveats that matter, and
+      nothing added to sound authoritative. Where the field would say the question is underspecified,
+      say so and state the assumption you proceed on.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Drop the role and answer the task plainly.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.68
+  task:creative_writing: 0.79
+  task:research: 0.72
+evidence_level: documented
+tags:
+- prompt-report
+- token-efficient
+- small-model-friendly
+source:
+  paper: Prompting GPT-3 To Be Reliable
+  authors: Si et al.
+  url: https://arxiv.org/abs/2210.09150
+  year: 2022

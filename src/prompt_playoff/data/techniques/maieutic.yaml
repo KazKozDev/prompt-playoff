@@ -1,0 +1,136 @@
+id: reasoning.maieutic
+version: 1.0.0
+title: Maieutic prompting
+family: abductive-consistency
+description: Argue the claim true and argue it false, then settle it on which set of explanations holds
+  together.
+strong_tasks:
+- classification
+- research
+acceptable_tasks:
+- structured_extraction
+avoid_tasks:
+- creative_writing
+- translation
+- summarization
+suits:
+- verifiable
+- underspecified
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 2
+tools_required: false
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.86
+  reliability: 0.88
+  latency_efficiency: 0.38
+  token_efficiency: 0.35
+  simplicity: 0.48
+recipe:
+  system: Build the case for both answers before deciding, and decide on consistency rather than
+    plausibility.
+  instructions:
+  - Explain why the claim would be true, then why it would be false.
+  - Keep the side whose explanations do not contradict each other.
+  blocks:
+  - name: procedure
+    title: ARGUE BOTH SIDES
+    body: 'Take the claim the task turns on and state it in one line.
+
+      Then argue it twice, in good faith on each side:
+
+
+      - `TRUE:` two or three explanations that would have to hold for the claim to be true
+
+      - `FALSE:` two or three explanations that would have to hold for it to be false
+
+
+      Argue each side as if it were the answer. Do not hedge, do not compare them yet, and do not say
+      which you believe.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: resolve_task
+    title: NOW RESOLVE
+    body: 'The two sets of explanations:
+
+
+      {previous}
+
+
+      Test each explanation for internal consistency: does it contradict another explanation on its own
+      side, or something the input states? Mark each `holds` or `breaks`, with the reason.
+
+      A side is only as strong as its weakest surviving explanation. Choose the side whose explanations
+      hold together, not the one that sounds more likely. If both sides survive intact, say the claim
+      is undetermined by what was given.
+
+      Give the answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  - allowed_labels
+  fallback: Re-argue the side whose explanation broke and re-resolve.
+execution:
+  strategy: multi_stage
+  stages:
+  - name: abduce
+    blocks:
+    - procedure
+    - input
+    system: Argue both sides. Decide nothing.
+    temperature: 0.7
+    carries_schema: false
+  - name: resolve
+    blocks:
+    - input
+    - resolve_task
+    - contract_native
+    - contract_embedded
+    - fields
+benchmark_priors:
+  default: 0.75
+  task:classification: 0.86
+  task:research: 0.82
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Maieutic Prompting: Logically Consistent Reasoning with Recursive Explanations'
+  authors: Jung et al.
+  url: https://arxiv.org/abs/2205.11822
+  year: 2022

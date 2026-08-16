@@ -1,0 +1,103 @@
+id: coding.chain-of-code
+version: 1.0.0
+title: Chain of code
+family: code-simulation
+description: Write the solution as code, run the parts that are computable, and simulate the parts that
+  are not — stating each simulated result as a value.
+strong_tasks:
+- coding
+- research
+acceptable_tasks:
+- structured_extraction
+- classification
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- computational
+- multi_step
+required_capabilities:
+- system_messages
+model_classes:
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+strict_json_fit: false
+validation_fit: true
+characteristics:
+  quality: 0.86
+  reliability: 0.81
+  latency_efficiency: 0.62
+  token_efficiency: 0.5
+  simplicity: 0.6
+recipe:
+  system: Express the whole solution as code; where code cannot decide it, simulate that line and say so.
+  instructions:
+  - Write the solution as a program, including the semantic steps.
+  - Simulate the lines a runtime could not execute.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Write the whole solution as a program, including the steps a runtime could never execute —
+      judgement calls, semantic tests, anything that needs reading rather than computing. Give those
+      steps ordinary function names and call them as if they existed.
+
+      Then step through the program and maintain the state after each line:
+
+
+      - a line a real interpreter could execute: execute it exactly, and report what it returns
+
+      - a line it could not: decide it yourself, and mark that line `# simulated` with the value you
+      assigned
+
+
+      A simulated value is a claim you are making. State it as a value, never as a hedge. Report the
+      final program state, then the answer alone.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - python_syntax
+  - json_validity
+  - json_schema
+  fallback: Re-run the trace from the first simulated line whose value does not hold.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.75
+  task:coding: 0.87
+  task:research: 0.79
+evidence_level: documented
+tags:
+- prompt-report
+source:
+  paper: 'Chain of Code: Reasoning with a Language Model-Augmented Code Emulator'
+  authors: Li et al.
+  url: https://arxiv.org/abs/2312.04474
+  year: 2023

@@ -1,0 +1,105 @@
+id: reasoning.chain-of-symbol
+version: 1.0.0
+title: Chain of symbol
+family: symbolic-representation
+description: Re-express the spatial or relational facts as compact symbols, then reason over the symbols
+  instead of the prose that carried them.
+strong_tasks:
+- agents
+- coding
+acceptable_tasks:
+- structured_extraction
+- research
+avoid_tasks:
+- creative_writing
+- translation
+suits:
+- multi_step
+- computational
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.79
+  reliability: 0.8
+  latency_efficiency: 0.82
+  token_efficiency: 0.83
+  simplicity: 0.72
+recipe:
+  system: Convert the relations into symbols first, then reason over the symbols.
+  instructions:
+  - Rewrite the stated relations in compact symbolic form.
+  - Reason over the symbols, not the prose.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'Prose hides relations. Before reasoning, rewrite every relation the input states in compact
+      symbolic form — one relation per line, entities as short names, relations as arrows or operators.
+      For example a placement becomes `A -> B` and a constraint becomes `A != C`.
+
+      Then work only from those lines. If a step needs a fact you did not symbolize, symbolize it
+      first rather than reaching back into the prose.
+
+      Give the final answer alone at the end.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - json_validity
+  - json_schema
+  fallback: Re-symbolize the relations that the failing step depended on.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.71
+  task:agents: 0.8
+  task:coding: 0.76
+evidence_level: documented
+tags:
+- prompt-report
+- token-efficient
+source:
+  paper: Chain-of-Symbol Prompting Elicits Planning in Large Language Models
+  authors: Hu et al.
+  url: https://arxiv.org/abs/2305.10276
+  year: 2023

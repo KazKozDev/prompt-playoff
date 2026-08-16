@@ -1,0 +1,107 @@
+id: context.thread-of-thought
+version: 1.0.0
+title: Thread of thought (ThoT)
+family: chaotic-context
+description: Walk a disordered context in manageable parts, summarising and judging the relevance of each
+  before answering from what survived.
+strong_tasks:
+- research
+- summarization
+acceptable_tasks:
+- structured_extraction
+- classification
+avoid_tasks:
+- creative_writing
+suits:
+- long_input
+- underspecified
+required_capabilities:
+- system_messages
+model_classes:
+- medium
+- large
+- reasoning
+min_calls: 1
+tools_required: false
+requires_supplied_evidence: true
+strict_json_fit: true
+validation_fit: true
+characteristics:
+  quality: 0.83
+  reliability: 0.85
+  latency_efficiency: 0.6
+  token_efficiency: 0.5
+  simplicity: 0.78
+recipe:
+  system: Work through a disordered context in parts, keeping only what bears on the question.
+  instructions:
+  - Walk the context in parts, summarising each.
+  - Mark each part relevant or not, and say why.
+  - Answer from the relevant parts alone.
+  blocks:
+  - name: role
+    title: OBJECTIVE
+    body: 'Complete this {task_type} task using the context supplied below.
+
+      '
+  - name: input
+    title: INPUT
+    body: '{input}
+
+      '
+  - name: procedure
+    title: PROCEDURE
+    body: 'This context is not ordered for the question being asked, and the parts that matter are
+      scattered through parts that do not. Do not read it as an argument.
+
+      Walk it in manageable parts, in the order it appears. For each part write one line: what it
+      states, and whether it bears on the question — `relevant` or `not relevant`, with the reason.
+
+      Then answer using only the parts you marked relevant. Where two relevant parts disagree, say so
+      and give the answer each supports rather than silently choosing. Where none of them settles the
+      question, say the context does not settle it.
+
+      '
+  - name: contract_native
+    title: OUTPUT CONTRACT
+    when: native_schema
+    body: 'The response is constrained by a schema enforced by the runtime. Emit the object only, with
+      no wrapper text.
+
+      '
+  - name: contract_embedded
+    title: OUTPUT CONTRACT
+    when: embedded_schema
+    body: 'Return one JSON document that validates against this schema:
+
+      {schema_json}
+
+      Emit the JSON only. No prose, no code fences, no trailing commentary.
+
+      '
+  - name: fields
+    title: FIELDS
+    when: has_schema
+    body: '{schema_fields}
+
+      '
+  validators:
+  - grounding_overlap
+  - json_validity
+  - json_schema
+  fallback: Re-walk the context for the part the answer turned on.
+execution:
+  strategy: single
+benchmark_priors:
+  default: 0.74
+  task:research: 0.84
+  task:summarization: 0.79
+evidence_level: documented
+tags:
+- prompt-report
+- long-context
+source:
+  paper: Thread of Thought Unraveling Chaotic Contexts
+  authors: Zhou et al.
+  url: https://arxiv.org/abs/2311.08734
+  year: 2023
