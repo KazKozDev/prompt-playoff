@@ -33,11 +33,12 @@ fail() {
 banner() {
     local i art hue base
 
-    # Two words, two colours: PROMPT in dark blue, PLAYOFF in dark gold, each
-    # stepping down from light to deep so the word reads as one mark. The steps
-    # stay mid-range: a Terminal window is white by default and black by
-    # preference, and only the middle is legible on both. The glyphs are heavy
-    # already, so no bold on top.
+    # Two words, two colours, and no gradient inside either: a wordmark is one
+    # mark, and a run of shades down its rows reads as six. Both are the muted
+    # mid-range pair the interface uses — steel blue and the same gold as the
+    # accent there. Mid-range is also what survives the background: a Terminal
+    # window is white by default and black by preference, and only the middle
+    # is legible on both. The glyphs are heavy already, so no bold on top.
     art=(
         '██████╗  ██████╗   ██████╗  ███╗   ███╗ ██████╗  ████████╗'
         '██╔══██╗ ██╔══██╗ ██╔═══██╗ ████╗ ████║ ██╔══██╗ ╚══██╔══╝'
@@ -53,7 +54,8 @@ banner() {
         '██║      ███████╗ ██║  ██║    ██║    ╚██████╔╝ ██║      ██║'
         '╚═╝      ╚══════╝ ╚═╝  ╚═╝    ╚═╝     ╚═════╝  ╚═╝      ╚═╝'
     )
-    hue=(27 27 26 26 25 25 0 178 178 172 172 136 136)
+    local blue=67 gold=179  # #5f87af and #d7af5f
+    hue=($blue $blue $blue $blue $blue $blue 0 $gold $gold $gold $gold $gold $gold)
     # The same two colours in the eight every terminal has, for the ones that
     # cannot do 256.
     base=(34 34 34 34 34 34 0 33 33 33 33 33 33)

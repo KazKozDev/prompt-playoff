@@ -99,7 +99,14 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-prompt_playoff = ["data/**/*.yaml", "data/**/*.jsonl", "data/static/*.html"]
+prompt_playoff = [
+  "data/**/*.yaml",
+  "data/**/*.jsonl",
+  "data/static/*.html",
+  "data/static/*.css",
+  "data/static/*.js",
+  "data/static/*.svg",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"

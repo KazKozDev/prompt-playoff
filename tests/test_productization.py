@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 
 import pytest
@@ -9,7 +11,7 @@ from prompt_playoff.api import app
 from prompt_playoff.deployment import export_runtime
 from prompt_playoff.domain import ModelProfile, TaskProfile, TaskType
 from prompt_playoff.evals import BenchmarkReport, Scorecard
-from prompt_playoff.experiments import ExperimentStore
+from prompt_playoff.experiments import CSV_COLUMNS, ExperimentStore, experiments_csv
 from prompt_playoff.model_profiles import ModelProfileStore
 
 
@@ -52,6 +54,9 @@ def report(scorecard: Scorecard) -> BenchmarkReport:
         finished_at="2026-08-15T10:00:01+00:00",
         scorecard=scorecard,
         prompt_preview={"stages": [{"user": "Extract {input}"}]},
+        dataset_revision="dataset-sha256",
+        grader_version="graders-v2",
+        seed_policy="repeat-index:0..0",
     )
 
 
@@ -82,6 +87,12 @@ def test_experiment_history_versions_and_marks_degradation(tmp_path):
     comparison = store.compare(first.id, second.id)
 
     assert (first.version, second.version) == (1, 2)
+    assert first.task is not None
+    assert first.task["model"]["model_id"] == "test-model"
+    assert first.dataset_revision == "dataset-sha256"
+    assert first.grader_version == "graders-v2"
+    assert first.seed_policy == "repeat-index:0..0"
+    assert first.environment["python"]
     by_metric = {item.metric: item for item in comparison.deltas}
     assert by_metric["quality"].degraded is True
     assert by_metric["mean_latency_seconds"].degraded is True
@@ -125,3 +136,43 @@ def test_profile_and_runtime_export_api(client):
     )
     assert exported.status_code == 200
     assert "runPromptPlayoff" in exported.json()["content"]
+
+
+def test_history_csv_is_one_row_per_variant_with_unformatted_numbers(tmp_path):
+    store = ExperimentStore(tmp_path / "experiments.json")
+    store.add_benchmark(report(card(quality=0.8675, latency=0.79, cost=0.000000772)), task())
+
+    text = experiments_csv(store.list())
+    rows = list(csv.reader(io.StringIO(text.lstrip("﻿"))))
+
+    assert text.startswith("﻿")  # or Excel reads the file in the legacy code page
+    assert "\r\n" in text
+    assert rows[0] == list(CSV_COLUMNS)
+    assert len(rows) == 2
+    row = dict(zip(CSV_COLUMNS, rows[1], strict=True))
+    assert row["variant"] == "structured.schema-first"
+    assert row["is_winner"] == "yes"
+    # A spreadsheet has to read these as numbers, so no rounding and no "$".
+    assert float(row["quality"]) == 0.8675
+    assert float(row["mean_cost_usd"]) == 0.000000772
+    assert row["kind"] == "benchmark"
+
+
+def test_history_csv_neutralises_cells_a_spreadsheet_would_run(tmp_path):
+    store = ExperimentStore(tmp_path / "experiments.json")
+    hostile = task()
+    hostile.model.model_id = '=HYPERLINK("http://evil","click")'
+    store.add_benchmark(report(card()), hostile)
+
+    row = list(csv.reader(io.StringIO(experiments_csv(store.list()).lstrip("﻿"))))[1]
+
+    assert row[CSV_COLUMNS.index("model_id")].startswith("'=")
+
+
+def test_history_csv_download_names_a_file(client):
+    response = client.get("/v1/experiments.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "prompt-playoff-history.csv" in response.headers["content-disposition"]
+    assert response.text.lstrip("﻿").startswith("version,recorded_at,")

@@ -8,6 +8,8 @@ the technique the user picked.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -107,6 +109,9 @@ class BenchmarkReport(BaseModel):
     delta: dict[str, float] = Field(default_factory=dict)
     runs: list[ExampleRun] = Field(default_factory=list)
     prompt_preview: dict[str, Any] = Field(default_factory=dict)
+    dataset_revision: str | None = None
+    grader_version: str = "deterministic-graders-v1"
+    seed_policy: str = "repeat-index"
 
     def to_evidence(self) -> MeasuredEvidence:
         return MeasuredEvidence(
@@ -271,6 +276,14 @@ class BenchmarkRunner:
             },
             runs=runs,
             prompt_preview=preview,
+            dataset_revision=hashlib.sha256(
+                json.dumps(
+                    [item.model_dump(mode="json") for item in dataset],
+                    sort_keys=True,
+                    ensure_ascii=False,
+                ).encode()
+            ).hexdigest(),
+            seed_policy=f"repeat-index:0..{repeats - 1}",
         )
 
     def _grade(

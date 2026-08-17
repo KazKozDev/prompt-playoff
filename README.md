@@ -1,6 +1,10 @@
-# Prompt Playoff — Prompt Optimization and Benchmarking for Local LLMs
+# Prompt Playoff — Prompt Optimization and Benchmarking for Local and Self-Hosted LLMs
 
-Prompt Playoff picks the prompting technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one. Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25 more — ranked on your data, not on a blog post's opinion.
+Prompt Playoff picks the prompting technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one. Chain-of-thought, self-consistency, ReAct, schema-first extraction and 57 more — ranked on your data, not on a blog post's opinion.
+
+Then it holds the result in place. Commit the thresholds a technique met and [`prompt-playoff check`](#prompt-regression-testing-in-ci) fails CI when a model swap or a prompt edit drops below them; [export the winner](#from-a-winning-prompt-to-production-monitoring) as a standalone Python or TypeScript client that runs without this repository.
+
+It is built for the case where the model is small and stays small — on a laptop, or on your own hardware because the data cannot leave it. That is where the choice of technique still moves the number. A frontier model answers a task correctly whichever way you ask it, and the technique only spends tokens; a 3B model gets the same task wrong until the prompt carries the method.
 
 ```bash
 # macOS
@@ -46,6 +50,29 @@ pip install 'prompt-playoff[all]' && prompt-playoff serve
 <p align="center">
   <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-ui.gif" alt="The Prompt Playoff web interface producing a schema-first prompt from a plain-language task, with the ranked alternatives below it" width="100%">
 </p>
+
+The browser now follows the full prompt lifecycle rather than stopping at a
+single benchmark:
+
+- **Build:** Dataset Builder creates deterministic mutations, can draft seed
+  cases with the configured prompt engine, or import Langfuse production
+  traces. Generated answers stay `unreviewed`; only explicitly approved rows
+  can be published as a benchmark dataset. Context Lab compares full,
+  compressed, retrieval, or memory context on the same prompt.
+- **Evaluate:** Blind Pairwise Judge randomizes answer order and routes every
+  verdict to Human Review. Model Matrix checks transfer across 2–8 models.
+  Analysis adds confidence intervals, a minimum-sample gate, and tag-based
+  slices over the last benchmark.
+- **Operate:** Regression Center compares recorded versions, reruns reproducible
+  experiments, and accepts a new baseline explicitly. Release Registry enforces
+  Draft → Tested → Human Approved → Production and supports rollback.
+  Production Quality detects vocabulary/error drift, grades agent trajectories,
+  and builds prompt-injection and conflicting-instruction security cases.
+
+Quality lifecycle state is stored separately in
+`benchmark-results/quality.json`; API keys are never written there. Experiment
+records include the task snapshot, dataset revision, grader/seed policy, prompt
+hash, and runtime version needed for a later rerun.
 
 ## Which prompting technique to use for your task
 
@@ -232,6 +259,8 @@ Tracing to Langfuse or Phoenix makes every call of every technique its own span,
 
 **PromptWizard** and other agent-driven optimizers ask an LLM to critique and rewrite instructions. Prompt Playoff does that too, but only during optimization — never to choose the technique, never to score an answer.
 
+All three leave the same thing unproven: that the technique you shipped is the right one for the task, and that it still is after the next model swap. Evaluation is reported as the leading blocker for AI work that stalls before production — ahead of governance and of model quality — and it is precisely the part a prompt library, a test harness and an optimizer each assume somebody else has done. Here it is the deliverable: a ranked choice with its reasons printed, the thresholds it met committed next to the code, and CI that fails when something drops below them.
+
 ### When not to use it
 
 Do not use it for one prompt on one task that already works — selection needs something to rank against, and every number here comes from examples with expected answers. It pays for itself when several techniques are plausible, when you have a dataset with gold answers, when picking wrong is expensive, or when the choice has to be defended to somebody else.
@@ -266,7 +295,7 @@ The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a j
 - `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
 - The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.
-- Graders are deterministic by design. There is no LLM judge, so open-ended generation cannot be scored on prose quality at all.
+- Deterministic graders remain the default release signal. The optional LLM judge handles open-ended or pairwise quality, but its verdict is blind-order randomized and remains pending until Human Review approves it.
 - The promptfoo export covers a technique's first stage only. Multi-call techniques must be measured here.
 - Trace import reads from Langfuse only. Phoenix is write-only in this direction — spans go out, datasets do not come back.
 

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import os
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -50,6 +53,11 @@ class ExperimentRecord(BaseModel):
     config_hash: str
     prompt_hash: str | None = None
     label: str | None = None
+    task: dict[str, Any] | None = None
+    dataset_revision: str | None = None
+    grader_version: str | None = None
+    seed_policy: str | None = None
+    environment: dict[str, str] = Field(default_factory=dict)
 
 
 class MetricDelta(BaseModel):
@@ -65,6 +73,102 @@ class ExperimentComparison(BaseModel):
     after: ExperimentRecord
     technique_id: str
     deltas: list[MetricDelta]
+
+
+# One row per measured variant rather than per experiment: a comparison holds
+# several and an optimization holds a baseline next to its winner, so a row each
+# is what lets a pivot table group by variant, by model or by dataset. "variant"
+# is the technique id for a benchmark or a comparison, and "baseline" or the
+# winning candidate's id for an optimization.
+CSV_COLUMNS = (
+    "version",
+    "recorded_at",
+    "kind",
+    "provider",
+    "model_id",
+    "dataset",
+    "variant",
+    "is_winner",
+    "quality",
+    "reliability",
+    "mean_latency_seconds",
+    "p95_latency_seconds",
+    "mean_total_tokens",
+    "mean_cost_usd",
+    "total_cost_usd",
+    "failures",
+    "runs",
+    "label",
+    "technique_ids",
+    "experiment_id",
+    "config_hash",
+    "prompt_hash",
+)
+
+# A cell a spreadsheet would run instead of show. Model ids, dataset names and
+# labels are all typed by someone or fetched from the Hub, so every text cell is
+# checked; numbers are written from floats and never pass through here.
+_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _cell(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (int, float)):
+        return str(value)
+    text = str(value)
+    return f"'{text}" if text.startswith(_FORMULA_LEAD) else text
+
+
+def experiments_csv(records: Iterable[ExperimentRecord]) -> str:
+    """Render the history as CSV for Excel, Numbers or Google Sheets.
+
+    Numbers are written unformatted so the spreadsheet reads them as numbers:
+    the cost column is dollars, not "$0.000772", and quality is 0.867, not a
+    rounded three-decimal string.
+    """
+    buffer = io.StringIO()
+    # Excel wants CRLF, and without a BOM it reads the file in the legacy code
+    # page and mangles anything a Hub dataset name might carry.
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(CSV_COLUMNS)
+    for record in records:
+        winner = record.winner
+        order = sorted(record.metrics, key=lambda name: (name != winner, name))
+        for variant in order:
+            snapshot = record.metrics[variant]
+            writer.writerow(
+                [
+                    _cell(value)
+                    for value in (
+                        record.version,
+                        record.created_at,
+                        record.kind,
+                        record.provider,
+                        record.model_id,
+                        record.dataset,
+                        variant,
+                        variant == winner,
+                        snapshot.quality,
+                        snapshot.reliability,
+                        snapshot.mean_latency_seconds,
+                        snapshot.p95_latency_seconds,
+                        snapshot.mean_total_tokens,
+                        snapshot.mean_cost_usd,
+                        snapshot.total_cost_usd,
+                        snapshot.failures,
+                        snapshot.runs,
+                        record.label,
+                        " ".join(record.technique_ids),
+                        record.id,
+                        record.config_hash,
+                        record.prompt_hash,
+                    )
+                ]
+            )
+    return "\ufeff" + buffer.getvalue()
 
 
 class ExperimentStore:
@@ -90,6 +194,11 @@ class ExperimentStore:
             winner=report.technique_id,
             metrics={report.technique_id: MetricSnapshot.from_scorecard(report.scorecard)},
             prompt=report.prompt_preview,
+            reproducibility={
+                "dataset_revision": report.dataset_revision,
+                "grader_version": report.grader_version,
+                "seed_policy": report.seed_policy,
+            },
         )
 
     def add_comparison(
@@ -106,6 +215,11 @@ class ExperimentStore:
                 for item in comparison.entries
             },
             prompt=[report.prompt_preview for report in reports],
+            reproducibility={
+                "dataset_revision": reports[0].dataset_revision if reports else None,
+                "grader_version": reports[0].grader_version if reports else None,
+                "seed_policy": reports[0].seed_policy if reports else None,
+            },
         )
 
     def add_optimization(self, result: OptimizationResult, task: TaskProfile) -> ExperimentRecord:
@@ -120,6 +234,7 @@ class ExperimentStore:
                 result.winner.id: MetricSnapshot.from_scorecard(result.winner_validation),
             },
             prompt=result.compiled_prompt,
+            reproducibility={},
         )
 
     def compare(
@@ -167,6 +282,7 @@ class ExperimentStore:
         winner: str | None,
         metrics: dict[str, MetricSnapshot],
         prompt: Any,
+        reproducibility: dict[str, str | None],
     ) -> ExperimentRecord:
         clean_task = task.model_dump(mode="json", exclude={"model": {"api_key"}})
         signature = {
@@ -192,6 +308,11 @@ class ExperimentStore:
                 metrics=metrics,
                 config_hash=_hash(clean_task),
                 prompt_hash=_hash(prompt) if prompt else None,
+                task=clean_task,
+                dataset_revision=reproducibility.get("dataset_revision"),
+                grader_version=reproducibility.get("grader_version"),
+                seed_policy=reproducibility.get("seed_policy"),
+                environment={"prompt_playoff": "local", "python": os.sys.version.split()[0]},
             )
             records.append(record)
             self._write_unlocked(records[-self.max_records :])

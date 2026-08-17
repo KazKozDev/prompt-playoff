@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 import pytest
@@ -61,9 +62,10 @@ def test_static_pages_are_served(client, path):
 def test_documentation_pages_are_reachable(client):
     # The app opens both documents in its own panel, so each page only carries its translation link.
     # English is what an unqualified path serves; Russian is the translation hanging off it.
-    home = client.get("/").text
-    assert "/help" in home
-    assert "/benchmarks" in home
+    navigation = client.get("/assets/navigation.js")
+    assert navigation.status_code == 200
+    assert "/help" in navigation.text
+    assert "/benchmarks" in navigation.text
     assert 'lang="en"' in client.get("/help").text
     assert 'lang="ru"' in client.get("/help/ru").text
     assert "/help/ru" in client.get("/help").text
@@ -72,13 +74,90 @@ def test_documentation_pages_are_reachable(client):
     assert "/benchmarks" in client.get("/benchmarks/ru").text
 
 
+def test_home_references_reachable_packaged_assets(client):
+    html = client.get("/").text
+    asset_paths = re.findall(r'(?:href|src)="(/assets/[^"]+)"', html)
+
+    assert asset_paths == [
+        "/assets/styles.css",
+        "/assets/core.js",
+        "/assets/datasets.js",
+        "/assets/catalog.js",
+        "/assets/selector.js",
+        "/assets/settings.js",
+        "/assets/navigation.js",
+        "/assets/platform.js",
+        "/assets/measurements.js",
+        "/assets/clipboard.js",
+        "/assets/boot.js",
+    ]
+    for path in asset_paths:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.content
+        expected_type = "text/css" if path.endswith(".css") else "text/javascript"
+        assert response.headers["content-type"].startswith(expected_type)
+
+
+def test_home_exposes_stable_lifecycle_shell_destinations(client):
+    html = client.get("/").text
+    sidebar_destinations = re.findall(
+        r'<a href="#[^"]+" data-global-tab="([^"]+)" data-screen="([^"]+)" '
+        r'data-testid="nav-[^"]+">',
+        html,
+    )
+
+    assert set(sidebar_destinations) == {
+        ("prompt", "prompt"),
+        # The measurements taken on a prompt are screens in their own right and
+        # are listed as such, not only reachable through the tab strip.
+        ("report", "report"),
+        ("comparison", "comparison"),
+        ("optimization", "optimization"),
+        ("dataset-library", "dataset-library"),
+        # Importing from the Hub is one of the three answers to "where do
+        # examples come from", so it is a destination, not a button in a panel.
+        ("dataset-hub", "dataset-hub"),
+        ("dataset-builder", "dataset-builder"),
+        ("history", "history"),
+        ("judge", "judge"),
+        ("model-matrix", "model-matrix"),
+        ("context-lab", "context-lab"),
+        ("analysis", "analysis"),
+        ("regressions", "regressions"),
+        ("reviews", "reviews"),
+        ("releases", "releases"),
+        ("production", "production"),
+        ("techniques", "techniques"),
+        ("logs", "logs"),
+        ("settings", "settings"),
+        ("evaluation", "evaluation"),
+        ("help", "help"),
+    }
+    assert 'data-testid="lifecycle-nav"' in html
+    assert 'data-testid="drawer-toggle"' in html
+    assert html.count('data-testid="bottom-') == 4
+    assert ">Evaluation guide<" in html
+    # The sidebar used to repeat the prompt/dataset/model line that the context
+    # bar already carries; one of the two had to go, and the header kept it.
+    assert 'id="sidebar-prompt"' not in html
+    assert 'id="context-prompt"' in html
+
+
+@pytest.mark.parametrize("path", ["/assets/missing.js", "/assets/.hidden.js", "/assets/index.html"])
+def test_static_asset_route_rejects_unknown_or_unsupported_files(client, path):
+    assert client.get(path).status_code == 404
+
+
 def test_home_exposes_the_complete_technique_catalog(client):
     html = client.get("/").text
     techniques = client.get("/v1/techniques").json()
     examples = client.get("/v1/techniques/examples").json()
 
     assert 'data-global-tab="techniques"' in html
-    assert "function renderTechniqueCatalog()" in html
+    catalog = client.get("/assets/catalog.js")
+    assert catalog.status_code == 200
+    assert "function renderTechniqueCatalog()" in catalog.text
     assert len(techniques) == 61
     assert len(examples) == len(techniques)
     assert len({item["user_input"] for item in examples}) == len(techniques)

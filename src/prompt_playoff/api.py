@@ -1,25 +1,32 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import random
 import re
+import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from prompt_playoff import __version__
 from prompt_playoff.deployment import DeploymentBundle, export_runtime
 from prompt_playoff.domain import (
     AuthorRequest,
     CompiledProgram,
+    CompiledPrompt,
     CompileRequest,
     DescriptionRequest,
     ExecutionTrace,
     Exemplar,
     MeasuredEvidence,
+    Message,
     ModelProfile,
     RunRequest,
     SelectionResult,
@@ -28,10 +35,11 @@ from prompt_playoff.domain import (
     TechniqueSpec,
 )
 from prompt_playoff.engine import PromptAuthoringError
-from prompt_playoff.evals import BenchmarkExample, load_jsonl_text
-from prompt_playoff.experiments import ExperimentComparison, ExperimentRecord
+from prompt_playoff.evals import BenchmarkExample, ExampleRun, load_jsonl_text
+from prompt_playoff.experiments import ExperimentComparison, ExperimentRecord, experiments_csv
 from prompt_playoff.graders import GRADER_HELP, grader_names
 from prompt_playoff.integrations import hub
+from prompt_playoff.integrations.tracing import import_langfuse_dataset
 from prompt_playoff.jobs import Job, JobStore
 from prompt_playoff.lint import lint_registry, registry_summary
 from prompt_playoff.model_profiles import SavedModelProfile
@@ -42,6 +50,27 @@ from prompt_playoff.providers import (
     ProviderError,
     check_model_connection,
     ollama_models,
+)
+from prompt_playoff.quality import (
+    DatasetBuildRequest,
+    DatasetProject,
+    DatasetReviewRequest,
+    DriftReport,
+    DriftRequest,
+    QualityStore,
+    ReleaseActionRequest,
+    ReleaseCreateRequest,
+    ReleaseRecord,
+    ReviewDecision,
+    ReviewItem,
+    SignificanceResult,
+    TrajectoryRequest,
+    build_dataset,
+    evaluate_trajectory,
+    production_drift,
+    security_suite,
+    significance,
+    slice_analysis,
 )
 from prompt_playoff.registry import Registry, RegistryError
 from prompt_playoff.service import PromptSelectorService
@@ -54,6 +83,7 @@ async def lifespan(app: FastAPI):
     registry = Registry.load()
     app.state.service = PromptSelectorService(registry)
     app.state.jobs = JobStore()
+    app.state.quality = QualityStore()
     yield
 
 
@@ -73,6 +103,10 @@ def _service(request: Request) -> PromptSelectorService:
 
 def _jobs(request: Request) -> JobStore:
     return request.app.state.jobs
+
+
+def _quality(request: Request) -> QualityStore:
+    return request.app.state.quality
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +206,66 @@ class DeploymentExportRequest(BaseModel):
     exemplars: list[Exemplar] = Field(default_factory=list)
 
 
+class PairwiseJudgeRequest(BaseModel):
+    input: str = Field(min_length=1, max_length=100_000)
+    answer_a: str = Field(min_length=1, max_length=100_000)
+    answer_b: str = Field(min_length=1, max_length=100_000)
+    rubric: list[str] = Field(min_length=1, max_length=12)
+    judge_model: ModelProfile
+    seed: int = 20260816
+    timeout_seconds: float = Field(default=120, gt=0, le=1800)
+
+
+class PairwiseJudgeScores(BaseModel):
+    first: float = Field(ge=0, le=10)
+    second: float = Field(ge=0, le=10)
+
+
+class PairwiseJudgeOutput(BaseModel):
+    winner: Literal["first", "second", "tie"]
+    scores: PairwiseJudgeScores
+    rationale: str
+
+
+class StatisticsRequest(BaseModel):
+    before: list[float] = Field(min_length=1, max_length=100_000)
+    after: list[float] = Field(min_length=1, max_length=100_000)
+
+
+class SliceAnalysisRequest(BaseModel):
+    examples: list[BenchmarkExample] = Field(min_length=1)
+    runs: list[dict[str, Any]] = Field(min_length=1)
+
+
+class RegressionRequest(BaseModel):
+    before_id: str
+    after_id: str
+    technique_id: str | None = None
+    quality_tolerance: float = Field(default=0.01, ge=0, le=1)
+    latency_tolerance: float = Field(default=0.1, ge=0)
+
+
+class RegressionActionRequest(BaseModel):
+    experiment_id: str
+
+
+class ModelMatrixRequest(BenchmarkRequest):
+    models: list[ModelProfile] = Field(min_length=2, max_length=8)
+
+
+class ContextVariant(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    context: str = Field(max_length=200_000)
+
+
+class ContextLabRequest(BenchmarkRequest):
+    contexts: list[ContextVariant] = Field(min_length=2, max_length=8)
+
+
+class SecurityEvaluationRequest(BenchmarkRequest):
+    source: BenchmarkExample
+
+
 # --------------------------------------------------------------------------- #
 # static + introspection
 # --------------------------------------------------------------------------- #
@@ -180,6 +274,29 @@ class DeploymentExportRequest(BaseModel):
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def index() -> str:
     return files("prompt_playoff").joinpath("data/static/index.html").read_text(encoding="utf-8")
+
+
+@app.get("/assets/{asset_name}", include_in_schema=False)
+def static_asset(asset_name: str) -> Response:
+    """Serve only the frontend's packaged, single-segment CSS and JavaScript assets."""
+    suffix = Path(asset_name).suffix
+    media_types = {".css": "text/css", ".js": "text/javascript"}
+    if (
+        asset_name != Path(asset_name).name
+        or asset_name.startswith(".")
+        or suffix not in media_types
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    resource = files("prompt_playoff").joinpath("data/static", asset_name)
+    if not resource.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return Response(content=resource.read_bytes(), media_type=media_types[suffix])
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon() -> Response:
+    body = files("prompt_playoff").joinpath("data/static/favicon.svg").read_text(encoding="utf-8")
+    return Response(content=body, media_type="image/svg+xml")
 
 
 @app.get("/help", response_class=HTMLResponse, include_in_schema=False)
@@ -448,6 +565,145 @@ def dataset_examples(name: str, request: Request) -> list[BenchmarkExample]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+# --------------------------------------------------------------------------- #
+# dataset builder + review-safe synthetic data
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/v1/dataset-projects", response_model=list[DatasetProject])
+def dataset_projects(request: Request) -> list[DatasetProject]:
+    return _quality(request).datasets()
+
+
+@app.post(
+    "/v1/dataset-projects", response_model=DatasetProject, status_code=status.HTTP_201_CREATED
+)
+async def create_dataset_project(payload: DatasetBuildRequest, request: Request) -> DatasetProject:
+    if payload.mode == "traces" and not payload.examples:
+        try:
+            rows = await asyncio.to_thread(
+                import_langfuse_dataset,
+                limit=payload.count,
+                session_id=payload.trace_session_id,
+                user_id=payload.trace_user_id,
+                tags=payload.trace_tags or None,
+                include_output_as_expected=False,
+            )
+            examples = [BenchmarkExample.model_validate(item) for item in rows]
+            if not examples:
+                raise ValueError("No matching Langfuse generations were found")
+            payload = payload.model_copy(update={"examples": examples, "count": len(examples)})
+        except (ImportError, RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail=f"Trace import failed: {exc}") from exc
+    if payload.generator_model is not None and not payload.examples:
+        schema = {
+            "type": "object",
+            "properties": {
+                "examples": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "input": {"type": "string"},
+                            "expected": {},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["input", "tags"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["examples"],
+            "additionalProperties": False,
+        }
+        prompt = CompiledPrompt(
+            technique_id="dataset-builder",
+            stage="generate",
+            messages=[
+                Message(
+                    role="system",
+                    content=(
+                        "Generate diverse evaluation inputs, including normal, boundary, "
+                        "malformed, "
+                        "long-context, and adversarial cases. Expected answers are proposals only."
+                    ),
+                ),
+                Message(
+                    role="user",
+                    content=(
+                        f"Create {payload.count} examples for this task:\n{payload.description}"
+                    ),
+                ),
+            ],
+            response_schema=schema,
+            generation_options={"temperature": 0.4},
+        )
+        try:
+            generated = await _service(request).provider(
+                TaskProfile(task_type=TaskType.summarization, model=payload.generator_model),
+                phase="dataset-builder",
+            ).generate(prompt, payload.generator_model)
+            rows = json.loads(generated.content).get("examples", [])
+            examples = [
+                BenchmarkExample(
+                    id=f"model-seed-{index + 1:03d}",
+                    input=row["input"],
+                    expected=row.get("expected"),
+                    tags=[*row.get("tags", []), "model-generated"],
+                )
+                for index, row in enumerate(rows[: payload.count])
+                if isinstance(row, dict) and row.get("input")
+            ]
+            if not examples:
+                raise ValueError("Generator returned no usable examples")
+            payload = payload.model_copy(update={"examples": examples, "count": len(examples)})
+        except (ProviderError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Dataset generation failed: {exc}"
+            ) from exc
+    project = _quality(request).add_dataset(build_dataset(payload))
+    _quality(request).add_review(
+        ReviewItem(
+            id=f"review_{project.id}",
+            kind="dataset",
+            created_at=project.created_at,
+            title=f"Review generated dataset: {project.name}",
+            payload={"project_id": project.id, "examples": len(project.examples)},
+        )
+    )
+    return project
+
+
+@app.post("/v1/dataset-projects/{project_id}/review", response_model=DatasetProject)
+def review_dataset_project(
+    project_id: str, payload: DatasetReviewRequest, request: Request
+) -> DatasetProject:
+    try:
+        return _quality(request).review_dataset(project_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/dataset-projects/{project_id}/publish", status_code=status.HTTP_201_CREATED)
+def publish_dataset_project(project_id: str, request: Request) -> dict[str, Any]:
+    project = next((item for item in _quality(request).datasets() if item.id == project_id), None)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Unknown dataset project")
+    examples = project.approved_examples
+    if not examples:
+        raise HTTPException(
+            status_code=422, detail="Approve at least one example before publishing"
+        )
+    name = f"builder:{project.name}"
+    path = _service(request).add_user_dataset(name, examples, persist=True)
+    return {"name": name, "examples": len(examples), "saved_to": str(path)}
+
+
+@app.post("/v1/datasets/security-suite", response_model=list[BenchmarkExample])
+def build_security_suite(example: BenchmarkExample) -> list[BenchmarkExample]:
+    return security_suite(example)
+
+
 @app.get("/v1/measurements", response_model=list[MeasuredEvidence])
 def measurements(request: Request) -> list[MeasuredEvidence]:
     return _service(request).measurements.records
@@ -593,6 +849,19 @@ def list_experiments(request: Request) -> list[ExperimentRecord]:
     return _service(request).experiments.list()
 
 
+@app.get("/v1/experiments.csv")
+def download_experiments_csv(request: Request) -> Response:
+    """The history as a spreadsheet: Excel and Numbers open it, Sheets imports it."""
+    body = experiments_csv(_service(request).experiments.list())
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="prompt-playoff-history.csv"',
+        },
+    )
+
+
 @app.post("/v1/experiments/compare", response_model=ExperimentComparison)
 def compare_experiments(
     payload: ExperimentCompareRequest, request: Request
@@ -611,6 +880,329 @@ def get_experiment(experiment_id: str, request: Request) -> ExperimentRecord:
     if record is None:
         raise HTTPException(status_code=404, detail="Unknown experiment")
     return record
+
+
+# --------------------------------------------------------------------------- #
+# judge, analysis, regressions, matrices, context, and production lifecycle
+# --------------------------------------------------------------------------- #
+
+
+@app.post("/v1/evaluate/pairwise")
+async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dict[str, Any]:
+    """Blind pairwise judging with seeded order randomisation and human review."""
+    rng = random.Random(payload.seed)
+    order = ["a", "b"]
+    rng.shuffle(order)
+    answers = {"a": payload.answer_a, "b": payload.answer_b}
+    schema = PairwiseJudgeOutput.model_json_schema()
+    prompt = CompiledPrompt(
+        technique_id="pairwise-judge",
+        stage="judge",
+        messages=[
+            Message(
+                role="system",
+                content=(
+                    "You are an impartial evaluator. Apply only the rubric. Do not infer which "
+                    "answer is a baseline or candidate. Return the requested JSON."
+                ),
+            ),
+            Message(
+                role="user",
+                content=(
+                    f"INPUT:\n{payload.input}\n\nRUBRIC:\n- "
+                    + "\n- ".join(payload.rubric)
+                    + f"\n\nFIRST ANSWER:\n{answers[order[0]]}"
+                    + f"\n\nSECOND ANSWER:\n{answers[order[1]]}"
+                ),
+            ),
+        ],
+        response_schema=schema,
+        generation_options={"temperature": 0},
+    )
+    try:
+        result = await _service(request).provider(
+            TaskProfile(task_type=TaskType.summarization, model=payload.judge_model),
+            phase="judge",
+        ).generate(prompt, payload.judge_model, payload.timeout_seconds)
+        judged = PairwiseJudgeOutput.model_validate_json(result.content)
+    except (ProviderError, ValidationError, TypeError, KeyError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Judge did not return valid JSON: {exc}"
+        ) from exc
+    winner = judged.winner
+    mapped = "tie" if winner == "tie" else order[0 if winner == "first" else 1]
+    raw_scores = {"first": judged.scores.first, "second": judged.scores.second}
+    scale = 10 if max(raw_scores.values()) > 1 else 1
+    response = {
+        "winner": mapped,
+        "scores": {
+            order[0]: round(raw_scores["first"] / scale, 4),
+            order[1]: round(raw_scores["second"] / scale, 4),
+        },
+        "rationale": judged.rationale,
+        "blind_order": order,
+        "judge_model": payload.judge_model.model_id,
+        "status": "pending_human_review",
+    }
+    review = _quality(request).add_review(
+        ReviewItem(
+            id=f"review_{uuid.uuid4().hex[:12]}",
+            kind="judge",
+            created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            title="Confirm pairwise judge decision",
+            payload=response,
+        )
+    )
+    return {**response, "review_id": review.id}
+
+
+@app.post("/v1/analysis/statistics", response_model=SignificanceResult)
+def analyze_statistics(payload: StatisticsRequest) -> SignificanceResult:
+    try:
+        return significance(payload.before, payload.after)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/analysis/slices")
+def analyze_slices(payload: SliceAnalysisRequest) -> list[dict[str, Any]]:
+    try:
+        runs = [ExampleRun.model_validate(item) for item in payload.runs]
+        return [item.model_dump(mode="json") for item in slice_analysis(payload.examples, runs)]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/regressions/analyze")
+def analyze_regression(payload: RegressionRequest, request: Request) -> dict[str, Any]:
+    try:
+        comparison = _service(request).experiments.compare(
+            payload.before_id, payload.after_id, payload.technique_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    active = []
+    for delta in comparison.deltas:
+        if delta.delta is None:
+            continue
+        if delta.metric in {"quality", "reliability"} and delta.delta < -payload.quality_tolerance:
+            active.append(delta.model_dump(mode="json"))
+        if "latency" in delta.metric and delta.delta > payload.latency_tolerance:
+            active.append(delta.model_dump(mode="json"))
+    result = {
+        "status": "failed" if active else "passed",
+        "active": active,
+        "comparison": comparison.model_dump(mode="json"),
+        "actions": ["rerun", "accept_baseline"] if active else [],
+    }
+    if active:
+        review = _quality(request).add_review(
+            ReviewItem(
+                id=f"review_{uuid.uuid4().hex[:12]}",
+                kind="regression",
+                created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+                title=f"Regression in {comparison.technique_id}",
+                payload=result,
+            )
+        )
+        result["review_id"] = review.id
+    return result
+
+
+@app.get("/v1/regressions/baselines")
+def regression_baselines(request: Request) -> dict[str, str]:
+    return _quality(request).baselines()
+
+
+@app.post("/v1/regressions/accept-baseline")
+def accept_regression_baseline(
+    payload: RegressionActionRequest, request: Request
+) -> dict[str, str]:
+    record = _service(request).experiments.get(payload.experiment_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown experiment")
+    key = f"{record.provider}:{record.model_id}:{record.dataset}"
+    return _quality(request).accept_baseline(key, record.id)
+
+
+@app.post("/v1/regressions/rerun", response_model=Job)
+async def rerun_regression(payload: RegressionActionRequest, request: Request) -> Job:
+    service, store = _service(request), _jobs(request)
+    record = service.experiments.get(payload.experiment_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown experiment")
+    if record.task is None or not record.technique_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="This older experiment lacks the reproducibility snapshot required to rerun it",
+        )
+    task = TaskProfile.model_validate(record.task)
+    job = store.create("regression-rerun")
+
+    async def work() -> dict[str, Any]:
+        report = await service.benchmark(
+            task=task,
+            technique_id=record.technique_ids[0],
+            dataset_name=record.dataset,
+            repeats=1,
+            record=True,
+            progress=lambda event: store.note(job.id, event),
+        )
+        return report.model_dump(mode="json")
+
+    return store.start(job, work)
+
+
+@app.post("/v1/model-matrix", response_model=Job)
+async def start_model_matrix(payload: ModelMatrixRequest, request: Request) -> Job:
+    service, store = _service(request), _jobs(request)
+    job = store.create("model-matrix")
+
+    async def work() -> dict[str, Any]:
+        reports = []
+        for model in payload.models:
+            task = payload.task.model_copy(update={"model": model})
+            model_id = model.model_id
+            report = await service.benchmark(
+                task=task,
+                technique_id=payload.technique_id,
+                dataset_name=payload.dataset,
+                inline=payload.examples or None,
+                repeats=payload.repeats,
+                timeout_seconds=payload.timeout_seconds,
+                record=payload.record,
+                progress=lambda event, current_model_id=model_id: store.note(
+                    job.id, {**event, "model_id": current_model_id}
+                ),
+            )
+            reports.append(report.model_dump(mode="json"))
+        winner = max(reports, key=lambda item: item["scorecard"]["quality"])
+        return {"reports": reports, "winner_model": winner["model_id"]}
+
+    return store.start(job, work)
+
+
+@app.post("/v1/security-evaluate", response_model=Job)
+async def start_security_evaluation(
+    payload: SecurityEvaluationRequest, request: Request
+) -> Job:
+    service, store = _service(request), _jobs(request)
+    job = store.create("security-evaluation")
+
+    async def work() -> dict[str, Any]:
+        report = await service.benchmark(
+            task=payload.task,
+            technique_id=payload.technique_id,
+            inline=security_suite(payload.source),
+            repeats=payload.repeats,
+            timeout_seconds=payload.timeout_seconds,
+            record=payload.record,
+            progress=lambda event: store.note(job.id, event),
+        )
+        return report.model_dump(mode="json")
+
+    return store.start(job, work)
+
+
+@app.post("/v1/context-lab", response_model=Job)
+async def start_context_lab(payload: ContextLabRequest, request: Request) -> Job:
+    service, store = _service(request), _jobs(request)
+    examples, dataset_name = service.resolve_dataset(payload.dataset, payload.examples or None)
+    job = store.create("context-lab")
+
+    async def work() -> dict[str, Any]:
+        reports = []
+        for variant in payload.contexts:
+            context_name = variant.name
+            contextual = [
+                item.model_copy(
+                    update={"input": f"CONTEXT:\n{variant.context}\n\nINPUT:\n{item.input}"}
+                )
+                for item in examples
+            ]
+            report = await service.benchmark(
+                task=payload.task,
+                technique_id=payload.technique_id,
+                inline=contextual,
+                repeats=payload.repeats,
+                timeout_seconds=payload.timeout_seconds,
+                record=False,
+                progress=lambda event, current_context=context_name: store.note(
+                    job.id, {**event, "context": current_context}
+                ),
+            )
+            reports.append({"context": variant.name, "report": report.model_dump(mode="json")})
+        winner = max(reports, key=lambda item: item["report"]["scorecard"]["quality"])
+        return {"dataset": dataset_name, "reports": reports, "winner_context": winner["context"]}
+
+    return store.start(job, work)
+
+
+@app.get("/v1/reviews", response_model=list[ReviewItem])
+def list_reviews(request: Request) -> list[ReviewItem]:
+    return _quality(request).reviews()
+
+
+@app.post("/v1/reviews/{review_id}", response_model=ReviewItem)
+def decide_review(review_id: str, payload: ReviewDecision, request: Request) -> ReviewItem:
+    try:
+        return _quality(request).decide_review(review_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/v1/releases", response_model=list[ReleaseRecord])
+def list_releases(request: Request) -> list[ReleaseRecord]:
+    return _quality(request).releases()
+
+
+@app.post("/v1/releases", response_model=ReleaseRecord, status_code=status.HTTP_201_CREATED)
+def create_release(payload: ReleaseCreateRequest, request: Request) -> ReleaseRecord:
+    record = _quality(request).create_release(payload)
+    _quality(request).add_review(
+        ReviewItem(
+            id=f"review_{record.id}",
+            kind="release",
+            created_at=record.created_at,
+            title=f"Approve release {record.name} v{record.version}",
+            payload={"release_id": record.id, "prompt_hash": record.prompt_hash},
+        )
+    )
+    return record
+
+
+@app.post("/v1/releases/{release_id}/action", response_model=ReleaseRecord)
+def act_on_release(
+    release_id: str, payload: ReleaseActionRequest, request: Request
+) -> ReleaseRecord:
+    if payload.action == "approve":
+        gate = next(
+            (
+                item
+                for item in _quality(request).reviews()
+                if item.kind == "release" and item.payload.get("release_id") == release_id
+            ),
+            None,
+        )
+        if gate is None or gate.status != "approved":
+            raise HTTPException(
+                status_code=409,
+                detail="Approve this release in Human Review before changing its lifecycle status",
+            )
+    try:
+        return _quality(request).act_on_release(release_id, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/drift", response_model=DriftReport)
+def analyze_drift(payload: DriftRequest) -> DriftReport:
+    return production_drift(payload)
+
+
+@app.post("/v1/trajectories/evaluate")
+def analyze_trajectory(payload: TrajectoryRequest) -> dict[str, Any]:
+    return evaluate_trajectory(payload)
 
 
 @app.post("/v1/export/promptfoo")
