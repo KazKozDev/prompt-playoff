@@ -64,8 +64,15 @@
       </svg>
       <div><strong>Prompt Playoff</strong><span>Prompt delivery workbench</span></div>
     </div>
+    <div class="rail-smart">
+      <div class="rail-smart-top">
+        <span class="rail-smart-mark" aria-hidden="true"></span>
+        <div><strong>Smart run</strong><small>Write, measure, improve — one pass</small></div>
+      </div>
+      <button type="button" class="primary block rail-smart-start" data-testid="smart-run">Start</button>
+      <p class="rail-smart-status" role="status" aria-live="polite"></p>
+    </div>
     <nav class="lifecycle-nav" data-testid="lifecycle-nav" aria-label="Prompt delivery lifecycle">
-      <div class="recent-group" id="recent-group" hidden></div>
       <div class="sidebar-group" data-section="prompt">
         <button class="sidebar-section" type="button" data-section-toggle="prompt" aria-expanded="false" aria-controls="section-prompt"><span class="section-name">Prompt</span><span class="section-count" data-section-count="prompt"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-prompt">
@@ -107,22 +114,21 @@
         <div class="sidebar-links" id="section-reference">
         <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
         <a href="#logs" data-global-tab="logs" data-screen="logs" data-testid="nav-logs">Jobs &amp; logs</a>
-        <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="nav-settings">Models &amp; keys</a>
         <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation" data-testid="nav-evaluation-guide">Evaluation guide</a>
         <a href="#help" data-global-tab="help" data-screen="help" data-testid="nav-help">Help</a>
         </div>
       </div>
     </nav>
     <div class="sidebar-foot">
-      <a class="rail-model" href="#settings" data-global-tab="settings" data-screen="settings" data-testid="rail-model">
-        <span class="rail-model-dot" aria-hidden="true"></span>
-        <span><strong id="rail-model-name">llama3.2:3b</strong><small>Runs every measurement · change</small></span>
-      </a>
       <div class="theme-switch" role="group" aria-label="Appearance" data-testid="theme-switch">
         <button type="button" data-theme-set="auto" aria-pressed="false">Auto</button>
         <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
         <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
       </div>
+      <a class="rail-model" href="#settings" data-global-tab="settings" data-screen="settings" data-testid="rail-model">
+        <span class="rail-model-dot" aria-hidden="true"></span>
+        <span><strong id="rail-model-name">llama3.2:3b</strong><small>Runs every measurement · change</small></span>
+      </a>
     </div>
   </aside>
   <button class="drawer-backdrop" type="button" tabindex="-1" data-action="close-drawer" aria-label="Close navigation"></button>
@@ -130,7 +136,8 @@
   <div class="app-main">
     <header class="context-bar">
       <button class="menu-button" type="button" data-action="open-drawer" data-testid="drawer-toggle" aria-controls="app-sidebar" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="sr-only">Open navigation</span></button>
-      <div class="context-title"><span class="context-eyebrow" id="context-section">Prompt</span><h1 id="page-title">Prompt Studio</h1></div>
+      <button class="back-button" type="button" id="back-button" data-testid="back-button" aria-label="Back" hidden></button>
+      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
       <div class="context-artifacts" aria-label="Active artifacts">
         <span><b>Prompt</b> <code id="context-prompt">Draft</code></span>
         <span><b>Dataset</b> <code id="context-dataset">Loading…</code></span>
@@ -139,10 +146,6 @@
           <div class="model-pop" id="model-pop" role="menu" hidden></div>
         </div>
       </div>
-      <nav class="context-utilities" aria-label="Utilities">
-        <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="utility-settings">Settings</a>
-        <a href="#help" data-global-tab="help" data-screen="help" data-testid="utility-help">Help</a>
-      </nav>
     </header>
 
     <main class="workspace-main" id="main-content" tabindex="-1">
@@ -168,67 +171,55 @@
         </fieldset>
         <p class="task-helper" id="task-helper">We will include your exact words in the finished prompt.</p>
         <div class="task-error" id="task-error" role="alert" aria-live="assertive"></div>
-        <button id="select-btn" class="primary" type="button" data-action="create-prompt" data-testid="create-prompt">Create my prompt</button>
+        <button id="select-btn" class="primary block" type="button" data-action="create-prompt" data-testid="create-prompt">Create my prompt</button>
 
       </section>
 
-      <section class="panel advanced-panel">
-        <details class="advanced-disclosure" id="test-details">
-          <summary>Measure and improve this prompt</summary>
-          <div class="advanced-content">
-            <div class="meta tune-status" id="chosen">Create a prompt first, then pick a method — both steps below measure the method you picked.</div>
+      <section class="panel run-panel">
+        <h2 class="task-title">Measure and improve it</h2>
+        <div class="meta tune-status" id="chosen">Create a prompt first, then pick a method — both steps below measure the method you picked.</div>
 
-            <div class="tune-group">
-              <h3 class="tune-title">Examples</h3>
-              <p class="tune-lead">Both steps below run your prompt over these and score the answers.</p>
-
-              <label for="dataset-file">Your own examples (JSONL)</label>
-              <div class="upload-row">
-                <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-describedby="upload-status">
-                <button id="upload-btn" class="ghost upload-btn" type="button" data-action="upload-dataset" disabled>Upload</button>
-              </div>
-              <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
-              <p class="field-hint">One example per line: <code>{"id":"1","input":"…","expected":"…"}</code>. Up to 10 MiB, kept until the server restarts.</p>
-
-              <div class="field-label">No examples of your own?</div>
-              <a class="field-link" href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub">Import a public dataset from Hugging Face</a>
-
-              <label for="dataset">Measure against</label>
-              <select id="dataset"></select>
-              <p class="field-hint">The bundled sets are there to try this out. A score only says something about your prompt when the examples look like your real inputs.</p>
-
-              <label for="repeats">Runs per example</label>
-              <input id="repeats" type="number" value="1" min="1" max="10">
-              <p class="field-hint">More than one shows how much the answers move between identical runs.</p>
-            </div>
-
-            <div class="tune-group">
-              <h3 class="tune-title">Measure</h3>
-              <p class="tune-lead">Score the prompt as it stands, or every recommended method side by side.</p>
-
-              <div class="meta estimate" id="measure-estimate"></div>
-              <button id="bench-btn" type="button" data-action="benchmark-prompt" disabled>Benchmark this prompt</button>
-              <button id="compare-btn" class="ghost" type="button" data-action="compare-prompts" disabled>Compare all recommended</button>
-            </div>
-
-            <div class="tune-group">
-              <h3 class="tune-title">Improve</h3>
-              <p class="tune-lead">Rewrite the prompt, score every version, keep the best one.</p>
-
-              <label for="rounds">Rounds</label>
-              <input id="rounds" type="number" value="2" min="1" max="6">
-              <p class="field-hint">Each round after the first writes three more versions and scores them all.</p>
-
-              <label for="backend">How to search</label>
-              <select id="backend"></select>
-
-              <div class="meta estimate" id="optimize-estimate"></div>
-              <button id="optimize-btn" type="button" data-action="optimize-prompt" disabled>Optimize the prompt</button>
-            </div>
-
-            <div class="progress" id="progress"></div>
+        <div class="run-group">
+          <span class="section-eyebrow">Examples</span>
+          <p class="run-lead">The rows both actions below run your prompt over.</p>
+          <label for="dataset">Measure against</label>
+          <select id="dataset"></select>
+          <label for="repeats">Runs per example</label>
+          <input id="repeats" type="number" value="1" min="1" max="10">
+          <p class="field-hint">More than one shows how much the answers move between identical runs.</p>
+          <label for="dataset-file">Your own examples (JSONL)</label>
+          <div class="upload-row">
+            <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-describedby="upload-status">
+            <button id="upload-btn" class="ghost upload-btn" type="button" data-action="upload-dataset" disabled>Upload</button>
           </div>
-        </details>
+          <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
+          <a class="field-link" href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub">No examples of your own? Import from Hugging Face</a>
+        </div>
+
+        <div class="run-group">
+          <span class="section-eyebrow">Measure</span>
+          <p class="run-lead">Score the prompt as it stands, or every recommended method side by side.</p>
+          <div class="meta estimate" id="measure-estimate"></div>
+          <div class="form-actions">
+            <button id="bench-btn" class="primary" type="button" data-action="benchmark-prompt" disabled>Measure now</button>
+            <button id="compare-btn" class="ghost" type="button" data-action="compare-prompts" disabled>Compare all recommended</button>
+          </div>
+        </div>
+
+        <div class="run-group">
+          <span class="section-eyebrow">Improve</span>
+          <p class="run-lead">Rewrites the prompt, scores every version, keeps the best one.</p>
+          <label for="rounds">Rounds</label>
+          <input id="rounds" type="number" value="2" min="1" max="6">
+          <label for="backend">How to search</label>
+          <select id="backend"></select>
+          <div class="meta estimate" id="optimize-estimate"></div>
+          <div class="form-actions">
+            <button id="optimize-btn" class="ghost" type="button" data-action="optimize-prompt" disabled>Optimize the prompt</button>
+          </div>
+        </div>
+
+        <div class="progress" id="progress"></div>
       </section>
     </div>
 

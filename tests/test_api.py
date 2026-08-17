@@ -97,6 +97,9 @@ def test_home_references_reachable_packaged_assets(client):
         assert response.content
         expected_type = "text/css" if path.endswith(".css") else "text/javascript"
         assert response.headers["content-type"].startswith(expected_type)
+        # The filenames never change, so without this a browser keeps showing an
+        # old interface against a new server and gives no sign that it is.
+        assert response.headers["cache-control"] == "no-cache, must-revalidate"
 
 
 def test_home_exposes_stable_lifecycle_shell_destinations(client):
@@ -130,10 +133,14 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         ("production", "production"),
         ("techniques", "techniques"),
         ("logs", "logs"),
-        ("settings", "settings"),
         ("evaluation", "evaluation"),
         ("help", "help"),
     }
+    # Models & keys is not one of the workspace's screens: it is the setup every
+    # screen depends on, so it lives in the corner of the rail and behind the
+    # model chip, both visible from everywhere, rather than in the list.
+    assert 'data-testid="rail-model"' in html
+    assert 'data-testid="model-chip"' in html
     assert 'data-testid="lifecycle-nav"' in html
     assert 'data-testid="drawer-toggle"' in html
     assert html.count('data-testid="bottom-') == 4

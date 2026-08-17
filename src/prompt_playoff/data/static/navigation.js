@@ -1,12 +1,9 @@
-const detailTabs = [
-    ['prompt', 'Authored prompt'],
-    ['report', 'Benchmark'],
-    ['comparison', 'Comparison'],
-    ['optimization', 'Optimization']
-];
-const resultTabs = detailTabs.map(([key]) => key);
+// The prompt and the three measurements taken on it: they share the composer
+// column, which every other screen hides.
+const resultTabs = ['prompt', 'report', 'comparison', 'optimization'];
 const platformTabs = ['dataset-builder', 'context-lab', 'judge', 'model-matrix', 'analysis', 'reviews', 'regressions', 'releases', 'production', 'dataset-library'];
-const detailPanels = ['home', 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', ...platformTabs];
+const sectionTabs = ['s-prompt', 's-examples', 's-check', 's-ship', 's-reference'];
+const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', ...platformTabs];
 const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluation Guide'] };
 // One name per screen, written down once. The sidebar link, the heading in the
 // context bar and the browser tab all read from here, so a screen can never be
@@ -32,7 +29,12 @@ const screenMeta = {
   logs:['Reference', 'Jobs & logs', 'What is running right now, and what every finished run did.'],
   settings:['Reference', 'Models & keys', 'Two models, and they do different jobs. The prompt engine writes the final prompt; the evaluation model runs it and produces every number you see.'],
   evaluation:['Reference', 'Evaluation guide'], help:['Reference', 'Help'],
-  home:['Workspace', 'Prompt Playoff', 'Five places, and one button that walks you through all of them. Everything here runs on your machine.']
+  home:['Workspace', 'Prompt Playoff', 'Five places, and one button that walks you through all of them. Everything here runs on your machine.'],
+  's-prompt':['Prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.'],
+  's-examples':['Examples', 'Examples', 'The rows every score is computed against — bring your own, import public ones, or generate them. A number only means something when these look like your real inputs.'],
+  's-check':['Check', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?'],
+  's-ship':['Ship', 'Ship', 'The gate between a prompt that scores well here and a prompt running in front of real users.'],
+  's-reference':['Reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.']
 };
 
 // The one action a screen offers about itself lives in the same corner on every
@@ -43,12 +45,15 @@ const screenActions = {
 };
 
 function screenShell(tab, body) {
-  const lead = screenMeta[tab]?.[2];
+  const [, title, lead] = screenMeta[tab] || screenMeta.home;
   const actions = screenActions[tab]?.() || '';
   const gate = modelGatedScreens.has(tab) ? MODEL_GATE : '';
-  const head = (lead || actions)
-    ? `<div class="screen-head">${lead ? `<p class="screen-lead">${esc(lead)}</p>` : '<span></span>'}${actions ? `<div class="screen-actions">${actions}</div>` : ''}</div>`
-    : '';
+  // The name belongs to the screen, not to the chrome: the bar carries the path
+  // you took, the screen carries what it is.
+  const head = `<div class="screen-head">
+      <div><h1 class="screen-title">${esc(title)}</h1>${lead ? `<p class="screen-lead">${esc(lead)}</p>` : ''}</div>
+      ${actions ? `<div class="screen-actions">${actions}</div>` : ''}
+    </div>`;
   return `${head}${gate}${body}`;
 }
 // Appearance. "Auto" clears the attribute so the media query decides; the other
@@ -85,8 +90,9 @@ document.querySelectorAll('.lifecycle-nav a[data-screen], .bottom-nav a[data-scr
 const sectionIcons = {prompt:'pencil', examples:'rows', check:'target', ship:'rocket', reference:'book'};
 document.querySelectorAll('[data-section-toggle]').forEach(button =>
   button.insertAdjacentHTML('afterbegin', icon(sectionIcons[button.dataset.sectionToggle])));
-const sectionOf = screen => [...document.querySelectorAll('.sidebar-group[data-section]')]
-  .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section || '';
+const sectionOf = screen => screen.startsWith('s-') ? screen.slice(2)
+  : [...document.querySelectorAll('.sidebar-group[data-section]')]
+      .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section || '';
 
 function openSection(section) {
   document.querySelectorAll('.sidebar-group[data-section]').forEach(group => {
@@ -102,9 +108,8 @@ function openSection(section) {
 }
 
 document.querySelectorAll('[data-section-toggle]').forEach(button => button.addEventListener('click', () => {
-  const section = button.dataset.sectionToggle;
-  const alreadyOpen = document.querySelector(`.sidebar-group[data-section="${section}"]`)?.classList.contains('open');
-  openSection(alreadyOpen ? sectionOf(state.tab) : section);
+  closeDrawer(false);
+  selectTab(`s-${button.dataset.sectionToggle}`, {focus:true});
 }));
 
 // A count that needs a person is the only thing in the rail allowed a colour.
@@ -123,7 +128,7 @@ function renderSectionCounts() {
 
 // The home tiles report state that arrives after the first paint.
 function refreshHomeIfVisible() {
-  if (state.tab === 'home') renderDetailPanel('home');
+  if (state.tab === 'home' || sectionTabs.includes(state.tab)) renderDetailPanel(state.tab);
 }
 
 /* --------------------------------------------------------------------------
@@ -188,31 +193,35 @@ document.addEventListener('click', event => {
   if (!event.target.closest('#model-pop')) toggleModelMenu(false);
 });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') toggleModelMenu(false); });
+// The ceiling floats until there is something under it to separate from.
+document.addEventListener('scroll', () => {
+  document.querySelector('.context-bar')?.classList.toggle('stuck', window.scrollY > 4);
+}, {passive:true});
 
 // Where you were, not where you are: the current screen is already lit in the
 // section below, and two highlights for one place read as two places.
-$('recent-group')?.addEventListener('click', event => {
-  const link = event.target.closest('[data-global-tab]');
-  if (!link) return;
-  event.preventDefault();
-  closeDrawer(false);
-  selectTab(link.dataset.globalTab, {focus:true});
+
+document.addEventListener('click', event => {
+  const crumb = event.target.closest('[data-crumb]');
+  if (crumb && crumb.dataset.crumb) selectTab(crumb.dataset.crumb, {focus:true});
 });
 
-const recentScreens = [];
-function rememberScreen(tab) {
-  if (!screenMeta[tab] || tab === 'home') return;
-  const next = [tab, ...recentScreens.filter(item => item !== tab)].slice(0, 4);
-  recentScreens.length = 0; recentScreens.push(...next);
-}
-
-function renderRecent() {
-  const host = $('recent-group');
-  if (!host) return;
-  const items = recentScreens.filter(tab => tab !== state.tab).slice(0, 3);
-  host.hidden = !items.length;
-  host.innerHTML = items.length ? `<span class="sidebar-label">Recent</span>${items.map(tab =>
-    `<a href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">${icon(screenIcons[tab] || 'clock')}${esc(screenMeta[tab][1])}</a>`).join('')}` : '';
+// One chain, two doors: the rail card and the home tile run the same thing.
+function wireSmartStart(button, status) {
+  button?.addEventListener('click', async () => {
+    const say = (kind, text) => { if (status) { status.textContent = text; status.className = `${status.classList[0]} ${kind}`; } };
+    button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Running…';
+    try {
+      await smartRun(say);
+      say('done', 'Done — opening the improved prompt.');
+      selectTab('optimization', {focus:true});
+    } catch (error) {
+      say('error-text', error.message);
+    } finally {
+      button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Start';
+      refreshActions();
+    }
+  });
 }
 
 const routeAliases = {selector:'prompt'};
@@ -310,21 +319,110 @@ function sectionTiles() {
   const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
   const technique = state.program?.technique_id || state.chosen;
   return [
-    ['prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.',
+    ['s-prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.',
       technique ? ['ok', 'Prompt ready'] : ['idle', 'Not written yet']],
-    ['dataset-library', 'Examples', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
+    ['s-examples', 'Examples', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
       state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…']],
-    ['history', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?',
+    ['s-check', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?',
       state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')} recorded`] : ['idle', 'Nothing measured yet']],
-    ['regressions', 'Ship', 'The gate between a prompt that scores well here and a prompt running in front of real users.',
+    ['s-ship', 'Ship', 'The gate between a prompt that scores well here and a prompt running in front of real users.',
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
-    ['techniques', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.',
+    ['s-reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.',
       state.techniqueCatalog.size ? ['idle', `${plural(state.techniqueCatalog.size, 'technique')}`] : ['idle', 'Loading…']]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
-      <span class="tile-top">${icon(sectionIcons[sectionOf(tab)] || 'pencil')}<strong>${esc(name)}</strong></span>
+      <span class="tile-top">${icon(sectionIcons[tab.slice(2)] || 'pencil')}<strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
       <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
     </a>`).join('');
+}
+
+// What a tile says is not what the screen says. A tile is read while scanning
+// five of them, so it gets one short line; the screen itself gets the longer
+// one, read once you are there. Same source, two lengths.
+const tileDesc = {
+  prompt:'Describe the job in plain words; a proven technique is picked and the prompt written for you.',
+  report:'The scorecard for the prompt as it stands, example by example.',
+  comparison:'Every recommended technique scored side by side on the same examples.',
+  optimization:'Rewrites the prompt over several rounds and keeps whichever version scores best.',
+  'dataset-library':'Every set available to this server — bundled, uploaded, imported, or built here.',
+  'dataset-hub':'No examples of your own? Find a public dataset whose material resembles your task.',
+  'dataset-builder':'Generate edge cases and mutations. Nothing becomes truth before you approve it.',
+  history:'Every run this server has recorded, newest first, with a version-to-version diff.',
+  judge:'Two answers, one rubric, order hidden from the judge.',
+  'model-matrix':'The same prompt on several models, to catch wording that only works on one.',
+  'context-lab':'Same prompt, different context — documents, memory, retrieval, compressed.',
+  analysis:'Is the difference real? Confidence intervals and per-slice scores, so noise does not become a decision.',
+  regressions:'Better or worse? Two recorded runs against the quality and the speed you are willing to lose.',
+  reviews:'Generated examples, judge decisions, regressions and releases needing a yes or no.',
+  releases:'Draft → tested → approved → production, with a rollback that restores the previous prompt.',
+  production:'Input drift, agent runs, and injection attempts — three checks on what happens in production.',
+  techniques:'Every method with its own task and a real prompt compiled from the live registry.',
+  logs:'What is running right now, and what every finished run did.',
+  settings:'Two models: one writes the prompt, one runs the tests.',
+  evaluation:'What the scores mean, and when a number is worth trusting.',
+  help:'How the whole thing fits together, start to finish.'
+};
+
+/* A section screen is where "where am I" is answered, so its tiles carry state
+ * rather than a separate list of steps saying the same thing beside them. */
+// Screens whose only state is "has this been run here yet".
+function screenResultState(tab) {
+  return state.quality.results[tab] ? ['ok', 'Run'] : ['idle', 'Not run'];
+}
+
+function screenState(tab) {
+  const runQuality = report => report ? report.scorecard.quality.toFixed(2) : null;
+  switch (tab) {
+    case 'prompt': return state.chosen ? ['ok', 'Written'] : ['idle', 'Not written yet'];
+    case 'report': return state.report ? ['ok', `Quality ${runQuality(state.report)}`] : ['idle', 'Not measured'];
+    case 'comparison': return state.comparison ? ['ok', `${plural(state.comparison.entries.length, 'method')}`] : ['idle', 'Not compared'];
+    case 'optimization': return state.optimization ? ['ok', 'Improved'] : ['idle', 'Not optimized'];
+    case 'dataset-library': return state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…'];
+    case 'dataset-builder': {
+      const unreviewed = state.quality.projects.reduce((total, project) =>
+        total + project.examples.filter(item => item.status === 'unreviewed').length, 0);
+      return unreviewed ? ['wait', `${plural(unreviewed, 'example')} unreviewed`] : ['idle', 'Nothing generated'];
+    }
+    case 'history': return state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')}`] : ['idle', 'No runs yet'];
+    case 'analysis': return state.report ? ['idle', 'Ready'] : ['wait', 'Needs a run'];
+    case 'regressions': return state.experiments.length > 1 ? ['idle', 'Ready'] : ['wait', 'Needs 2 runs'];
+    case 'reviews': {
+      const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
+      return pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting'];
+    }
+    case 'releases': return state.quality.releases.length ? ['ok', `${plural(state.quality.releases.length, 'release')}`] : ['idle', 'None yet'];
+    case 'techniques': return state.techniqueCatalog.size ? ['idle', `${state.techniqueCatalog.size}`] : ['idle', 'Loading…'];
+    case 'settings': return [state.settings.evaluation.model_id.trim() ? 'ok' : 'wait', state.settings.evaluation.model_id.trim() || 'No model set'];
+    case 'dataset-hub': return ['idle', 'Needs internet'];
+    case 'judge': return screenResultState('judge');
+    case 'model-matrix': return screenResultState('model-matrix');
+    case 'context-lab': return screenResultState('context-lab');
+    case 'production': return ['idle', '3 tools'];
+    case 'logs': {
+      const running = state.jobs.filter(job => job.status === 'running').length;
+      return running ? ['wait', `${plural(running, 'job')} running`] : ['idle', 'Idle'];
+    }
+    case 'evaluation': case 'help': return ['idle', 'Reading'];
+    default: return null;
+  }
+}
+
+function screenTile(tab) {
+  const [, name] = screenMeta[tab];
+  const lead = tileDesc[tab] || screenMeta[tab][2];
+  const chip = screenState(tab);
+  return `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
+      <span class="tile-top">${icon(screenIcons[tab] || 'pencil')}<strong>${esc(name)}</strong></span>
+      <span class="tile-lead">${esc(lead || '')}</span>
+      ${chip ? `<span class="tile-foot"><span class="state ${chip[0]}">${esc(chip[1])}</span></span>` : ''}
+    </a>`;
+}
+
+function renderSection(tab) {
+  const section = tab.slice(2);
+  const group = document.querySelector(`.sidebar-group[data-section="${section}"]`);
+  const screens = group ? [...group.querySelectorAll('.sidebar-links a')].map(link => link.dataset.screen) : [];
+  return `<div class="tiles">${screens.map(screenTile).join('')}</div>`;
 }
 
 function renderHome() {
@@ -345,6 +443,7 @@ function renderHome() {
 function detailBody(tab) {
   let body = '<div class="empty">Nothing here yet.</div>';
   if (tab === 'home') body = renderHome();
+  if (sectionTabs.includes(tab)) body = renderSection(tab);
   if (tab === 'prompt' && state.program) body = renderProgram(state.program);
   if (tab === 'report') body = state.report ? renderReport(state.report) : renderBenchmarkPrerequisites();
   if (tab === 'comparison' && state.comparison) body = renderComparison(state.comparison);
@@ -379,20 +478,11 @@ function renderBenchmarkPrerequisites() {
 
 function ensureDetailShell() {
   if ($('detail').querySelector('.detail-panels')) return;
-  const tabs = detailTabs.map(([key, label]) => `<button type="button" role="tab" id="prompt-tab-${key}" aria-controls="screen-panel-${key}" aria-selected="false" data-tab="${key}" data-action="open-prompt-${key}">${label}</button>`).join('');
-  const panels = detailPanels.map(key => `<section class="tab-panel" id="screen-panel-${key}" ${resultTabs.includes(key) ? `role="tabpanel" aria-labelledby="prompt-tab-${key}"` : ''} data-tab-panel="${key}" data-screen="${key}" data-testid="screen-${key}" hidden></section>`).join('');
-  $('detail').innerHTML = `<div class="tabs" role="tablist" aria-label="Prompt results">${tabs}</div><div class="detail-panels">${panels}</div>`;
-  $('detail').querySelectorAll('.tabs button').forEach(button => {
-    button.addEventListener('click', () => selectTab(button.dataset.tab));
-    button.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const buttons = [...$('detail').querySelectorAll('.tabs button')];
-      const index = buttons.indexOf(button);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-      buttons[next].focus(); selectTab(buttons[next].dataset.tab);
-    });
-  });
+  // No tab strip: a prompt's measurements are screens with names of their own,
+  // listed once in the rail and once as tiles on their section. A strip here
+  // would be a third place to reach them, under a fourth set of labels.
+  const panels = detailPanels.map(key => `<section class="tab-panel" id="screen-panel-${key}" data-tab-panel="${key}" data-screen="${key}" data-testid="screen-${key}" hidden></section>`).join('');
+  $('detail').innerHTML = `<div class="detail-panels">${panels}</div>`;
 }
 
 function fitDocFrame(frame) {
@@ -435,26 +525,13 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
       else state.openLogs.delete(item.dataset.jobId);
     }));
   }
-  if (tab === 'home') {
+  if (tab === 'home' || sectionTabs.includes(tab)) {
     panel.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
       event.preventDefault(); selectTab(link.dataset.globalTab, {focus:true});
     }));
-    panel.querySelector('.smart-start')?.addEventListener('click', async event => {
-      const button = event.currentTarget;
-      const status = panel.querySelector('.smart-status');
-      const say = (kind, text) => { if (status) { status.textContent = text; status.className = `smart-status ${kind}`; } };
-      button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Running…';
-      try {
-        await smartRun(say);
-        say('done', 'Done — opening the improved prompt.');
-        selectTab('optimization', {focus:true});
-      } catch (error) {
-        say('error-text', error.message);
-      } finally {
-        button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Start';
-        refreshActions();
-      }
-    });
+  }
+  if (tab === 'home') {
+    wireSmartStart(panel.querySelector('.smart-start'), panel.querySelector('.smart-status'));
   }
   if (tab === 'report' && state.report && !state.experiments.length) {
     // The verdict reads this run against the last recorded one, and the history
@@ -468,38 +545,29 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   if (tab === 'history') wireHistoryControls(panel);
   if (platformTabs.includes(tab)) wirePlatformTab(tab, panel);
   panel.querySelector('[data-action="setup-benchmark"]')?.addEventListener('click', () => {
-    const details = $('test-details');
-    if (!details) return;
-    details.open = true;
-    details.scrollIntoView({behavior:'smooth', block:'start'});
-    window.requestAnimationFrame(() => details.querySelector('summary')?.focus({preventScroll:true}));
+    const steps = $('prompt-steps');
+    if (!steps) return;
+    steps.scrollIntoView({behavior:'smooth', block:'start'});
+    window.requestAnimationFrame(() => $('dataset')?.focus({preventScroll:true}));
   });
 }
 
 function activateDetailTab() {
   ensureDetailShell();
   if (resultTabs.includes(state.tab)) state.lastResultTab = state.tab;
-  const globalView = !resultTabs.includes(state.tab);
+  // Only the screen you write on keeps the composer beside it. A measurement is
+  // something you read, so it gets the full width, like every other screen.
+  const globalView = state.tab !== 'prompt';
   $('workspace-layout').classList.toggle('global-view', globalView);
   $('workspace-layout').dataset.screen = state.tab;
-  const tabsBar = $('detail').querySelector('.tabs');
-  if (tabsBar) tabsBar.hidden = globalView;
   // Recommendations belong to the authored prompt, not to the measurements taken on it.
   $('results').hidden = state.tab !== 'prompt';
   $('detail').querySelectorAll('[data-tab-panel]').forEach(panel => {
     panel.hidden = panel.dataset.tabPanel !== state.tab;
   });
-  $('detail').querySelectorAll('.tabs button').forEach(button => {
-    const active = button.dataset.tab === state.tab;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-selected', String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
   renderHeaderActions();
   updateWorkspaceContext();
   openSection(sectionOf(state.tab));
-  rememberScreen(state.tab);
-  renderRecent();
 }
 
 function renderDetail() {
@@ -525,10 +593,29 @@ function renderHeaderActions() {
   });
 }
 
+/* Where you are, as a path rather than a label: home → section → screen. The
+ * back button walks it one step up, which is the move a tile screen creates. */
+function crumbTrail(tab) {
+  const trail = [['home', 'Prompt Playoff']];
+  if (tab === 'home') return trail;
+  const section = sectionOf(tab);
+  if (section) trail.push([`s-${section}`, screenMeta[`s-${section}`][1]]);
+  if (!sectionTabs.includes(tab)) trail.push([tab, (screenMeta[tab] || screenMeta.home)[1]]);
+  return trail;
+}
+
+function renderCrumbs(tab) {
+  const trail = crumbTrail(tab);
+  const parent = trail.length > 1 ? trail[trail.length - 2][0] : null;
+  $('crumbs').innerHTML = trail.slice(0, -1).map(([target, label]) =>
+    `<button type="button" data-crumb="${target}">${esc(label)}</button>${icon('chevron')}`).join('');
+  const back = $('back-button');
+  if (back) { back.hidden = !parent; back.dataset.crumb = parent || ''; if (!back.firstChild) back.innerHTML = icon('chevronLeft'); }
+}
+
 function updateWorkspaceContext() {
-  const [section, title] = screenMeta[state.tab] || screenMeta.home;
-  $('context-section').textContent = section;
-  $('page-title').textContent = title;
+  const [, title] = screenMeta[state.tab] || screenMeta.home;
+  renderCrumbs(state.tab);
   document.title = `${title} · Prompt Playoff`;
   const technique = state.program?.technique_id || state.chosen;
   const prompt = technique ? (state.techniqueCatalog.get(technique)?.title || technique) : 'Draft';
@@ -703,8 +790,8 @@ function renderHistory() {
   const options = state.experiments.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');
   const rows = state.experiments.map(item => { const m = experimentMetric(item); return `<tr><td>v${item.version}</td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${esc(item.dataset)}</td><td>${m ? m.quality.toFixed(3) : '—'}</td><td>${m ? m.mean_latency_seconds.toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${m.mean_cost_usd.toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
   return `${historyChart(state.experiments)}
-    <div class="row"><div><label for="history-before">Before</label><select id="history-before">${options}</select></div><div><label for="history-after">After</label><select id="history-after">${options}</select></div></div>
-    <button type="button" class="ghost history-compare">Compare versions</button>
+    <div class="quality-form"><label for="history-before">Before<select id="history-before">${options}</select></label><label for="history-after">After<select id="history-after">${options}</select></label></div>
+    <div class="form-actions"><button type="button" class="primary history-compare">Compare versions</button></div>
     ${renderExperimentComparison(state.experimentComparison)}
     <p class="table-scroll-hint" id="history-scroll-hint">Scroll the table horizontally to inspect every measurement.</p>
     <div class="table-scroll" role="region" aria-label="Experiment history table" aria-describedby="history-scroll-hint" tabindex="0"><table><thead><tr><th>Version</th><th>Recorded</th><th>Kind</th><th>Model</th><th>Dataset</th><th>Quality</th><th>Latency s</th><th>Mean cost</th></tr></thead><tbody>${rows}</tbody></table></div>`;

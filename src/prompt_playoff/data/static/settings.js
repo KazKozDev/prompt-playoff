@@ -124,9 +124,9 @@ function renderSettings() {
       <div class="settings-role">Reusable connections</div><h3>Saved evaluation profiles</h3>
       <p class="settings-description">Save endpoint, model, capabilities, and prices. API keys are never written to disk.</p>
       <label for="profile-name">Profile name</label><input id="profile-name" placeholder="Production model">
-      <div class="row"><button type="button" class="ghost profile-save">Save current</button><button type="button" class="ghost provider-check">Check connection</button></div>
+      <div class="form-actions"><button type="button" class="ghost profile-save">Save current</button><button type="button" class="ghost provider-check">Check connection</button></div>
       <label for="profile-select">Saved profiles</label><select id="profile-select"><option value="">Choose a profile</option>${profileOptions}</select>
-      <div class="row"><button type="button" class="ghost profile-load">Load selected</button><button type="button" class="ghost profile-delete">Delete selected</button></div>
+      <div class="form-actions"><button type="button" class="ghost profile-load">Load selected</button><button type="button" class="ghost profile-delete">Delete selected</button></div>
       <div class="upload-status" data-profile-status role="status" aria-live="polite"></div>
     </section>
     <aside class="settings-security"><strong>API key safety:</strong> keys stay only in this page's current in-memory state. They are never saved to local or session storage, and are sent only to the local Prompt Playoff backend when it makes provider calls.</aside>`;

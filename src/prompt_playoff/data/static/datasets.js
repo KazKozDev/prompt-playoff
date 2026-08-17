@@ -6,6 +6,7 @@ async function loadDatasets(selectedName) {
     if (selectedName && list.some(d => d.name === selectedName)) $('dataset').value = selectedName;
     updateEstimates();
     updateWorkspaceContext();
+    refreshActions();
     refreshHomeIfVisible();
     return list;
   } catch (e) {

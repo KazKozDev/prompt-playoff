@@ -20,7 +20,7 @@ function renderDatasetBuilder() {
       <div class="table-scroll"><table><thead><tr><th></th><th>ID</th><th>Mutation</th><th>Status</th><th>Split</th><th>Input</th></tr></thead><tbody>${rows}</tbody></table></div>
     </details>`;
   }).join('');
-  return `${qualityError()}${outcome}<div class="quality-form"><label>Name<input id="builder-name" value="robustness-suite"></label><label>Mode<select id="builder-mode"><option value="edge_cases">Generate edge cases</option><option value="description">From description</option><option value="expand">Expand examples</option><option value="traces">Production traces</option></select></label><label>Examples<input id="builder-count" type="number" min="2" max="100" value="12"></label><label class="mode-option"><input id="builder-llm" type="checkbox"><span><strong>Draft seeds with the prompt engine</strong><small>Model outputs stay unreviewed; the default generator is deterministic.</small></span></label><label>Trace session (optional)<input id="builder-trace-session" placeholder="Langfuse session ID"></label><label>Trace tags (optional)<input id="builder-trace-tags" placeholder="production, support"></label><label class="wide">Task description<textarea id="builder-description" placeholder="Describe real inputs, output contract, and risky cases.">${esc($('description')?.value || '')}</textarea></label><button class="builder-create" data-action="create-dataset-project" data-testid="builder-create">Generate review set</button></div>
+  return `${qualityError()}${outcome}<div class="quality-form"><label>Name<input id="builder-name" value="robustness-suite"></label><label>Mode<select id="builder-mode"><option value="edge_cases">Generate edge cases</option><option value="description">From description</option><option value="expand">Expand examples</option><option value="traces">Production traces</option></select></label><label>Examples<input id="builder-count" type="number" min="2" max="100" value="12"></label><label class="mode-option"><input id="builder-llm" type="checkbox"><span><strong>Draft seeds with the prompt engine</strong><small>Model outputs stay unreviewed; the default generator is deterministic.</small></span></label><label>Trace session (optional)<input id="builder-trace-session" placeholder="Langfuse session ID"></label><label>Trace tags (optional)<input id="builder-trace-tags" placeholder="production, support"></label><label class="wide">Task description<textarea id="builder-description" placeholder="Describe real inputs, output contract, and risky cases.">${esc($('description')?.value || '')}</textarea></label></div><div class="form-actions"><button class="builder-create" data-action="create-dataset-project" data-testid="builder-create">Generate review set</button></div>
     <div class="stage-title">Projects</div>${projects || '<div class="empty">No generated datasets yet.</div>'}`;
 }
 
@@ -28,7 +28,7 @@ function renderJudge() {
   const current = screenResult('judge');
   const result = current?.kind === 'judge' ? `<div class="quality-result">${statusCard('Winner', current.winner)}${statusCard('Human gate', 'Pending review', 'warning')}<p>${esc(current.rationale)}</p></div>` : '';
   return `${qualityError()}
-    <div class="quality-form"><label class="wide">Input<textarea id="judge-input"></textarea></label><label>Answer A<textarea id="judge-a"></textarea></label><label>Answer B<textarea id="judge-b"></textarea></label><label class="wide">Rubric, one criterion per line<textarea id="judge-rubric">Correctness\nCompleteness\nFollows the requested format</textarea></label><button class="judge-run" data-action="run-blind-judge">Run blind judge</button></div>${result}`;
+    <div class="quality-form"><label class="wide">Input<textarea id="judge-input"></textarea></label><label>Answer A<textarea id="judge-a"></textarea></label><label>Answer B<textarea id="judge-b"></textarea></label><label class="wide">Rubric, one criterion per line<textarea id="judge-rubric">Correctness\nCompleteness\nFollows the requested format</textarea></label></div><div class="form-actions"><button class="judge-run" data-action="run-blind-judge">Run blind judge</button></div>${result}`;
 }
 
 function renderReviews() {
@@ -44,7 +44,7 @@ function renderRegressions() {
   const current = screenResult('regressions');
   const result = current?.kind === 'regression' ? `<div class="quality-result">${statusCard('Gate', current.status, current.status === 'passed' ? 'passed' : 'failed')}<pre>${esc(JSON.stringify(current.active, null, 2))}</pre>${current.status === 'failed' ? '<div class="quality-actions"><button class="reg-rerun">Rerun candidate</button><button class="ghost reg-accept">Accept new baseline</button></div>' : ''}</div>` : '';
   const gate = state.experiments.length < 2 ? prerequisite('Record at least two benchmark experiments before analyzing a regression.', 'prompt', 'Open Prompt Studio') : '';
-  return `${qualityError()}${gate}<div class="quality-form"><label>Baseline<select id="reg-before">${experimentOptions()}</select></label><label>Candidate<select id="reg-after">${experimentOptions()}</select></label><label>Quality tolerance<input id="reg-quality" type="number" step="0.01" min="0" value="0.01"></label><label>Latency tolerance, seconds<input id="reg-latency" type="number" step="0.1" min="0" value="0.1"></label><button class="reg-run" data-action="analyze-regression" ${state.experiments.length < 2 ? 'disabled' : ''}>Analyze regression</button></div>${result}`;
+  return `${qualityError()}${gate}<div class="quality-form"><label>Baseline<select id="reg-before">${experimentOptions()}</select></label><label>Candidate<select id="reg-after">${experimentOptions()}</select></label><label>Quality tolerance<input id="reg-quality" type="number" step="0.01" min="0" value="0.01"></label><label>Latency tolerance, seconds<input id="reg-latency" type="number" step="0.1" min="0" value="0.1"></label></div><div class="form-actions"><button class="reg-run" data-action="analyze-regression" ${state.experiments.length < 2 ? 'disabled' : ''}>Analyze regression</button></div>${result}`;
 }
 
 function renderAnalysis() {
@@ -52,7 +52,7 @@ function renderAnalysis() {
   const result = current?.kind === 'analysis' ? `<div class="quality-result">${statusCard('Delta', current.delta)}${statusCard('Decision', current.direction, current.significant ? 'passed' : 'warning')}<pre>${esc(JSON.stringify(current, null, 2))}</pre></div>` : '';
   const slices = current?.kind === 'slices' ? `<div class="table-scroll"><table><thead><tr><th>Slice</th><th>Quality</th><th>Runs</th><th>Failures</th></tr></thead><tbody>${current.rows.map(row => `<tr><td>${esc(row.slice)}</td><td>${Number(row.quality).toFixed(3)}</td><td>${row.runs}</td><td>${row.failures}</td></tr>`).join('')}</tbody></table></div>` : '';
   const sliceGate = state.report ? '' : prerequisite('Slice analysis needs a completed benchmark; confidence comparison can run now.', 'prompt', 'Run a benchmark');
-  return `${qualityError()}${sliceGate}<div class="quality-form"><label>Baseline scores<textarea id="stats-before" placeholder="0.80, 0.75, 0.90"></textarea></label><label>Candidate scores<textarea id="stats-after" placeholder="0.84, 0.82, 0.91"></textarea></label><button class="stats-run">Compare confidence</button><button class="ghost slices-run" ${state.report ? '' : 'disabled'}>Analyze last benchmark by tags</button></div>${result}${slices}`;
+  return `${qualityError()}${sliceGate}<div class="quality-form"><label>Baseline scores<textarea id="stats-before" placeholder="0.80, 0.75, 0.90"></textarea></label><label>Candidate scores<textarea id="stats-after" placeholder="0.84, 0.82, 0.91"></textarea></label></div><div class="form-actions"><button class="stats-run">Compare confidence</button><button class="ghost slices-run" ${state.report ? '' : 'disabled'}>Analyze last benchmark by tags</button></div>${result}${slices}`;
 }
 
 function baseBenchmarkPayload() {
@@ -64,26 +64,52 @@ function renderModelMatrix() {
   const current = screenResult('model-matrix');
   const result = current?.kind === 'matrix' ? `<div class="quality-result">${statusCard('Winner model', current.winner_model)}<div class="table-scroll"><table><thead><tr><th>Model</th><th>Quality</th><th>Latency</th><th>Cost</th></tr></thead><tbody>${current.reports.map(item => `<tr><td>${esc(item.model_id)}</td><td>${item.scorecard.quality.toFixed(3)}</td><td>${item.scorecard.mean_latency_seconds.toFixed(2)}</td><td>${item.scorecard.mean_cost_usd == null ? 'unknown' : item.scorecard.mean_cost_usd.toFixed(6)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
   const gate = state.chosen ? '' : prerequisite('Create and choose a prompt before comparing models.', 'prompt', 'Create a prompt');
-  return `${qualityError()}${gate}<label>Model IDs, one per line<textarea id="matrix-models" placeholder="llama3.2:3b\nqwen3:8b"></textarea></label><button class="matrix-run" data-action="run-model-matrix" ${state.chosen ? '' : 'disabled'}>Run matrix</button>${result}`;
+  return `${qualityError()}${gate}<label>Model IDs, one per line<textarea id="matrix-models" placeholder="llama3.2:3b\nqwen3:8b"></textarea></label><div class="form-actions"><button class="matrix-run" data-action="run-model-matrix" ${state.chosen ? '' : 'disabled'}>Run matrix</button></div>${result}`;
 }
 
 function renderContextLab() {
   const current = screenResult('context-lab');
   const result = current?.kind === 'context' ? `<div class="quality-result">${statusCard('Best context', current.winner_context)}<pre>${esc(JSON.stringify(current.reports.map(item => ({context:item.context, quality:item.report.scorecard.quality})), null, 2))}</pre></div>` : '';
   const gate = state.chosen ? '' : prerequisite('Create a prompt before comparing context variants.', 'prompt', 'Create a prompt');
-  return `${qualityError()}${gate}<div class="quality-form"><label>Variant A name<input id="ctx-a-name" value="full"></label><label>Variant B name<input id="ctx-b-name" value="compressed"></label><label>Context A<textarea id="ctx-a"></textarea></label><label>Context B<textarea id="ctx-b"></textarea></label><button class="context-run" data-action="compare-contexts" ${state.chosen ? '' : 'disabled'}>Compare contexts</button></div>${result}`;
+  return `${qualityError()}${gate}<div class="quality-form"><label>Variant A name<input id="ctx-a-name" value="full"></label><label>Variant B name<input id="ctx-b-name" value="compressed"></label><label>Context A<textarea id="ctx-a"></textarea></label><label>Context B<textarea id="ctx-b"></textarea></label></div><div class="form-actions"><button class="context-run" data-action="compare-contexts" ${state.chosen ? '' : 'disabled'}>Compare contexts</button></div>${result}`;
 }
 
 function renderReleases() {
   const rows = q.releases.map(item => `<tr data-release-id="${esc(item.id)}"><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? '<button data-release-action="approve">Approve</button>' : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}</div></td></tr>`).join('');
   const gate = state.program ? '' : prerequisite('Author a prompt before registering a release.', 'prompt', 'Author a prompt');
-  return `${qualityError()}${gate}<div class="quality-form"><label>Release name<input id="release-name" value="production-prompt"></label><button class="release-create" data-action="create-release" ${state.program ? '' : 'disabled'}>Register current prompt</button></div><div class="table-scroll"><table><thead><tr><th>Release</th><th>Status</th><th>Technique</th><th>Hash</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `${qualityError()}${gate}<div class="quality-form"><label>Release name<input id="release-name" value="production-prompt"></label></div><div class="form-actions"><button class="release-create" data-action="create-release" ${state.program ? '' : 'disabled'}>Register current prompt</button></div><div class="table-scroll"><table><thead><tr><th>Release</th><th>Status</th><th>Technique</th><th>Hash</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+
+/* Three unrelated checks used to sit on one screen as six blank fields in a
+ * row. They are three tools, so they are three cards: each says what it answers
+ * before it asks for anything, and only one is open at a time. */
+const subTool = (id, mark, title, question, body, open=false) => `<details class="sub-tool"${open ? ' open' : ''} data-sub-tool="${id}">
+  <summary><span class="sub-mark">${icon(mark)}</span><span class="sub-title"><strong>${esc(title)}</strong><small>${esc(question)}</small></span></summary>
+  <div class="sub-body">${body}</div>
+</details>`;
 
 function renderProduction() {
   const current = screenResult('production');
   const result = current?.kind === 'production' ? `<div class="quality-result"><pre>${esc(JSON.stringify(current.value, null, 2))}</pre></div>` : '';
-  return `${qualityError()}<div class="quality-form"><label>Baseline inputs, one per line<textarea id="drift-before"></textarea></label><label>Current inputs, one per line<textarea id="drift-after"></textarea></label><button class="drift-run">Detect drift</button><label class="wide">Agent trajectory JSON<textarea id="trajectory-json" placeholder='[{"tool":"search","success":true},{"tool":"browser","success":false,"recovered":true}]'></textarea></label><label>Required tools, comma separated<input id="trajectory-tools" placeholder="search, browser"></label><button class="ghost trajectory-run">Evaluate trajectory</button><label class="wide">Input for security suite<textarea id="security-input"></textarea></label><button class="ghost security-run">${state.chosen ? 'Run security evaluation' : 'Generate security cases'}</button></div>${result}`;
+  return `${qualityError()}
+    ${subTool('drift', 'wave', 'Input drift', 'Are real inputs still like the ones you tested on?', `
+      <div class="quality-form">
+        <label>Baseline inputs, one per line<textarea id="drift-before"></textarea></label>
+        <label>Current inputs, one per line<textarea id="drift-after"></textarea></label>
+      </div>
+      <div class="sub-actions"><button class="drift-run" type="button">Detect drift</button></div>`, true)}
+    ${subTool('trajectory', 'link', 'Agent runs', 'Did the agent call the tools it was supposed to?', `
+      <div class="quality-form">
+        <label class="wide">Trajectory JSON<textarea id="trajectory-json" placeholder='[{"tool":"search","success":true},{"tool":"browser","success":false,"recovered":true}]'></textarea></label>
+        <label>Required tools, comma separated<input id="trajectory-tools" placeholder="search, browser"></label>
+      </div>
+      <div class="sub-actions"><button class="ghost trajectory-run" type="button">Evaluate trajectory</button></div>`)}
+    ${subTool('security', 'shield', 'Injection attempts', 'Does the prompt hold when the input fights it?', `
+      <div class="quality-form">
+        <label class="wide">Input for the security suite<textarea id="security-input"></textarea></label>
+      </div>
+      <div class="sub-actions"><button class="ghost security-run" type="button">${state.chosen ? 'Run security evaluation' : 'Generate security cases'}</button></div>`)}
+    ${result}`;
 }
 
 function renderDatasetLibrary() {

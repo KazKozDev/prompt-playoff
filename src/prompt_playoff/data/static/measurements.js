@@ -105,8 +105,11 @@ function refreshActions(running = false) {
   $('chosen').innerHTML = state.chosen
     ? `Ready to measure <strong>${esc(techniqueTitle(state.chosen))}</strong>.`
     : 'Create a prompt first, then pick a method — both steps below measure the method you picked.';
+  refreshHomeIfVisible();
   updateEstimates();
 }
+
+
 
 function busy(on) {
   refreshActions(on);
@@ -231,16 +234,37 @@ function renderVerdict(report) {
   const previous = previousMeasurement(report);
   const delta = previous ? c.quality - previous.quality : null;
   const points = delta == null ? null : Math.round(Math.abs(delta) * 100);
-  const movement = delta == null ? ''
-    : points === 0 ? ` Unchanged against v${previous.version} on the same examples.`
-    : delta > 0 ? ` That is ${plural(points, 'point')} better than v${previous.version} on the same examples.`
-    : ` That is ${plural(points, 'point')} worse than v${previous.version} on the same examples.`;
+  const movement = delta == null ? 'No earlier run on these examples to compare against.'
+    : points === 0 ? `Unchanged against v${previous.version} on the same examples.`
+    : delta > 0 ? `${plural(points, 'point')} better than v${previous.version} on the same examples.`
+    : `${plural(points, 'point')} worse than v${previous.version} on the same examples.`;
   const tone = delta == null ? '' : delta > 0 ? ' up' : delta < 0 ? ' down' : '';
   const cautions = verdictCautions(report);
+  // 2πr for the ring below; the arc is the score and nothing else.
+  const circumference = 273.3;
+  const stat = (label, value, note) => `<div class="stat"><dt>${esc(label)}</dt><dd>${esc(value)}<small>${esc(note)}</small></dd></div>`;
   return `<section class="verdict${tone}">
-    <span class="section-eyebrow">Result</span>
-    <p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.${esc(movement)}</p>
-    <p class="verdict-sub">${esc(techniqueTitle(report.technique_id))} on ${esc(report.model_id)} · ${esc(report.dataset)} · ${report.examples} × ${report.repeats} · ${c.mean_latency_seconds.toFixed(2)} s per answer${c.mean_cost_usd == null ? '' : ` · $${c.mean_cost_usd.toFixed(6)} per answer`}</p>
+    <div class="verdict-head">
+      <div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1">
+        <svg viewBox="0 0 96 96" aria-hidden="true">
+          <circle class="ring-track" cx="48" cy="48" r="43.5"></circle>
+          <circle class="ring-fill" cx="48" cy="48" r="43.5" stroke-dasharray="${circumference}" stroke-dashoffset="${(circumference * (1 - Math.max(0, Math.min(1, c.quality)))).toFixed(1)}"></circle>
+        </svg>
+        <b>${c.quality.toFixed(2)}</b><span>quality</span>
+      </div>
+      <div class="verdict-words">
+        <span class="section-eyebrow">Result</span>
+        <p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.</p>
+        <p class="verdict-move">${esc(movement)}</p>
+        <p class="verdict-sub">${esc(techniqueTitle(report.technique_id))} on ${esc(report.model_id)} · ${esc(report.dataset)}</p>
+      </div>
+    </div>
+    <dl class="stats">
+      ${stat('Quality', c.quality.toFixed(3), previous ? `was ${previous.quality.toFixed(3)}` : 'first run')}
+      ${stat('Answer time', `${c.mean_latency_seconds.toFixed(2)} s`, 'median per example')}
+      ${stat('Examples', String(report.examples), `${plural(report.repeats, 'run')} each`)}
+      ${stat('Cost', c.mean_cost_usd == null ? 'unknown' : `$${c.mean_cost_usd.toFixed(6)}`, 'per answer')}
+    </dl>
     ${cautions.length ? `<ul class="verdict-cautions">${cautions.map(note => `<li>${esc(note)}</li>`).join('')}</ul>` : ''}
   </section>`;
 }

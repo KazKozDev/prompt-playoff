@@ -272,8 +272,9 @@ class SecurityEvaluationRequest(BenchmarkRequest):
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-def index() -> str:
-    return files("prompt_playoff").joinpath("data/static/index.html").read_text(encoding="utf-8")
+def index() -> HTMLResponse:
+    body = files("prompt_playoff").joinpath("data/static/index.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=body, headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/assets/{asset_name}", include_in_schema=False)
@@ -290,7 +291,15 @@ def static_asset(asset_name: str) -> Response:
     resource = files("prompt_playoff").joinpath("data/static", asset_name)
     if not resource.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return Response(content=resource.read_bytes(), media_type=media_types[suffix])
+    # The asset names never change, so a browser that caches them shows an old
+    # interface against a new server and gives no sign that it is doing so.
+    # Revalidating on every load costs nothing here: the server is on the same
+    # machine as the browser.
+    return Response(
+        content=resource.read_bytes(),
+        media_type=media_types[suffix],
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @app.get("/favicon.svg", include_in_schema=False)
