@@ -195,6 +195,19 @@ class PromptSelectorService:
         self.user_datasets[name] = list(examples)
         return self.dataset_store.save(name, examples) if persist else None
 
+    def remove_user_dataset(self, name: str) -> Path | None:
+        """Forget a set the user brought in, and delete its file if it had one.
+
+        Only the user's own sets can go: a bundled set lives inside the installed
+        package, and deleting it would leave the server describing a registry it
+        no longer has.
+        """
+        if name not in self.user_datasets:
+            raise KeyError(name)
+        removed = self.dataset_store.path_for(name) if self.dataset_store.remove(name) else None
+        del self.user_datasets[name]
+        return removed
+
     @property
     def dataset_names(self) -> list[str]:
         return sorted({*self.registry.datasets, *self.user_datasets})
@@ -220,9 +233,18 @@ class PromptSelectorService:
         timeout_seconds: float = 120,
         record: bool = True,
         progress: ProgressCallback | None = None,
+        prompt: CompiledProgram | None = None,
     ) -> BenchmarkReport:
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
+        # A supplied prompt is the thing being measured, so the numbers have to
+        # be filed under the method it was written from — not under whichever
+        # one the caller named alongside it.
+        if prompt is not None and prompt.technique_id != technique.id:
+            raise ValueError(
+                f"This prompt was written from {prompt.technique_id}, "
+                f"but the run was asked for {technique.id}."
+            )
         runner = BenchmarkRunner(
             self.provider(task, technique_id=technique.id, phase="benchmark"), self.compiler
         )
@@ -234,6 +256,7 @@ class PromptSelectorService:
             timeout_seconds=timeout_seconds,
             dataset_name=name,
             progress=progress,
+            authored=prompt,
         )
         if record:
             self.measurements.record(report.to_evidence())
@@ -250,6 +273,7 @@ class PromptSelectorService:
         timeout_seconds: float = 120,
         record: bool = True,
         progress: ProgressCallback | None = None,
+        prompt: CompiledProgram | None = None,
     ) -> tuple[ComparisonReport, list[BenchmarkReport]]:
         techniques = [self.registry.technique(item) for item in technique_ids]
         examples, name = self.resolve_dataset(dataset_name, inline)
@@ -262,6 +286,7 @@ class PromptSelectorService:
             timeout_seconds=timeout_seconds,
             dataset_name=name,
             progress=progress,
+            authored=prompt,
         )
         if record:
             for report in reports:

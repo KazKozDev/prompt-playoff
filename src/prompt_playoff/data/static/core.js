@@ -2,7 +2,7 @@
  * One icon set. Every mark is drawn on the same 24-unit grid with the same
  * stroke, round caps and no fills, so a column of them reads as one family
  * instead of as whatever each font's glyph happened to look like. A section and
- * its screens deliberately share a mark — Examples and Example library.
+ * its screens deliberately share a mark — Datasets and Dataset library.
  * -------------------------------------------------------------------------- */
 const ICONS = {
   pencil:'<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -30,13 +30,14 @@ const ICONS = {
   chevron:'<path d="m9.5 5 7 7-7 7"/>',
   chevronLeft:'<path d="m14.5 5-7 7 7 7"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+  upload:'<path d="M12 15V4"/><path d="m8 7.5 4-4 4 4"/><path d="M4 16.5v3A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-3"/>',
   download:'<path d="M12 3v11"/><path d="m8 10.5 4 4 4-4"/><path d="M4 16.5v3A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-3"/>'
 };
 const icon = name => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 // Which mark belongs to which screen. The sidebar is static HTML, so the marks
 // are put in from here rather than repeated sixteen times in the markup.
 const screenIcons = {
-  prompt:'pencil', 'dataset-library':'rows', 'dataset-hub':'download', 'dataset-builder':'rowsAdd',
+  prompt:'pencil', 'dataset-library':'rows', 'dataset-upload':'upload', 'dataset-hub':'download', 'dataset-builder':'rowsAdd',
   history:'clock', judge:'scale', 'model-matrix':'grid', 'context-lab':'columns', analysis:'target',
   regressions:'diff', reviews:'checkCircle', releases:'package', production:'pulse',
   techniques:'sparkle', logs:'play', settings:'sliders', evaluation:'book', help:'help'
@@ -48,19 +49,62 @@ const plural = (count, word) => `${count} ${word}${Number(count) === 1 ? '' : 's
 const chips = values => values.map(value => `<code>${esc(value)}</code>`).join('');
 const state = {
   task:null, recs:[], chosen:null, program:null, tab:'prompt', lastResultTab:'prompt', report:null,
+  // One step below a screen: which single thing on it you arrived to look at.
+  // {tab, value}, or null for the whole screen. It lives in the address bar as
+  // `#screen/thing`, so the step can be walked back out of like any other.
+  showing:null,
   comparison:null, optimization:null, inputSource:'task',
   techniqueCatalog:new Map(), catalogStatus:'loading', catalogError:'', copyPayloads:new Map(),
   datasetSizes:new Map(), hub:null,
+  // The business catalogue: fifty jobs a model is paid to do and the public set
+  // that measures each. Fetched once per visit to the library, and null until
+  // then. `catalogGroup` is which of the ten categories is open — one at a time,
+  // because fifty cases at once is a document, not a screen.
+  catalog:null, catalogError:'', catalogGroup:null,
+  // The rows of a set, fetched only when the library is opened on that one set.
+  // Name → {status, rows, error}.
+  datasetRows:new Map(),
+  // Which set has been armed for deletion, and what the last deletion did. Both
+  // belong to the screen rather than to a set, because only one row at a time
+  // can be asking the question.
+  pendingDelete:null, datasetNote:'',
+  // What a run is set up with. It used to live in the DOM, which meant the
+  // controls had to exist on whatever screen you were on; held here, each
+  // screen can render the ones it needs and none of the others.
+  run:{dataset:'', repeats:1, rounds:2, backend:''}, backendOptions:'',
   techniqueExamples:new Map(), graderHelp:{},
-  installed:{ engine:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
+  installed:{ engine:{status:'idle', models:[], error:'', url:null}, judge:{status:'idle', models:[], error:'', url:null}, similarity:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
   openLogs:new Set(), logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
-  quality:{projects:[], reviews:[], releases:[], results:{}, error:'', loading:false, loaded:new Set()},
+  quality:{projects:[], reviews:[], releases:[], results:{}, error:'', loading:false, loaded:new Set(),
+    // The builder form lives here rather than in the DOM: the cost of the
+    // settings is quoted before the button is pressed, so a keystroke has to
+    // re-render the quote, and a re-render would otherwise wipe the fields.
+    build:{name:'robustness-suite', mode:'edge_cases', count:12, llm:false, candidates:4, answers:false, personas:true, session:'', tags:'', filter:'all'}},
   settings:{
     engine:{provider:'ollama', model_id:'', base_url:'', api_key:''},
+    // Scores answers against each other. Blank falls back to the engine and
+    // never to the model under evaluation — see judgeProfile.
+    judge:{provider:'ollama', model_id:'', base_url:'', api_key:''},
+    // Turns generated rows into vectors so near-copies can be spotted. Blank is
+    // off: the exact-match rule stays the only duplicate rule.
+    similarity:{provider:'ollama', model_id:'', base_url:'', api_key:''},
     evaluation:{provider:'ollama', model_id:'llama3.2:3b', base_url:'', api_key:'', model_class:'small', capabilities:['structured_output','system_messages'], input_cost_per_million_usd:'', output_cost_per_million_usd:''}
   }
 };
+
+// What this screen has been narrowed to, or null. Every screen that can be
+// narrowed asks this one question rather than reading the address bar itself.
+const showingOn = tab => (state.showing && state.showing.tab === tab ? state.showing.value : null);
+
+// One name for one part of a compiled prompt: the map that draws the prompt to
+// scale and the screen that highlights a part of it have to agree on what that
+// part is called, or clicking a circle would land on nothing.
+function promptPartName(program, stageIndex, message) {
+  const stage = program.stages[stageIndex] || {};
+  const role = String(message.role || 'message');
+  return program.stages.length > 1 ? `${stage.stage || `stage ${stageIndex + 1}`} · ${role}` : role;
+}
 
 function modelProfile() {
   const setting = state.settings.evaluation;
@@ -80,21 +124,57 @@ function modelProfile() {
   return profile;
 }
 
-// Prompt authoring always uses a model. Blank is an explicit UI choice to use
-// the target model itself; the authoring endpoint has no deterministic fallback.
-function engineProfile() {
-  const setting = state.settings.engine;
+// The model named on one of the side cards, or null when that card is blank.
+// Blank is a real answer here — what to do about it differs per role, and each
+// caller answers that for itself rather than being handed a substitute.
+const ROLE_LABELS = {engine:'prompt engine', judge:'judge', similarity:'similarity model'};
+function roleProfile(role) {
+  const setting = state.settings[role];
   const id = setting.model_id.trim();
-  if (!id) return modelProfile();
+  if (!id) return null;
   const profile = { provider:setting.provider, model_id:id, local:setting.provider === 'ollama' };
   if (setting.base_url.trim()) profile.base_url = setting.base_url.trim();
   if (setting.api_key) profile.api_key = setting.api_key;
-  if (setting.provider === 'custom' && !profile.base_url) throw new Error('Base URL is required for a custom prompt engine.');
+  if (setting.provider === 'custom' && !profile.base_url) throw new Error(`Base URL is required for a custom ${ROLE_LABELS[role]}.`);
   return profile;
 }
 
+// Prompt authoring always uses a model. Blank is an explicit UI choice to use
+// the target model itself; the authoring endpoint has no deterministic fallback.
+function engineProfile() {
+  return roleProfile('engine') || modelProfile();
+}
+
+/* Who scores answers.
+ *
+ * This one never falls back to the model under evaluation: a model asked to
+ * mark its own answers marks them well, and a verdict bought that way is worth
+ * less than no verdict. Blank borrows the engine, which is a different model by
+ * intent; blank on both is null, and the judge screen says so rather than
+ * quietly handing the whistle to a player.
+ */
+function judgeProfile() {
+  return roleProfile('judge') || roleProfile('engine');
+}
+
+/* Which model compares rows with each other, or null.
+ *
+ * No fallback of any kind: this one writes nothing, so standing another model
+ * in for it would not degrade the check, it would answer a different question.
+ * Blank means the check does not run, and the builder says so.
+ */
+function similarityProfile() {
+  return roleProfile('similarity');
+}
+
+// A method with no body is a real request — DELETE mostly — so it is the method
+// that decides how this is sent, not whether a body happened to be passed.
 async function api(path, body, method) {
-  const res = await fetch(path, body ? {method:method||'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+  const verb = method || (body ? 'POST' : 'GET');
+  const init = verb === 'GET' ? undefined : body
+    ? {method:verb, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
+    : {method:verb};
+  const res = await fetch(path, init);
   if (!res.ok) throw new Error(await apiError(res));
   return res.json();
 }
@@ -125,16 +205,17 @@ async function loadBackends() {
   }).join('');
   try {
     const info = await api('/v1/integrations');
-    $('backend').innerHTML = options(info.optimizer_backends, info.dspy.installed);
-    if (info.tracing.active && info.tracing.active !== 'none') {
-      $('progress').textContent = `tracing → ${info.tracing.active}`;
-    }
+    state.backendOptions = options(info.optimizer_backends, info.dspy.installed);
+    state.run.backend = state.run.backend || info.optimizer_backends[0] || '';
+    if (info.tracing.active && info.tracing.active !== 'none') state.tracing = info.tracing.active;
   } catch {
     // The probe failed, not the backends: keep the same list the server ships
     // and only mark the ones we cannot vouch for, instead of silently
     // collapsing the search down to a single choice.
-    $('backend').innerHTML = options(Object.keys(labels), false);
+    state.backendOptions = options(Object.keys(labels), false);
+    state.run.backend = state.run.backend || 'native';
   }
+  if (typeof refreshRunSetup === 'function') refreshRunSetup();
 }
 
 // The full recipes live in one shared catalog. Recommendations remain compact

@@ -1,11 +1,13 @@
 import pytest
 from conftest import FakeProvider
 
+from prompt_playoff.compiler import PromptCompiler
 from prompt_playoff.domain import Priorities
 from prompt_playoff.evals import (
     BenchmarkExample,
     BenchmarkRunner,
     ExampleRun,
+    authored_for,
     build_scorecard,
     compare_techniques,
 )
@@ -203,3 +205,79 @@ def test_a_measurement_from_another_model_is_not_evidence(tmp_path):
         store.lookup(*args, "llama3.2:3b")
         and store.lookup("other.technique", *args[1:], "llama3.2:3b") is None
     )
+
+
+def authored(task, technique, user_input, extra):
+    """A prompt as the authoring screen hands it over: compiled, then written on."""
+    program = PromptCompiler().compile(task=task, technique=technique, user_input=user_input)
+    stage = program.stages[0]
+    user = next(message for message in stage.messages if message.role == "user")
+    written = stage.model_copy(
+        update={
+            "messages": [
+                message
+                if message.role != "user"
+                else message.model_copy(update={"content": f"{extra}\n{user.content}"})
+                for message in stage.messages
+            ]
+        }
+    )
+    return program.model_copy(update={"stages": [written], "source_input": user_input})
+
+
+@pytest.mark.asyncio
+async def test_a_measurement_runs_the_prompt_it_was_given(
+    extraction_task, entity_schema, registry
+):
+    """The screen measures the prompt on Prompt text, not a fresh compile of it.
+
+    An engine model's wording is the difference between the two, so a run that
+    quietly recompiled the technique reported numbers for text nobody had seen.
+    """
+    program = authored(
+        extraction_task,
+        registry.technique("structured.schema-first"),
+        "Mara entered Veyr.",
+        "HOUSE RULE: never invent a place.",
+    )
+    provider = FakeProvider(responses=['{"people": ["Mara"], "places": ["Veyr"]}'])
+    report = await BenchmarkRunner(provider).run(
+        dataset=dataset(entity_schema),
+        task=extraction_task,
+        technique=registry.technique("structured.schema-first"),
+        dataset_name="unit",
+        authored=program,
+    )
+    sent = [call.messages[-1].content for call in provider.calls]
+    assert len(sent) == 2
+    # The written line survives every row, and each row's own input replaces the
+    # one the prompt was written around.
+    assert all("HOUSE RULE: never invent a place." in text for text in sent)
+    assert "Mara entered Veyr." in sent[0]
+    assert "Orin stayed in Kesh." in sent[1]
+    assert "Mara entered Veyr." not in sent[1]
+    assert report.prompt_preview["stages"][0]["user"].startswith("HOUSE RULE")
+
+
+def test_a_reusable_prompt_keeps_its_slot_for_the_row(extraction_task, registry):
+    program = authored(
+        extraction_task,
+        registry.technique("structured.schema-first"),
+        "{input}",
+        "HOUSE RULE",
+    )
+    filled = authored_for(program, BenchmarkExample(id="a", input="Orin stayed in Kesh."))
+    text = filled.stages[0].messages[-1].content
+    assert "Orin stayed in Kesh." in text
+    assert "{input}" not in text
+
+
+def test_a_prompt_with_nowhere_to_put_the_row_says_so(extraction_task, registry):
+    """Better a refusal naming the cause than a run measuring the wrong text."""
+    program = PromptCompiler().compile(
+        task=extraction_task,
+        technique=registry.technique("structured.schema-first"),
+        user_input="Mara entered Veyr.",
+    ).model_copy(update={"source_input": ""})
+    with pytest.raises(ValueError, match="no place for an example"):
+        authored_for(program, BenchmarkExample(id="a", input="Orin stayed in Kesh."))

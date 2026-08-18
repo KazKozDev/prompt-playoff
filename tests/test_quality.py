@@ -7,18 +7,24 @@ from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
 from prompt_playoff.evals import BenchmarkExample, ExampleRun
 from prompt_playoff.quality import (
+    MUTATION_INTENT,
     DatasetBuildRequest,
     DatasetReviewRequest,
     DriftRequest,
+    ManagedExample,
     QualityStore,
     ReleaseActionRequest,
     ReleaseCreateRequest,
+    apply_similarity,
     build_dataset,
     confidence_interval,
+    data_mix,
     production_drift,
     security_suite,
+    shares_family,
     significance,
     slice_analysis,
+    verify_examples,
 )
 
 
@@ -198,3 +204,145 @@ def test_release_api_requires_human_review_before_approval(client: TestClient):
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+def test_checks_object_before_a_person_has_to():
+    source = BenchmarkExample(id="real-1", input="line one\nline two", expected="bug")
+    project = build_dataset(
+        DatasetBuildRequest(
+            name="flagged", description="Classify tickets", examples=[source], count=8, seed=3
+        )
+    )
+    codes = {check.code for item in project.examples for check in item.checks}
+
+    assert "stale-answer" in codes
+    flagged = [item for item in project.examples if item.checks]
+    assert flagged and all(item.review_priority[0] == 0 for item in flagged)
+
+
+def test_coverage_keeps_the_empty_axes():
+    project = build_dataset(
+        DatasetBuildRequest(name="thin", description="Extract entities", count=3, seed=11)
+    )
+    empty = [cell.axis for cell in project.coverage if not cell.examples]
+
+    assert len(project.coverage) > 3
+    assert empty and all(MUTATION_INTENT[axis] for axis in empty)
+
+
+def test_low_agreement_is_flagged_and_families_are_compared():
+    items = verify_examples(
+        [
+            ManagedExample(
+                example=BenchmarkExample(id="a", input="x", expected="maybe"),
+                agreement=0.25,
+            )
+        ]
+    )
+
+    assert [check.code for check in items[0].checks] == ["low-agreement"]
+    assert shares_family("qwen3:8b", "qwen3:32b") is True
+    assert shares_family("qwen3:8b", "llama3.2:3b") is False
+
+
+def test_near_duplicates_are_flagged_with_the_number_that_flagged_them():
+    """The rule the exact-match one cannot state: same row, different wording."""
+    items = [
+        ManagedExample(example=BenchmarkExample(id="a", input="Please cancel my subscription")),
+        ManagedExample(
+            example=BenchmarkExample(id="b", input="I would like to cancel my subscription")
+        ),
+        ManagedExample(example=BenchmarkExample(id="c", input="My package has not arrived")),
+    ]
+    # Stand-in vectors: a and b almost parallel, c pointing elsewhere.
+    vectors = [[1.0, 0.0], [0.97, 0.24], [0.0, 1.0]]
+
+    diversity = apply_similarity(items, vectors, threshold=0.9)
+
+    assert [check.code for check in items[1].checks] == ["near-duplicate"]
+    assert "a" in items[1].checks[0].detail
+    # The number is in the objection: the threshold is a calibration, so a
+    # reader has to be able to disagree with it.
+    assert "%" in items[1].checks[0].detail
+    assert not items[0].checks and not items[2].checks
+    assert diversity is not None and 0.0 < diversity < 1.0
+
+
+def test_similarity_says_nothing_when_there_is_nothing_to_compare():
+    single = [ManagedExample(example=BenchmarkExample(id="a", input="only row"))]
+
+    assert apply_similarity(single, [[1.0, 0.0]]) is None
+    # A vector per row or no verdict at all: a half-embedded set would flag rows
+    # by comparing them with whatever happened to line up.
+    assert apply_similarity(single * 2, [[1.0, 0.0]]) is None
+
+
+def test_an_exact_duplicate_is_not_also_reported_as_a_near_one():
+    items = verify_examples(
+        [
+            ManagedExample(example=BenchmarkExample(id="a", input="cancel my plan")),
+            ManagedExample(example=BenchmarkExample(id="b", input="Cancel my plan")),
+        ]
+    )
+    apply_similarity(items, [[1.0, 0.0], [1.0, 0.0]], threshold=0.9)
+
+    assert [check.code for check in items[1].checks] == ["duplicate-input"]
+
+
+def test_failure_mode_needs_the_rows_it_builds_around(client: TestClient):
+    refused = client.post(
+        "/v1/dataset-projects",
+        json={"name": "from-failures", "description": "Classify support requests",
+              "mode": "failures", "count": 4},
+    )
+    assert refused.status_code == 422
+
+    built = client.post(
+        "/v1/dataset-projects",
+        json={
+            "name": "from-failures",
+            "description": "Classify support requests",
+            "mode": "failures",
+            "count": 4,
+            "examples": [{"id": "missed-1", "input": "It broke again", "expected": "bug"}],
+        },
+    )
+    assert built.status_code == 201
+    project = built.json()
+    assert project["examples"][0]["mutation"] == "as_failed"
+    assert project["examples"][0]["example"]["input"] == "It broke again"
+    assert all("from-failure" in item["example"]["tags"] for item in project["examples"])
+
+
+def test_judge_warns_when_it_shares_a_family_with_the_answers(client: TestClient, monkeypatch):
+    class JudgeProvider:
+        async def generate(self, prompt, model, timeout_seconds=120):
+            return ModelResult(
+                content='{"winner":"first","scores":{"first":9,"second":4},"rationale":"ok"}'
+            )
+
+    monkeypatch.setattr(app.state.service, "provider", lambda *args, **kwargs: JudgeProvider())
+    body = {
+        "input": "Summarize the incident",
+        "answer_a": "Short",
+        "answer_b": "Long",
+        "rubric": ["Correctness"],
+        "judge_model": {"provider": "ollama", "model_id": "qwen3:32b"},
+        "subject_models": ["qwen3:8b"],
+    }
+    same = client.post("/v1/evaluate/pairwise", json=body).json()
+    other = client.post(
+        "/v1/evaluate/pairwise", json={**body, "subject_models": ["llama3.2:3b"]}
+    ).json()
+
+    assert "same model family" in same["self_preference_warning"]
+    assert other["self_preference_warning"] is None
+
+
+def test_data_mix_names_a_fully_generated_set():
+    generated = data_mix([BenchmarkExample(id="a", input="a", tags=["synthetic"])])
+    observed = data_mix([BenchmarkExample(id="b", input="b", tags=["production"])])
+
+    assert generated.synthetic_ratio == 1.0
+    assert "written by a model" in generated.note
+    assert observed.synthetic == 0

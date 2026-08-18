@@ -136,7 +136,21 @@ prompt-playoff compare --model llama3.2:3b --model-class small --dataset entity-
 
 That contradicts the registry, which priors `structured.schema-first` at 0.95 for this task: on a 3B model the plainer technique wins. Results are recorded to `benchmark-results/measurements.json` and reused for later ranking, labelled `measured` instead of `prior only`.
 
-Eleven datasets ship with the package, from a 6-example smoke set to `entity-extraction-hard`, `multiconer-en` and `few-nerd` at 200 each. `prompt-playoff list-datasets` prints their sizes and how many carry gold answers.
+Eleven task datasets ship with the package, from a 6-example smoke set to `entity-extraction-hard`, `multiconer-en` and `few-nerd` at 200 each. `prompt-playoff list-datasets` prints their sizes and how many carry gold answers.
+
+### The business catalogue
+
+Alongside them, 17 sets named `business:*` cover work businesses actually pay a model to do — replying to email, turning a transcript into minutes, routing a support question, pulling fields off an invoice, classifying a contract clause, answering from a filing. They come from 50 reported business cases in ten categories — email, customer support, meetings, document routing, invoices and receipts, legal and contracts, finance, privacy and compliance, HR and recruiting, marketing and e-commerce — each mapped to the public dataset closest to its shape:
+
+```bash
+prompt-playoff benchmark --model llama3.2:3b --model-class small --dataset business:support-reply
+```
+
+The mapping lives in [`business_cases.yaml`](src/prompt_playoff/data/business_cases.yaml) and is the point of the exercise: 17 cases have a public set in the same input → output shape, 23 have only a near neighbour, and 10 have nothing public at all — and the last group is listed as loudly as the first, because a benchmark that does not match the work is worse than no benchmark. Every case names the company that reported it and, where one was published, the figure they claim: BNY's contract review at 4 hours down to 1, Kraft Heinz's product-content cycle at 8 weeks down to 8 hours, Starling Bank's 8,000 hours a month of call summarization. Those are customer-story numbers, labelled as claims and checked by nothing here — the tool's own numbers are the ones on the Measurement screen.
+
+The **Dataset library** screen renders it in three zones: the catalogue as a card per case, the business sets on the server, and the task benchmarks and sets you brought yourself.
+
+Each set is a sample of a public repository, bundled so a first run needs no network, and every row carries its source repo and licence back to Hugging Face. `scripts/fetch_business_datasets.py` re-downloads them from the manifest.
 
 ## Automatic prompt optimization, natively or with DSPy
 
@@ -251,6 +265,8 @@ prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limi
 
 Tracing to Langfuse or Phoenix makes every call of every technique its own span, and `import-traces` turns observed traffic into a dataset — with `expected: null` and tagged `unreviewed`, because a trace has no gold answer and pretending otherwise would benchmark a model against its own past mistakes. Four presets convert Hugging Face corpora instead: MultiCoNER v2 and Few-NERD for extraction, GSM8K for reasoning, MBPP for code graded by running its own tests. Both paths are set up in [docs/integrations.md](docs/integrations.md).
 
+The **Build datasets** screen generates rows instead of importing them, along a fixed taxonomy of seven axes rather than as free variation, and shows which axes came out empty — a set that filled three cells tested three things, whatever its row count. Every generated row is put through deterministic checks before anyone reads it: duplicates of another row, an answer copied from an input that has since lost half its content, an answer echoing an injection attempt, an answer of the wrong declared shape. With a benchmark behind you, the `failures` mode seeds from the rows the last run did not score full marks on and mutates around them, so the next set aims at what the prompt is failing rather than at more of what it handles. A model may write the seed inputs — several samples pooled, each in a different voice, and an optional answer per row sampled repeatedly so the row records how much the generator agreed with itself. That agreement sorts the review queue; it is not a score, and nothing generated becomes benchmark truth until a person approves it.
+
 ## How it differs from DSPy, promptfoo and PromptWizard
 
 **DSPy** optimizes the prompt inside a module you have already chosen — you write `dspy.ChainOfThought` or `dspy.ReAct` yourself. Prompt Playoff makes that choice for you, deterministically and with its reasons printed, then hands the winner to DSPy's search if you want it.
@@ -293,6 +309,7 @@ The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a j
 - Ranking still uses declared priors for any (technique, task, model) triple you have not benchmarked. The UI and the CLI mark those `prior only`.
 - Of the 61 techniques, 6 carry `benchmarked` evidence, 48 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
 - `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
+- The `business:*` sets are 50–60-row samples of public corpora, enough to rank two prompts against each other and not enough to certify one. Ten of the 50 business cases have no public set in the same shape at all — the catalogue says which, and the answer there is your own examples.
 - The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
 - `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.
 - Deterministic graders remain the default release signal. The optional LLM judge handles open-ended or pairwise quality, but its verdict is blind-order randomized and remains pending until Human Review approves it.

@@ -76,37 +76,38 @@
       <div class="sidebar-group" data-section="prompt">
         <button class="sidebar-section" type="button" data-section-toggle="prompt" aria-expanded="false" aria-controls="section-prompt"><span class="section-name">Prompt</span><span class="section-count" data-section-count="prompt"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-prompt">
-        <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="nav-prompt">Write the prompt</a>
+        <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="nav-prompt">Prompt text</a>
         <a href="#report" data-global-tab="report" data-screen="report" data-testid="nav-report">Measurement</a>
         <a href="#comparison" data-global-tab="comparison" data-screen="comparison" data-testid="nav-comparison">Method comparison</a>
         <a href="#optimization" data-global-tab="optimization" data-screen="optimization" data-testid="nav-optimization">Optimization</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="examples">
-        <button class="sidebar-section" type="button" data-section-toggle="examples" aria-expanded="false" aria-controls="section-examples"><span class="section-name">Examples</span><span class="section-count" data-section-count="examples"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <button class="sidebar-section" type="button" data-section-toggle="examples" aria-expanded="false" aria-controls="section-examples"><span class="section-name">Datasets</span><span class="section-count" data-section-count="examples"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-examples">
-        <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="nav-dataset-library">Example library</a>
+        <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="nav-dataset-library">Dataset library</a>
+        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload" data-testid="nav-dataset-upload">Upload your own</a>
         <a href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub" data-testid="nav-dataset-hub">Import from Hugging Face</a>
-        <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder" data-testid="nav-dataset-builder">Build examples</a>
+        <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder" data-testid="nav-dataset-builder">Build datasets</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="check">
         <button class="sidebar-section" type="button" data-section-toggle="check" aria-expanded="false" aria-controls="section-check"><span class="section-name">Check</span><span class="section-count" data-section-count="check"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-check">
         <a href="#history" data-global-tab="history" data-screen="history" data-testid="nav-history">Results</a>
-        <a href="#judge" data-global-tab="judge" data-screen="judge" data-testid="nav-judge">Side-by-side judging</a>
-        <a href="#model-matrix" data-global-tab="model-matrix" data-screen="model-matrix" data-testid="nav-model-matrix">Across models</a>
-        <a href="#context-lab" data-global-tab="context-lab" data-screen="context-lab" data-testid="nav-context-lab">Context test</a>
-        <a href="#analysis" data-global-tab="analysis" data-screen="analysis" data-testid="nav-analysis">Confidence</a>
+        <a href="#judge" data-global-tab="judge" data-screen="judge" data-testid="nav-judge">Pairwise judging</a>
+        <a href="#model-matrix" data-global-tab="model-matrix" data-screen="model-matrix" data-testid="nav-model-matrix">Model matrix</a>
+        <a href="#context-lab" data-global-tab="context-lab" data-screen="context-lab" data-testid="nav-context-lab">Context lab</a>
+        <a href="#analysis" data-global-tab="analysis" data-screen="analysis" data-testid="nav-analysis">Significance</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="ship">
-        <button class="sidebar-section" type="button" data-section-toggle="ship" aria-expanded="false" aria-controls="section-ship"><span class="section-name">Ship</span><span class="section-count" data-section-count="ship"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <button class="sidebar-section" type="button" data-section-toggle="ship" aria-expanded="false" aria-controls="section-ship"><span class="section-name">Production</span><span class="section-count" data-section-count="ship"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-ship">
-        <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="nav-regressions">Before / after</a>
-        <a href="#reviews" data-global-tab="reviews" data-screen="reviews" data-testid="nav-reviews">Your approvals</a>
+        <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="nav-regressions">Regressions</a>
+        <a href="#reviews" data-global-tab="reviews" data-screen="reviews" data-testid="nav-reviews">Reviews</a>
         <a href="#releases" data-global-tab="releases" data-screen="releases" data-testid="nav-releases">Releases</a>
-        <a href="#production" data-global-tab="production" data-screen="production" data-testid="nav-production">Live quality</a>
+        <a href="#production" data-global-tab="production" data-screen="production" data-testid="nav-production">Monitoring</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="reference">
@@ -139,8 +140,11 @@
       <button class="back-button" type="button" id="back-button" data-testid="back-button" aria-label="Back" hidden></button>
       <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
       <div class="context-artifacts" aria-label="Active artifacts">
-        <span><b>Prompt</b> <code id="context-prompt">Draft</code></span>
-        <span><b>Dataset</b> <code id="context-dataset">Loading…</code></span>
+        <!-- The three things every number on every screen is computed from. Each
+             one is named here and leads to the one place it lives — the dataset
+             to that set in the library, not to the library. -->
+        <a class="context-artifact" href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="context-prompt-link"><b>Prompt</b> <code id="context-prompt">Draft</code></a>
+        <a class="context-artifact" href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="context-dataset-link" id="context-dataset-link"><b>Dataset</b> <code id="context-dataset">Loading…</code></a>
         <div class="model-picker">
           <button class="model-chip" type="button" id="model-chip" aria-expanded="false" aria-haspopup="true" aria-controls="model-pop" data-testid="model-chip"><b>Model</b> <code id="context-model">llama3.2:3b</code><span class="section-caret" aria-hidden="true"></span></button>
           <div class="model-pop" id="model-pop" role="menu" hidden></div>
@@ -151,7 +155,11 @@
     <main class="workspace-main" id="main-content" tabindex="-1">
       <div class="layout" id="workspace-layout" data-testid="workspace-layout">
         <div id="composer-column" data-testid="prompt-composer">
-      <section class="panel">
+      <!-- The left column belongs to the prompt on every screen of this section:
+           the composer that writes it, and on the screens that run it, the
+           prompt itself. One place to look for it, whichever screen you are on. -->
+      <aside class="panel run-side" id="run-aside" data-testid="run-subject" hidden></aside>
+      <section class="panel" id="composer-panel">
         <div class="gate" data-model-gate hidden>No model is set, so nothing here can run yet.<button type="button" class="ghost" data-action="open-model-settings">Models &amp; keys</button></div>
         <h2 class="task-title">What should the model do?</h2>
         <label for="description">Enter the actual task, including the result, format, and important constraints</label>
@@ -175,52 +183,7 @@
 
       </section>
 
-      <section class="panel run-panel">
-        <h2 class="task-title">Measure and improve it</h2>
-        <div class="meta tune-status" id="chosen">Create a prompt first, then pick a method — both steps below measure the method you picked.</div>
 
-        <div class="run-group">
-          <span class="section-eyebrow">Examples</span>
-          <p class="run-lead">The rows both actions below run your prompt over.</p>
-          <label for="dataset">Measure against</label>
-          <select id="dataset"></select>
-          <label for="repeats">Runs per example</label>
-          <input id="repeats" type="number" value="1" min="1" max="10">
-          <p class="field-hint">More than one shows how much the answers move between identical runs.</p>
-          <label for="dataset-file">Your own examples (JSONL)</label>
-          <div class="upload-row">
-            <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-describedby="upload-status">
-            <button id="upload-btn" class="ghost upload-btn" type="button" data-action="upload-dataset" disabled>Upload</button>
-          </div>
-          <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
-          <a class="field-link" href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub">No examples of your own? Import from Hugging Face</a>
-        </div>
-
-        <div class="run-group">
-          <span class="section-eyebrow">Measure</span>
-          <p class="run-lead">Score the prompt as it stands, or every recommended method side by side.</p>
-          <div class="meta estimate" id="measure-estimate"></div>
-          <div class="form-actions">
-            <button id="bench-btn" class="primary" type="button" data-action="benchmark-prompt" disabled>Measure now</button>
-            <button id="compare-btn" class="ghost" type="button" data-action="compare-prompts" disabled>Compare all recommended</button>
-          </div>
-        </div>
-
-        <div class="run-group">
-          <span class="section-eyebrow">Improve</span>
-          <p class="run-lead">Rewrites the prompt, scores every version, keeps the best one.</p>
-          <label for="rounds">Rounds</label>
-          <input id="rounds" type="number" value="2" min="1" max="6">
-          <label for="backend">How to search</label>
-          <select id="backend"></select>
-          <div class="meta estimate" id="optimize-estimate"></div>
-          <div class="form-actions">
-            <button id="optimize-btn" class="ghost" type="button" data-action="optimize-prompt" disabled>Optimize the prompt</button>
-          </div>
-        </div>
-
-        <div class="progress" id="progress"></div>
-      </section>
     </div>
 
         <div id="content-column">
@@ -236,9 +199,9 @@
 
     <nav class="bottom-nav" aria-label="Primary mobile destinations">
       <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="bottom-prompt">Prompt</a>
-      <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="bottom-data">Examples</a>
+      <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="bottom-data">Datasets</a>
       <a href="#history" data-global-tab="history" data-screen="history" data-testid="bottom-evaluate">Check</a>
-      <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="bottom-ship">Ship</a>
+      <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="bottom-ship">Production</a>
     </nav>
   </div>
 </div>

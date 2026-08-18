@@ -132,6 +132,49 @@ async def check_model_connection(
     )
 
 
+async def embed_texts(
+    model: ModelProfile,
+    texts: list[str],
+    transport: httpx.AsyncBaseTransport | None = None,
+    timeout_seconds: float = 120,
+) -> list[list[float]]:
+    """Vectors for a list of texts, from an embedding model on Ollama.
+
+    An embedding model writes nothing; it only says how close two texts are. So
+    this is the one model call in the app that cannot invent an answer, which is
+    why the dataset checks are allowed to use it and still call themselves
+    deterministic: pin the model and the same rows give the same verdict.
+
+    OpenAI-compatible providers have their own `/v1/embeddings` and are not
+    wired here yet — a caller that asks for one gets a clear refusal rather than
+    a wrong endpoint.
+    """
+    if not texts:
+        return []
+    if model.provider != "ollama":
+        raise ProviderError(
+            f"Embeddings are only wired for Ollama, not {model.provider}. "
+            "Point the similarity model at a local Ollama, or leave it blank."
+        )
+    root = (model.base_url or OLLAMA_DEFAULT_URL).rstrip("/")
+    async with httpx.AsyncClient(timeout=timeout_seconds, transport=transport) as client:
+        try:
+            response = await client.post(
+                f"{root}/api/embed", json={"model": model.model_id, "input": texts}
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"Embedding request failed: {_reason(exc)}") from exc
+
+    vectors = response.json().get("embeddings") or []
+    if len(vectors) != len(texts):
+        raise ProviderError(
+            f"{model.model_id} returned {len(vectors)} vectors for {len(texts)} rows. "
+            "That model may not be an embedding model."
+        )
+    return [[float(value) for value in vector] for vector in vectors]
+
+
 class OllamaProvider:
     def __init__(self, base_url: str | None = None) -> None:
         self.base_url = (base_url or OLLAMA_DEFAULT_URL).rstrip("/")

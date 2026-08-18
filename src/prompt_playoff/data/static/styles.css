@@ -124,6 +124,9 @@
     .tile:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .tile-top { display:flex; align-items:center; gap:10px; }
     .tile-top .i { width:17px; height:17px; color:var(--accent-ink); }
+    /* A home tile is read at rest, not scanned past, so it is the one place a
+       section is named with its drawing rather than with its name alone. */
+    .tile-top .section-art { flex:0 0 34px; width:34px; height:34px; border-radius:var(--r-sm); object-fit:cover; box-shadow:inset 0 0 0 1px var(--border); }
     .tile-top strong { font-size:var(--fs-lead); font-weight:600; letter-spacing:-.01em; }
     .tile-lead { color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
     .tile-foot { margin-top:auto; padding-top:4px; }
@@ -149,6 +152,196 @@
     .tiles .tile:nth-child(4) { animation-delay:.09s } .tiles .tile:nth-child(5) { animation-delay:.12s }
     .tiles .tile:nth-child(6) { animation-delay:.15s }
     @media (prefers-reduced-motion:reduce) { .tiles .tile { animation:none; } .sidebar-links { transition:none; } }
+
+    /* ============ Section Showcase (CleanMyMac / Assistant layout) ============ */
+    /* On a section screen the page carries no surface of its own: the three
+       parts each bring theirs, with the page showing between them. */
+    .panel.unplated { border:0; padding:0; background:none; box-shadow:none; }
+    .panel.unplated .screen-head {
+      padding:22px 24px; border:1px solid var(--border); border-radius:var(--r-lg);
+      background:var(--panel); box-shadow:var(--shadow);
+    }
+    .panel.unplated .section-showcase { margin-top:18px; }
+    /* Three parts, and they drop out of the row in the order you can most
+       afford to lose them: the map goes under the other two before the list of
+       screens ever gives up its width, and only a narrow screen stacks all
+       three. Nothing is hidden — a section screen with a part missing would be
+       three different screens depending on the window. */
+    .section-showcase { display:grid; grid-template-columns:1fr; gap:24px; align-items:start; margin-top:6px; }
+    @media (min-width:1100px) {
+      .section-showcase { grid-template-columns:minmax(340px, 430px) minmax(0, 1fr); }
+      .section-map { grid-column:1 / -1; }
+    }
+    @media (min-width:1480px) {
+      .section-showcase { grid-template-columns:minmax(300px, 360px) minmax(0, 1fr) minmax(300px, 340px); }
+      .section-map { grid-column:auto; }
+    }
+
+    /* The drawing sits in a well of its own rather than on the screen's own
+       surface: it shares an edge with the list of screens beside it, and two
+       panels of the same colour touching read as one wide panel. */
+    .section-spotlight {
+      display:flex; flex-direction:column; align-items:center; justify-content:space-between;
+      padding:32px 26px 24px; border:1px solid var(--border-strong); border-radius:var(--r-lg);
+      box-shadow:var(--shadow); position:relative; overflow:hidden;
+      background:radial-gradient(circle at 50% 34%, var(--accent-soft), var(--sunken) 74%);
+    }
+    .spotlight-aura {
+      position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:100%; padding:10px 0 18px;
+    }
+    .spotlight-ring {
+      position:relative; width:274px; height:274px; max-width:100%; aspect-ratio:1; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      border:2.5px solid rgba(224,167,38,.45);
+      box-shadow:0 0 44px rgba(224,167,38,.24), inset 0 0 32px rgba(224,167,38,.16);
+      background:radial-gradient(circle, rgba(224,167,38,.14) 0%, rgba(224,167,38,.03) 65%, transparent 100%);
+      transition:transform .3s ease, box-shadow .3s ease;
+    }
+    .section-spotlight:hover .spotlight-ring {
+      transform:scale(1.02);
+      box-shadow:0 0 48px rgba(224,167,38,.34), inset 0 0 32px rgba(224,167,38,.22);
+    }
+    /* The drawing takes the ring's own shape rather than sitting in it as a
+       second, squarer object: the art is drawn with margin on all four sides,
+       so a round crop takes nothing off it. */
+    .spotlight-ring .section-art { width:218px; height:218px; max-width:78%; display:block; border-radius:50%; object-fit:cover; box-shadow:0 8px 22px rgba(0,0,0,.26); }
+    .spotlight-tag {
+      margin-top:14px; font-size:var(--fs-sm); font-weight:600; color:var(--text-2);
+      letter-spacing:.02em; text-align:center;
+    }
+    .spotlight-footer {
+      width:100%; text-align:left; padding-top:16px; border-top:1px solid var(--border);
+    }
+    .spotlight-status-title {
+      font-size:var(--fs-base); font-weight:600; margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    }
+    .spotlight-status-title .state { font-size:var(--fs-micro); }
+    .spotlight-status-title .info-dot {
+      display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px;
+      border-radius:50%; background:var(--wash-2); color:var(--muted); font-size:11px; font-weight:600;
+    }
+    .spotlight-desc {
+      font-size:var(--fs-sm); color:var(--muted); line-height:1.55; margin:0;
+    }
+
+    /* The screens under a section are one list, so they share one surface and
+       are told apart by a hairline — five cards floating beside the drawing
+       read as five more things to decide between, not as one list. */
+    .section-tiles-stack {
+      display:flex; flex-direction:column; overflow:hidden;
+      border:1px solid var(--border); border-radius:var(--r-lg);
+      background:var(--panel); box-shadow:var(--shadow);
+    }
+    .section-tile-card {
+      display:flex; align-items:center; gap:16px; padding:18px 20px;
+      color:var(--text); text-decoration:none;
+      transition:background .18s, box-shadow .18s;
+      animation:tile-in .26s cubic-bezier(.22,.7,.3,1) both;
+    }
+    .section-tile-card + .section-tile-card { border-top:1px solid var(--border); }
+    .section-tile-card:nth-child(2) { animation-delay:.03s; }
+    .section-tile-card:nth-child(3) { animation-delay:.06s; }
+    .section-tile-card:nth-child(4) { animation-delay:.09s; }
+    .section-tile-card:nth-child(5) { animation-delay:.12s; }
+    .section-tile-card:hover { background:var(--wash); }
+    .section-tile-card:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+
+    .section-tile-info { flex:1; min-width:0; }
+    .section-tile-info strong { display:block; font-size:var(--fs-base); font-weight:600; color:var(--text); margin-bottom:3px; }
+    .section-tile-info p { margin:0; font-size:var(--fs-sm); color:var(--muted); line-height:1.45; }
+
+    .section-tile-action { margin-left:auto; flex:0 0 auto; }
+    .section-tile-btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:7px 15px; border-radius:var(--r-pill); background:var(--wash-2);
+      border:1px solid var(--border); color:var(--text-2); font-size:var(--fs-sm);
+      font-weight:550; white-space:nowrap; transition:background .15s, color .15s, border-color .15s;
+    }
+    .section-tile-card:hover .section-tile-btn {
+      background:var(--panel2); border-color:var(--border-strong); color:var(--text);
+    }
+
+    /* The section's own stock, drawn to scale. One circle per thing, its area
+       the size of that thing, so "most of my rows are in one set" is something
+       you see rather than something you work out. Every circle is a link into
+       the screen the thing lives on, and the panel ends with the one move that
+       follows from what it just showed. */
+    .section-map {
+      display:flex; flex-direction:column; overflow:hidden;
+      border:1px solid var(--border); border-radius:var(--r-lg);
+      background:var(--panel); box-shadow:var(--shadow);
+    }
+    .map-head { padding:16px 18px 12px; }
+    .map-head strong { display:block; font-size:var(--fs-base); font-weight:600; }
+    .map-caption { display:block; margin-top:3px; color:var(--muted); font-size:var(--fs-sm); font-variant-numeric:tabular-nums; }
+    /* The plot is square whatever it is holding, and never wider than it can be
+       read at — on a wide screen the panel grows and the drawing does not. */
+    .map-plot {
+      position:relative; width:100%; max-width:430px; margin:0 auto; aspect-ratio:1;
+      background:radial-gradient(circle at 50% 50%, var(--accent-soft), var(--sunken) 72%);
+      border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+    }
+    /* Nothing to draw yet: the panel says so in a band, not in a square of
+       empty ground the size of a full map. */
+    .map-plot.empty-plot { display:grid; place-items:center; aspect-ratio:auto; min-height:132px; padding:26px; }
+    .map-plot.empty-plot p { margin:0; max-width:34ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; text-align:center; }
+    /* The circles sit in a square of their own, inset so a bubble touching the
+       edge still has its rim drawn. */
+    .map-bubble {
+      position:absolute; transform:translate(-50%,-50%); aspect-ratio:1;
+      display:grid; place-items:center; padding:2px; border-radius:50%;
+      border:1px solid var(--accent-line); background:var(--accent-soft);
+      color:var(--text); text-decoration:none; text-align:center; overflow:hidden;
+      transition:transform .18s cubic-bezier(.22,.7,.3,1), border-color .18s, background .18s;
+    }
+    .map-bubble.lead { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+    /* The one circle that is a person's turn rather than a quantity is the only
+       one allowed out of the gold: same colour the rail marks a queue with. */
+    .map-bubble.wait { border-color:var(--warn); background:var(--warn-soft); }
+    .map-bubble.wait .map-bubble-text b { color:var(--warn-ink); }
+    .map-bubble.rest { border-color:var(--border-strong); background:var(--wash-2); }
+    .map-bubble:hover { transform:translate(-50%,-50%) scale(1.05); border-color:var(--accent); z-index:2; }
+    .map-bubble:focus-visible { outline:2px solid var(--accent); outline-offset:2px; z-index:2; }
+    /* Text stays inside the circle, not inside its box: the widest line a round
+       shape can hold is the square drawn inside it. */
+    .map-bubble-text { display:flex; flex-direction:column; align-items:center; max-width:72%; line-height:1.15; }
+    .map-bubble-text b { font-size:var(--fs-sm); font-weight:600; font-variant-numeric:tabular-nums; }
+    .map-bubble-text i {
+      max-width:100%; margin-top:1px; overflow:hidden; color:var(--text-2);
+      font:10px/1.2 var(--sans); font-style:normal; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .map-bubble.value .map-bubble-text i, .map-bubble.bare .map-bubble-text { display:none; }
+    .map-bubble.value .map-bubble-text b { font-size:var(--fs-micro); }
+    .map-legend { margin:0; padding:11px 18px 0; color:var(--muted); font-size:var(--fs-micro); line-height:1.5; }
+    /* At the one width where the map runs the full page it turns on its side —
+       the words on the left, the drawing on the right — rather than centring a
+       square in a panel three times its width. */
+    @media (min-width:1100px) and (max-width:1479px) {
+      .section-map {
+        display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,360px);
+        grid-template-areas:"head plot" "legend plot" "next plot"; align-items:start;
+      }
+      .map-head { grid-area:head; }
+      .map-legend { grid-area:legend; max-width:60ch; }
+      .map-next { grid-area:next; align-self:end; }
+      .map-plot { grid-area:plot; grid-row:1 / -1; max-width:none; border:0; border-left:1px solid var(--border); }
+    }
+    /* The panel ends on advice, not on another link: one move, and why it is
+       the one. It is allowed to point at another section — after writing a
+       prompt the next thing is to measure it. */
+    .map-next {
+      display:block; margin-top:auto; padding:14px 18px 16px;
+      color:var(--text); text-decoration:none; transition:background .18s;
+    }
+    .map-next:hover { background:var(--wash); }
+    .map-next:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+    .map-next-kicker { display:block; margin-bottom:4px; color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+    .map-next strong { display:block; font-size:var(--fs-base); font-weight:600; }
+    .map-next strong::after { content:' →'; color:var(--accent-ink); }
+    .map-next small { display:block; margin-top:3px; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
+    @media (prefers-reduced-motion:reduce) { .map-bubble { transition:none; } }
+
     /* The model chip: the one control in the bar, because the model decides
        every number under it. */
     .model-picker { position:relative; }
@@ -176,6 +369,16 @@
        greys out and leaves you guessing. */
     .gate { display:flex; align-items:center; gap:14px; margin:0 0 16px; padding:11px 14px; border-left:2px solid var(--accent-line); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--accent-soft); color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
     .gate button { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:6px 12px; font-size:var(--fs-sm); }
+    /* A screen that is showing one thing out of many says so here, and the way
+       back to all of them is in the same band. Grey, not gold: it reports where
+       you are, it does not ask for anything. */
+    .showing-band {
+      display:flex; align-items:center; gap:14px; margin:0 0 16px; padding:9px 14px;
+      border-left:2px solid var(--border-strong); border-radius:0 var(--r-sm) var(--r-sm) 0;
+      background:var(--wash); color:var(--muted); font-size:var(--fs-sm); line-height:1.6;
+    }
+    .showing-band b { color:var(--text); font-weight:600; overflow-wrap:anywhere; }
+    .showing-band button { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:5px 12px; font-size:var(--fs-sm); }
     /* The verdict. Tinted band, not coloured type: the border carries the
        direction and the words stay the same grey as the rest of the prose. */
     .verdict { margin-bottom:20px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius:0 var(--r-md) var(--r-md) 0; background:var(--panel2); }
@@ -206,6 +409,51 @@
     /* What would change the answer, in the same place as the answer. */
     .verdict-cautions { margin:12px 0 0; padding-left:18px; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
     .verdict-cautions li + li { margin-top:6px; }
+    /* --- the run, example by example ------------------------------------ *
+     * A hundred answers as a hundred blocks, worst first. The eye gets the
+     * shape of the run — a wall of green with three red at the head reads
+     * differently from an even field of amber — and every block is the door to
+     * the answer behind it. Three states only: right, needs reading, wrong. */
+    .run-strip { display:flex; flex-wrap:wrap; gap:3px; margin:10px 0 6px; }
+    .strip-cell {
+      display:block; width:15px; height:26px; border:1px solid; border-radius:3px;
+      transition:transform .14s ease, box-shadow .14s ease;
+    }
+    /* Tinted enough to be read as a shape from a metre away — the soft tokens
+       are sized for a band of text behind prose, and a block this small
+       disappears in them. */
+    .strip-cell.good { border-color:var(--good-line); background:color-mix(in srgb, var(--good) 26%, transparent); }
+    .strip-cell.part { border-color:var(--warn-line); background:color-mix(in srgb, var(--warn) 34%, transparent); }
+    .strip-cell.bad { border-color:var(--bad-line); background:color-mix(in srgb, var(--bad) 42%, transparent); }
+    .strip-cell:hover { transform:scaleY(1.18); box-shadow:0 2px 8px rgba(0,0,0,.18); }
+    .strip-cell:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .strip-cell.here { outline:2px solid var(--accent); outline-offset:2px; }
+    @media (prefers-reduced-motion:reduce) { .strip-cell { transition:none; } }
+
+    /* One example, in full: what it was asked, what was wanted back, what came
+       back, and what each grader made of it. The card is tinted on one edge
+       only — the answer inside has to stay readable. */
+    .example-card { margin:10px 0; padding:14px 16px; border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius:0 var(--r-md) var(--r-md) 0; background:var(--panel); }
+    .example-card.good { border-left-color:var(--good); }
+    .example-card.part { border-left-color:var(--warn); }
+    .example-card.bad { border-left-color:var(--bad); }
+    .example-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+    .example-head strong { font:600 var(--fs-base)/1.5 var(--mono); }
+    .example-head .state.bad-chip { background:var(--bad-soft); color:var(--bad-text); }
+    .example-open { margin-left:auto; color:var(--accent-ink); font-size:var(--fs-sm); text-decoration:none; }
+    .example-open:hover { text-decoration:underline; }
+    .example-fields { display:grid; gap:10px; margin:0; }
+    .example-field dt { color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+    .example-field dd { margin:4px 0 0; }
+    .example-field pre { margin:0; }
+    .example-answer + .example-answer { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+    .example-grades { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .grade { padding:2px 9px; border-radius:var(--r-pill); font-size:var(--fs-micro); font-variant-numeric:tabular-nums; }
+    .grade b { font-weight:600; }
+    .grade.good { background:var(--good-soft); color:var(--good-ink); }
+    .grade.part { background:var(--warn-soft); color:var(--warn-ink); }
+    .grade.bad { background:var(--bad-soft); color:var(--bad-text); }
+    .example-trouble { margin:6px 0 0; color:var(--bad-text); font-size:var(--fs-sm); line-height:1.55; }
     /* A screen holding several tools lists them as tools, not as one long form:
        each says what it answers before it asks for anything. */
     .sub-tool { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--panel); box-shadow:var(--shadow); overflow:hidden; }
@@ -245,15 +493,53 @@
     .rail-smart-status:empty { display:none; }
     .rail-smart-status.done { color:var(--good); }
     .rail-smart-status.error-text { color:var(--bad); }
-    /* Section rows carry their mark in a tile; the screens under them carry a
-       dot, so the two levels never read as one flat list. */
-    .sidebar-section .i { width:15px; height:15px; }
-    .sidebar-section > .i { flex:0 0 26px; width:26px; height:26px; padding:5px; border-radius:var(--r-sm); background:var(--sunken); color:var(--muted); box-sizing:border-box; }
-    .sidebar-group.open .sidebar-section > .i { background:var(--accent-soft); color:var(--accent-ink); }
+    /* The rail carries no marks at all: it is a list of names, and a name is
+       what you are looking for there. Weight, indent, and the caret are what
+       separate its two levels. */
     .sidebar-links a::before { content:''; flex:0 0 5px; width:5px; height:5px; border-radius:50%; background:var(--border-strong); }
     .sidebar-links a[aria-current="page"]::before { background:var(--accent); }
-    .sidebar-links a .i { display:none; }
     .theme-switch { margin-bottom:10px; }
+    /* The setup for a run sits above what the run produced, on the screen that
+       runs it — as the first part of that screen, sharing its surface with the
+       name at the top and the results below, parted by a rule. It used to be a
+       panel of its own inside the screen's panel: two plates of one colour, and
+       the heading left standing outside both. */
+    .run-setup { margin:0 0 20px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+    /* It carries no heading: the screen is named one line above it. */
+    .run-setup .run-lead { margin-top:0; }
+    /* The prompt sits in the left column, in the place the composer that wrote
+       it occupies on the screen before — so on all four screens of the section
+       the prompt is in the same place, and the work happens beside it. It stays
+       put while a long report is read: it is the answer to "what am I looking
+       at" on every screenful. */
+    .run-side { min-width:0; }
+    @media (min-width:900px) { .run-side { position:sticky; top:74px; } }
+    /* Inside its own plate the block brings no second surface. */
+    .run-subject { margin:0; padding:0; border:0; background:none; }
+    .subject-top { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+    .subject-top .stage-title { margin:0; }
+    .subject-open { flex:0 0 auto; color:var(--accent-ink); font-size:var(--fs-sm); text-decoration:none; white-space:nowrap; }
+    .subject-open::after { content:' \2192'; }
+    .subject-open:hover { text-decoration:underline; }
+    .subject-name { margin:7px 0 0; font-size:var(--fs-base); line-height:1.5; }
+    .subject-more { margin-left:7px; color:var(--muted); font-size:var(--fs-sm); }
+    .subject-task { margin:6px 0 0; max-width:74ch; color:var(--text-2); font-size:var(--fs-sm); line-height:1.55; }
+    /* The opening of it, faded out rather than cut off: a hard edge through the
+       middle of a line reads as a rendering fault, a fade reads as "this
+       continues", which is what it does — in full, one click away. */
+    .subject-opening {
+      margin:11px 0 0; max-height:calc(4.8em + 28px); overflow:hidden;
+      background:var(--panel2); color:var(--muted);
+      -webkit-mask-image:linear-gradient(180deg, #000 66%, transparent 100%);
+      mask-image:linear-gradient(180deg, #000 66%, transparent 100%);
+    }
+    .subject-note { margin:11px 0 0; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .subject-empty { color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .subject-empty a { color:var(--accent-ink); }
+    .run-setup .task-title { margin-bottom:0; }
+    .run-setup .quality-form { margin-top:16px; }
+    .run-setup .estimate { margin-top:14px; }
+    .run-setup .form-actions { margin-bottom:0; }
     .app-main { min-width:0; }
     .context-bar { position:sticky; top:0; display:flex; align-items:center; gap:14px; min-height:56px; padding:12px 26px; border-bottom:1px solid transparent; background:color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter:blur(8px); transition:border-color .2s ease; z-index:20; }
     .context-bar.stuck { border-bottom-color:var(--border); }
@@ -269,9 +555,18 @@
     .back-button:hover { transform:translateX(-2px); background:var(--wash); }
     .back-button .i { width:16px; height:16px; }
     h1 { margin:2px 0 0; color:var(--text); font-size:var(--fs-lead); font-weight:600; line-height:1.2; letter-spacing:-.01em; }
+    /* On a plated screen the name is the top of the plate, so it needs the gap
+       under it that a card's border used to fake. A section screen is exempt:
+       there the head is a plate of its own and the parts below bring theirs. */
+    .panel:not(.unplated) .screen-head { margin-bottom:18px; }
     .context-artifacts { display:flex; align-items:center; gap:8px; min-width:0; }
-    .context-artifacts > span { overflow:hidden; }
-    .context-artifacts > span { display:flex; align-items:center; gap:6px; min-width:0; padding:5px 11px; border:1px solid var(--border); border-radius:var(--r-pill); background:var(--panel); color:var(--muted); font-size:var(--fs-micro); white-space:nowrap; }
+    .context-artifacts > span, .context-artifacts > .context-artifact { display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; padding:5px 11px; border:1px solid var(--border); border-radius:var(--r-pill); background:var(--panel); color:var(--muted); font-size:var(--fs-micro); white-space:nowrap; }
+    /* Two of the three are now doors, so they answer to a pointer like one —
+       quietly: the bar reports, it does not compete with the screen. */
+    .context-artifact { text-decoration:none; }
+    .context-artifact:hover { border-color:var(--border-strong); background:var(--wash); }
+    .context-artifact:hover code { color:var(--text); }
+    .context-artifact:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .context-artifacts code { max-width:150px; overflow:hidden; color:var(--text-2); font:var(--fs-micro)/1.5 var(--mono); text-overflow:ellipsis; }
     .context-utilities { display:flex; gap:6px; }
     .context-utilities a { padding:5px 8px; border:1px solid var(--border); border-radius:var(--r-sm); color:var(--muted); font-size:var(--fs-sm); text-decoration:none; }
@@ -313,6 +608,72 @@
     .upload-status:empty { margin-top:0; }
     .upload-status.success { color:var(--good); }
     .upload-status.error-text { color:var(--bad); }
+    /* Getting rows from somewhere is two blocks beside the rail, each on a
+       surface of its own: the control that does the work, held to a column of
+       its own, and what there is to know across the rest. Both screens that
+       bring examples in are laid out this way, so the reading is the same on
+       either. They part at the width where the control's column fits, and stack
+       in the same order below it. */
+    .screen-split { display:grid; grid-template-columns:1fr; gap:18px; align-items:start; margin-top:18px; }
+    @media (min-width:1100px) {
+      .screen-split { grid-template-columns:minmax(320px,380px) minmax(0,1fr); }
+    }
+    /* The builder is the same three zones, with the halves the other way round:
+       its work is a table of generated rows and a deck of counts, which does not
+       fit the narrow column the upload control is happy in. The notes beside it
+       do, and they are read once rather than scanned across. */
+    @media (min-width:1100px) {
+      .screen-split.builder-split { grid-template-columns:minmax(0,1fr) minmax(300px,340px); }
+      /* The rows are a long scroll and the notes are about those rows, so the
+         notes travel with them rather than sitting at the top of a table you
+         have already scrolled past. Its own scrollbar appears only when the
+         column is taller than the window. */
+      .builder-split .screen-guide { position:sticky; top:74px; max-height:calc(100vh - 96px); overflow:auto; }
+    }
+    .build-work { min-width:0; }
+    /* Each note is a claim about the project on screen, so it carries the same
+       three colours the deck does rather than a decorative mark of its own. */
+    .advice-list { margin:14px 0 0; padding:0; list-style:none; }
+    .advice { margin-top:10px; padding:12px 14px; border:1px solid var(--border); border-left-width:3px; border-radius:var(--r-md); background:var(--panel2); }
+    .advice.bad { border-left-color:var(--bad-line); }
+    .advice.warn { border-left-color:var(--warn-line); }
+    .advice.good { border-left-color:var(--good-line); }
+    .advice strong { display:block; color:var(--text); font-size:var(--fs-sm); font-weight:600; line-height:1.45; }
+    .advice p { margin:5px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .advice p:empty { display:none; }
+    .advice-act { width:auto; margin:9px 0 0; padding:5px 11px; font-size:var(--fs-sm); }
+    .guide-note b { color:var(--text-2); font-weight:600; }
+    /* The same list of terms as .guide-fields, stacked: this column is a third
+       of the width that one has, and a name beside its sentence there becomes a
+       name beside four words here. */
+    .guide-stack { margin:12px 0 0; }
+    .guide-stack > div { margin-top:11px; padding-top:11px; border-top:1px solid var(--border); }
+    .guide-stack dt { color:var(--text-2); font-size:var(--fs-sm); font-weight:600; }
+    .guide-stack dd { margin:3px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .screen-guide, .screen-body {
+      padding:22px 24px; border:1px solid var(--border); border-radius:var(--r-lg);
+      background:var(--panel); box-shadow:var(--shadow);
+    }
+    .screen-guide h2, .screen-body h2 { margin:0 0 8px; font-size:var(--fs-base); font-weight:600; letter-spacing:0; }
+    .screen-guide h3 { margin:22px 0 0; }
+    .guide-lead { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .guide-sample {
+      margin:14px 0 0; padding:12px; border-radius:var(--r-sm); background:var(--sunken);
+      color:var(--text-2); font:var(--fs-sm)/1.65 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere;
+    }
+    /* One row per field, the name in the type the file is written in. */
+    .guide-fields { margin:16px 0 0; }
+    .guide-fields > div {
+      display:grid; grid-template-columns:minmax(104px,158px) minmax(0,1fr); gap:4px 18px;
+      padding:11px 0 0; margin-top:11px; border-top:1px solid var(--border);
+    }
+    .guide-fields dt { color:var(--text); font:var(--fs-sm)/1.55 var(--mono); overflow-wrap:anywhere; }
+    .guide-fields dd { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .guide-steps { margin:10px 0 0; padding-left:19px; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .guide-steps li + li { margin-top:6px; }
+    .guide-steps code { color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
+    .guide-note { margin:16px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .guide-steps a, .guide-note a { color:var(--accent-ink); text-underline-offset:3px; }
     .empty { color:var(--muted); min-height:150px; display:grid; place-items:center; text-align:center; padding:24px; }
     .task-helper { margin:8px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     .creation-modes { margin:16px 0 0; padding:0; border:0; }
@@ -356,9 +717,9 @@
        rename the button it sits above. This only looks like one. */
     .field-label { display:block; margin:12px 0 6px; color:var(--muted); font-size:var(--fs-sm); }
     .field-link { display:inline-block; color:var(--accent-ink); font-size:var(--fs-sm); text-underline-offset:3px; }
-    .hub-search { max-width:70ch; }
-    .hub-search textarea { min-height:70px; }
-    .hub-search .hub-results { max-width:none; }
+    /* The column the search sits in already holds it to a readable width; the
+       task box is the one thing that would otherwise run the whole of it. */
+    .hub-search textarea { max-width:70ch; min-height:70px; }
     /* Hub candidates. Everything here is text the Hub returned, so it stays
        visually quieter than the app's own copy and is always escaped. */
     .hub-results:not(:empty) { margin-top:12px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
@@ -473,6 +834,12 @@
     .prompt-msg-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
     .prompt-role { color:var(--muted); font:600 var(--fs-micro)/1.5 var(--mono); text-transform:uppercase; letter-spacing:.08em; }
     .prompt-msg pre { margin-bottom:0; background:var(--panel2); }
+    /* The message you arrived to read. Marked on its own edge rather than by
+       dimming the others: the rest of the prompt still has to be readable, it
+       is the same prompt. */
+    .prompt-msg.picked { margin-left:-14px; padding-left:11px; border-left:3px solid var(--accent); }
+    .prompt-msg.picked .prompt-role { color:var(--accent-ink); }
+    .prompt-msg.picked pre { background:var(--accent-soft); }
     .prompt-foot { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:12px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
     .prompt-foot strong { color:var(--text-2); font-weight:600; }
     .prompt-spec > summary, .prompt-notes > summary { cursor:pointer; color:var(--muted); font-size:var(--fs-sm); }
@@ -488,11 +855,29 @@
     th { color:var(--muted); font-weight:600; font-size:var(--fs-micro); text-transform:uppercase; letter-spacing:.08em; }
     /* Prose in a table of numbers: reads left to right, and stays quieter than the score. */
     th.what, td.what { text-align:left; color:var(--muted); font-weight:400; }
+    /* The two tables in the app whose columns are prose rather than numbers: the
+       rows of a set, read to judge whether they look like your real inputs, and
+       the generated rows waiting for a decision. Both align like text and give
+       the input the width to be read at. */
+    .dataset-preview th, .dataset-preview td,
+    .business-list th, .business-list td,
+    .builder-rows th, .builder-rows td { text-align:left; vertical-align:top; font-variant-numeric:normal; }
+    /* Except the one column that is a number and gets compared down the column. */
+    .builder-rows th.agree, .builder-rows td.agree { text-align:right; font-variant-numeric:tabular-nums; }
+    /* The input wraps at a readable measure instead of running the table off the
+       side of its own scroller, where the end of every row is out of sight. */
+    .builder-rows td:last-child { max-width:44ch; }
+    .dataset-preview td:nth-child(2) { min-width:32ch; color:var(--text-2); }
+    .dataset-preview td:nth-child(3) { max-width:24ch; overflow-wrap:anywhere; }
+    .dataset-preview code { color:var(--muted); font:var(--fs-micro)/1.5 var(--mono); }
     .delta.up { color:var(--good); }
     .delta.down { color:var(--bad); }
     .tab-panel[hidden] { display:none; }
     .settings-intro { margin:6px 0 16px; max-width:70ch; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
-    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+    /* Three roles, three columns where they fit; two, then one, where they do
+       not. The cards are read against each other — which model does what — so
+       they wrap rather than becoming a list. */
+    .settings-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; align-items:start; }
     /* No coloured stripe on the card: it is one of a grid of identical cards,
        and the kicker inside already says which role it is. */
     .settings-card { min-width:0; padding:20px; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--panel2); }
@@ -672,24 +1057,249 @@
     .table-scroll table { min-width:640px; }
     .table-scroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .table-scroll-hint { margin:18px 0 6px; color:var(--muted); font-size:var(--fs-sm); }
-    .benchmark-setup { max-width:620px; padding:8px 0 20px; }
-    .section-eyebrow { display:block; margin-bottom:4px; color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
-    /* Every screen opens the same way: the line that says what it is for, and
-       the one action it offers about itself, in the corner it always occupies.
-       The name is not repeated here — the context bar above is already showing
-       it, and a screen that titles itself twice reads as two screens. */
-    .screen-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin:0 0 20px; padding:4px 4px 0; }
-    .screen-lead { margin:6px 0 0; max-width:70ch; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
-    .screen-actions { display:flex; flex:0 0 auto; gap:8px; align-items:center; }
-    .screen-actions button { width:auto; margin:0; padding:7px 12px; font-size:var(--fs-sm); }
-    .log-status { margin:0 0 12px; }
-    .setup-checklist { margin:22px 0; padding:0; list-style:none; border-top:1px solid var(--border); }
-    .setup-checklist li { display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:8px; align-items:center; padding:11px 0; border-bottom:1px solid var(--border); color:var(--text-2); }
-    .setup-checklist li > span { display:block; width:9px; height:9px; border:1px solid var(--text-2); border-radius:50%; }
-    .setup-checklist li.ready > span { border-color:var(--good); background:var(--good); }
-    .setup-checklist small { color:var(--muted); font-size:var(--fs-micro); text-transform:uppercase; letter-spacing:.06em; }
-    .setup-benchmark { width:auto; min-width:180px; margin:0; }
     .gate + .quality-form { margin-top:16px; }
+
+    /* ---- dataset builder ---------------------------------------------------
+     * A generated set is read as counts before it is read as rows, so the middle
+     * of the screen is a deck of counts: one number, one sentence, and at most
+     * one verb that narrows the table below. Nothing on a card can approve
+     * anything — that decision only exists as a tick in the table. */
+    .build-mode-lead { margin:0 0 14px; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
+    .build-seeds,.build-cost { margin:0 0 16px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--panel2); color:var(--text-2); font-size:var(--fs-sm); line-height:1.55; }
+    .build-cost { border-color:var(--accent-line); background:var(--accent-soft); }
+    .build-toggles { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .build-provenance { margin:14px 0 0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
+    .build-provenance code { font:var(--fs-sm)/1.5 var(--mono); }
+    .deck-lead-line { margin:26px 0 12px; color:var(--text); font-size:var(--fs-lead); font-weight:600; letter-spacing:-.01em; line-height:1.5; }
+    /* Flex rather than grid so a card left over on the last row grows to fill
+     * it, instead of sitting narrow beside a hole the width of two cards. */
+    .deck { display:flex; flex-wrap:wrap; gap:12px; }
+    .deck-card { flex:1 1 175px; display:flex; flex-direction:column; gap:6px; min-width:0; padding:16px; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--panel); box-shadow:var(--shadow); }
+    .deck-top { display:flex; align-items:center; gap:8px; color:var(--text-2); }
+    .deck-top strong { font-size:var(--fs-sm); font-weight:600; }
+    .deck-mark { display:inline-flex; }
+    .deck-mark .i { width:15px; height:15px; }
+    .deck-value { font-size:30px; font-weight:600; letter-spacing:-.03em; font-variant-numeric:tabular-nums; line-height:1.1; }
+    .deck-lead { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
+    .deck-act { width:auto; margin:8px 0 0; padding:5px 11px; align-self:flex-start; font-size:var(--fs-sm); }
+    .deck-card.good { border-color:var(--good-line); }
+    .deck-card.good .deck-value,.deck-card.good .deck-mark { color:var(--good-ink); }
+    .deck-card.warn { border-color:var(--warn-line); }
+    .deck-card.warn .deck-value,.deck-card.warn .deck-mark { color:var(--warn-ink); }
+    .deck-card.bad { border-color:var(--bad-line); }
+    .deck-card.bad .deck-value,.deck-card.bad .deck-mark { color:var(--bad-text); }
+    .deck-card.idle .deck-value { color:var(--muted); }
+
+    /* Coverage before deduplication, not after: an empty cell is the finding,
+     * so it keeps its place in the grid instead of being left out of it. */
+    .cov-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:8px; }
+    .cov-cell { display:flex; flex-direction:column; gap:3px; padding:11px 12px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--panel2); }
+    .cov-cell.empty { border-style:dashed; background:transparent; }
+    .cov-axis { color:var(--text-2); font-size:var(--fs-micro); text-transform:uppercase; letter-spacing:.06em; }
+    .cov-count { font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; }
+    .cov-cell.empty .cov-count { color:var(--muted); font-weight:400; }
+    .cov-flag { color:var(--bad-text); font-size:var(--fs-micro); }
+
+    /* ---- the business catalogue -------------------------------------------
+     * Zone one of the library. Ten kinds of work, and under whichever is open,
+     * what is inside it. They are tiles rather than rows because a category is
+     * what someone recognises their own company in — the tile is the size of a
+     * thing you choose, not of a thing you read past. What tells them apart is
+     * the picture and the headline; colour is spent only on the one that is
+     * open, as everywhere else in the app.
+     *
+     * The last two run double width so the shelf ends on a full row rather than
+     * on a gap. Heights stay level all the same — the headline holds two lines'
+     * room, the summary is clamped and the foot is pushed down, so a row is a
+     * grid and not four paragraphs of different lengths. */
+    .catalog-lead { max-width:78ch; margin:0 0 14px; line-height:1.6; }
+    /* Twelve columns so the mosaic divides by two, three and four. Four across
+       leaves the ten groups in the catalogue file as 4, 4 and a short row, so
+       the last two take half a row each and the shelf ends square. Dense flow
+       is the safety net for an eleventh. */
+    .catalog-groups { display:grid; grid-template-columns:repeat(12,1fr); grid-auto-flow:row dense; gap:12px; }
+    .cat-tile { grid-column:span 3; }
+    .cat-tile:nth-last-child(1), .cat-tile:nth-last-child(2) { grid-column:span 6; }
+    /* Below about 1000px four across is four columns of nothing. */
+    @media (max-width:1000px) { .catalog-groups { grid-template-columns:repeat(6,1fr); } .cat-tile, .cat-tile:nth-last-child(1), .cat-tile:nth-last-child(2) { grid-column:span 3; } }
+    @media (max-width:640px) { .catalog-groups { grid-template-columns:1fr; } .cat-tile, .cat-tile:nth-last-child(1), .cat-tile:nth-last-child(2) { grid-column:1/-1; } }
+    .cat-tile {
+      display:flex; flex-direction:column; align-items:stretch; gap:10px;
+      width:auto; height:100%; margin:0; padding:16px 17px 14px; text-align:left;
+      border:1px solid var(--border); border-radius:var(--r-lg); background:var(--panel);
+      box-shadow:var(--shadow); font:inherit; color:var(--text); cursor:pointer;
+      transition:transform .18s cubic-bezier(.22,.7,.3,1), border-color .16s ease, background .16s ease;
+    }
+    .cat-tile:hover { transform:translateY(-2px); border-color:var(--border-strong); background:var(--panel2); }
+    /* Open is the accent, as everywhere else in the app: the accent means the
+       thing you are on, and one tile at a time is on. */
+    .cat-tile.open { border-color:var(--accent); background:var(--accent-soft); }
+    .cat-tile:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    /* The picture is the thing the eye lands on, so it goes above the words and
+       keeps its own square. It says nothing the text does not, which is why it
+       carries an empty alt in the markup. */
+    .cat-art {
+      flex:0 0 auto; width:72px; height:72px; margin-bottom:2px;
+      border-radius:var(--r-md); object-fit:cover; box-shadow:inset 0 0 0 1px var(--border);
+    }
+    /* The category's own name, small and above the headline: it is how the tile
+       is referred to everywhere else — in the panel it opens, in the rail — and
+       it would be missing from the tile otherwise. */
+    .cat-name { color:var(--muted); font-size:var(--fs-micro); font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    /* What a model is asked to do here, in the largest type on the tile. Two
+       lines' worth of room whether it needs them or not, so the feet across a
+       row sit level instead of stepping down by however long a line ran. */
+    .cat-headline {
+      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
+      margin-top:-6px; min-width:0; min-height:2.4em;
+      font-size:var(--fs-lead); font-weight:600; line-height:1.2; letter-spacing:-.02em;
+    }
+    /* The same job said once more, concretely — the verbs a person would search
+       for if they did not know what the category was called. */
+    .cat-summary {
+      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;
+      color:var(--muted); font-size:var(--fs-sm); font-weight:400; line-height:1.5;
+    }
+    .cat-foot {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      margin-top:auto; padding-top:11px; border-top:1px solid var(--border);
+    }
+    /* Counted from what this server can actually read, never from the catalogue:
+       a category described here with nothing bundled for it says so. */
+    .cat-held { min-width:0; overflow:hidden; color:var(--text-2); font-size:var(--fs-micro); font-weight:600; white-space:nowrap; text-overflow:ellipsis; }
+    /* Reads as the button it is inside, so the tile says what a click does
+       without a second control that could be clicked instead. */
+    .cat-open {
+      flex:0 0 auto; padding:4px 11px; border:1px solid var(--border); border-radius:var(--r-pill);
+      background:var(--panel2); color:var(--text-2); font-size:var(--fs-micro); font-weight:600;
+    }
+    .cat-tile:hover .cat-open { border-color:var(--border-strong); color:var(--text); }
+    .cat-tile.open .cat-open { border-color:var(--accent-line); background:var(--panel); color:var(--accent-ink); }
+    @media (prefers-reduced-motion:reduce) { .cat-tile:hover { transform:none; } }
+
+    /* ---- what a tile opens into -------------------------------------------
+     * One panel under the mosaic, not an accordion inside a tile a fifth of a
+     * row wide. It is tied to its tile by the accent and by sitting directly
+     * under the grid, it says whose it is, and it closes from its own corner —
+     * the tile that opened it is a scroll away by then.
+     *
+     * Inside, the sets come before the stories: within a kind of work, the sets
+     * are the part you can actually pick up and run a measurement against. */
+    .cat-panel {
+      margin-top:14px; padding:18px 20px 20px;
+      border:1px solid var(--accent-line); border-radius:var(--r-lg); background:var(--panel2);
+      animation:panel-in .22s cubic-bezier(.22,.7,.3,1) both;
+    }
+    @keyframes panel-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+    @media (prefers-reduced-motion:reduce) { .cat-panel { animation:none; } }
+    .cat-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+    /* h3 is a micro uppercase label everywhere else in the app; here it is the
+       name of the thing you just opened, so it is written as one. */
+    .cat-panel-head h3 {
+      margin:3px 0 0; color:var(--text); font-size:var(--fs-lead); font-weight:600;
+      text-transform:none; letter-spacing:-.01em;
+    }
+    .cat-panel-head .ghost { flex:0 0 auto; margin:0; }
+    .cat-panel-lead { margin:6px 0 0; max-width:72ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .cat-panel-label {
+      display:flex; align-items:baseline; gap:8px; margin:20px 0 10px;
+      color:var(--text-2); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em;
+    }
+    .cat-panel-note { color:var(--muted); font-weight:400; text-transform:none; letter-spacing:0; }
+    /* The nested categories. Small, plain and all the same size: this is a
+       shelf you pick from, and the one thing worth comparing across it is how
+       much of the group each set carries. */
+    .set-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(212px,1fr)); gap:10px; }
+    .set-card {
+      display:flex; flex-direction:column; gap:3px; min-width:0; padding:12px 14px;
+      border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel);
+      color:var(--text); text-decoration:none; transition:border-color .16s ease, background .16s ease;
+    }
+    .set-card:hover { border-color:var(--border-strong); background:var(--panel2); }
+    .set-card:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .set-card-title { font-size:var(--fs-base); font-weight:600; line-height:1.35; }
+    .set-card-facts { color:var(--text-2); font-size:var(--fs-sm); }
+    /* The name a run is set up with, last and quietest: you need it when you
+       come back to a report, not when you are choosing. */
+    .set-card-name { margin-top:5px; color:var(--muted); font-size:var(--fs-micro); overflow-wrap:anywhere; }
+    /* A set the server does not have is still worth naming — it is what the
+       mapping leans on — but it is not a door, so it does not look like one. */
+    .set-card.off { border-style:dashed; background:transparent; }
+    .set-card.off .set-card-title { color:var(--text-2); font-weight:500; }
+    .set-card.off .set-card-facts { color:var(--muted); }
+    .catalog-cases { margin-top:4px; }
+    .case-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(288px,1fr)); gap:12px; }
+    /* The match is on the left edge as colour before it is a word in the
+       corner, so a group can be read for shape — mostly green, mostly grey —
+       without reading a single card. Same three colours as the tally bar. */
+    .case-card {
+      display:flex; flex-direction:column; gap:8px; min-width:0;
+      padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--border-strong);
+      border-radius:0 var(--r-md) var(--r-md) 0; background:var(--panel);
+    }
+    .case-card[data-match="direct"] { border-left-color:var(--good); }
+    .case-card[data-match="partial"] { border-left-color:var(--warn); }
+    .case-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .case-no { color:var(--muted); font:600 var(--fs-sm)/1 var(--mono); letter-spacing:.04em; }
+    .case-task { margin:0; font-size:var(--fs-body); font-weight:600; line-height:1.35; }
+    .case-who { color:var(--text-2); font-size:var(--fs-sm); font-weight:500; }
+    /* Who told the story, when it was a vendor's customer story rather than the
+       company's own words. Quiet, because it is provenance and not the fact. */
+    .case-source {
+      margin-left:8px; padding:1px 7px; border:1px solid var(--border); border-radius:999px;
+      color:var(--muted); font-size:var(--fs-micro); font-weight:400; white-space:nowrap;
+    }
+    /* The figure is why anyone reads the case, so it is the largest thing on
+       the card — and it is somebody's claim, which is why it sits in a well of
+       its own instead of being typeset like a number this tool produced. */
+    .case-claim {
+      display:flex; flex-direction:column; gap:2px; margin:2px 0;
+      padding:10px 12px; border-radius:var(--r-sm); background:var(--accent-soft);
+      box-shadow:inset 0 0 0 1px var(--accent-line);
+    }
+    .case-claim b { color:var(--accent-ink); font-size:var(--fs-h2); font-weight:600; letter-spacing:-.02em; line-height:1.15; }
+    .case-claim span { color:var(--text-2); font-size:var(--fs-sm); line-height:1.4; }
+    .case-story { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .case-evidence { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; padding-top:8px; border-top:1px solid var(--border); }
+    /* The foot of the card is where it stops being a story and becomes
+       something you can run: one click to the rows the claim would be tested on. */
+    .case-set {
+      display:inline-flex; align-items:baseline; gap:6px; padding:3px 9px;
+      border:1px solid var(--accent-line); border-radius:var(--r-pill); background:var(--accent-soft);
+      color:var(--accent-ink); font:var(--fs-micro)/1.6 var(--mono); text-decoration:none;
+    }
+    .case-set:hover { border-color:var(--accent); }
+    .case-set span { color:var(--muted); font-family:var(--sans); }
+    .case-set.off { border-color:var(--border); background:var(--wash); color:var(--muted); }
+    .case-nothing { color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
+    /* A dataset named by the mapping but not shipped. It is a link and nothing
+       else on purpose: the citation stays checkable, and it never looks like a
+       row you can measure against. */
+    .catalog-ref { color:var(--muted); font-size:var(--fs-sm); border-bottom:1px dotted var(--border-strong); }
+    .catalog-citations { margin:0; padding:0; list-style:none; }
+    .catalog-citations li { padding:8px 0; border-bottom:1px solid var(--border); font-size:var(--fs-sm); }
+    .catalog-citations li:last-child { border-bottom:0; }
+    .catalog-citations .meta { margin-left:8px; }
+    .business-list td:nth-child(4) { min-width:26ch; color:var(--text-2); }
+    .business-list code.meta { font:var(--fs-micro)/1.6 var(--mono); }
+
+    /* ---- deleting a set ----------------------------------------------------
+     * Removing rows cannot be undone, so the second button is the only one in
+     * the app that says so in colour, and it only exists after the first click. */
+    .dataset-list th:last-child, .dataset-list td.row-actions { text-align:right; white-space:nowrap; }
+    .dataset-list td.row-actions button { width:auto; margin:0; padding:4px 10px; font-size:var(--fs-sm); }
+    .delete-confirm { display:inline-flex; gap:6px; }
+    button.danger { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
+    button.danger:hover:not(:disabled) { border-color:var(--bad); background:var(--bad); color:var(--panel); }
+
+    .row-filters { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; margin-bottom:10px; }
+    .chip-btn { width:auto; margin:0; padding:4px 11px; border-radius:var(--r-pill); font-size:var(--fs-sm); text-transform:capitalize; }
+    .chip-btn.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); }
+    .check-chip { display:inline-block; margin:0 4px 3px 0; padding:2px 7px; border:1px solid var(--bad-line); border-radius:999px; background:var(--bad-soft); color:var(--bad-text); font-size:var(--fs-micro); cursor:help; }
+    .row-flagged > td:first-child { box-shadow:inset 2px 0 0 var(--bad); }
+    .row-persona { display:block; margin-top:3px; max-width:26ch; color:var(--muted); font-size:var(--fs-micro); line-height:1.4; }
+    .selected-count { margin-right:auto; font-size:var(--fs-sm); }
+
     .prerequisite { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:16px 0; padding:12px 14px; border-left:2px solid var(--accent-line); background:var(--accent-soft); color:var(--text-2); }
     .prerequisite p { margin:0; }
     .prerequisite button { flex:0 0 auto; width:auto; margin:0; padding:6px 10px; }
@@ -711,7 +1321,7 @@
       .bottom-nav a { display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 4px; border-top:2px solid transparent; color:var(--muted); font-size:var(--fs-micro); text-align:center; text-decoration:none; }
       .bottom-nav a[aria-current="page"] { border-top-color:var(--accent); color:var(--text); }
     }
-    @media (max-width:720px) { .settings-grid,.quality-form { grid-template-columns:1fr; } .quality-form .wide { grid-column:auto; } .settings-description { min-height:0; } }
+    @media (max-width:720px) { .settings-grid,.quality-form,.build-toggles { grid-template-columns:1fr; } .quality-form .wide { grid-column:auto; } .settings-description { min-height:0; } }
     @media (max-width:480px) {
       .context-bar { padding-inline:12px; }
       .context-utilities { display:none; }

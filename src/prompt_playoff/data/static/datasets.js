@@ -2,8 +2,10 @@ async function loadDatasets(selectedName) {
   try {
     const list = await api('/v1/datasets');
     state.datasetSizes = new Map(list.map(d => [d.name, d.examples]));
-    $('dataset').innerHTML = list.map(d => `<option value="${esc(d.name)}">${esc(d.name)} — ${d.examples} examples</option>`).join('');
-    if (selectedName && list.some(d => d.name === selectedName)) $('dataset').value = selectedName;
+    const names = list.map(d => d.name);
+    if (selectedName && names.includes(selectedName)) state.run.dataset = selectedName;
+    if (!names.includes(state.run.dataset)) state.run.dataset = names[0] || '';
+    refreshRunSetup();
     updateEstimates();
     updateWorkspaceContext();
     refreshActions();
@@ -11,12 +13,30 @@ async function loadDatasets(selectedName) {
     return list;
   } catch (e) {
     state.datasetSizes = new Map();
-    $('dataset').innerHTML = '<option>no datasets</option>';
+    state.run.dataset = '';
+    refreshRunSetup();
     updateEstimates();
     updateWorkspaceContext();
     if (selectedName) throw e;
     return [];
   }
+}
+
+/* The mapping from business work to public datasets, fetched once a session.
+ * It is a file on the server rather than a request to anything, so a failure
+ * here is a broken install and not an outage — but the library screen still
+ * has two working zones without it, so the error is shown in its own zone
+ * rather than taking the screen down. */
+async function loadBusinessCatalog() {
+  if (state.catalog) return state.catalog;
+  try {
+    state.catalog = await api('/v1/datasets/catalog');
+    state.catalogError = '';
+  } catch (error) {
+    state.catalog = null;
+    state.catalogError = error.message;
+  }
+  return state.catalog;
 }
 
 // The split is computed server-side with Python's round(), which sends halves
@@ -28,25 +48,45 @@ function roundHalfToEven(value) {
   return nearest % 2 === 0 ? nearest : nearest - 1;
 }
 
+/* A set opened on its own is opened to be looked at, and a row saying "agents,
+ * 120, bundled" is what the list already said. So the rows themselves are
+ * fetched — the material every score on this server is computed against — and
+ * only then: one set, asked for once, cached for the session. */
+async function loadDatasetRows(name) {
+  if (!name || state.datasetRows.has(name)) return;
+  state.datasetRows.set(name, {status:'loading'});
+  try {
+    state.datasetRows.set(name, {status:'ready', rows: await api(`/v1/datasets/${encodeURIComponent(name)}`)});
+  } catch (error) {
+    state.datasetRows.set(name, {status:'error', error:error.message});
+  }
+  // Two screens wait on this: the library opened on one set, and a measurement
+  // opened on one example, which needs the row to say what was asked.
+  if (state.tab === 'dataset-library' && showingOn('dataset-library') === name) renderDetailPanel('dataset-library');
+  if (state.tab === 'report' && state.report?.dataset === name) renderDetailPanel('report');
+}
+
 // What a click costs is invisible until it is running, and the numbers here
 // reach the thousands. Spell them out while the fields can still be changed.
 function updateEstimates() {
-  const examples = state.datasetSizes.get($('dataset').value);
+  const examples = state.datasetSizes.get(state.run.dataset);
+  // Either estimate may be off-screen: each lives on the screen that runs it.
   const measure = $('measure-estimate');
   const optimize = $('optimize-estimate');
   if (!Number.isFinite(examples) || examples < 1) {
-    measure.textContent = optimize.textContent = '';
+    if (measure) measure.textContent = '';
+    if (optimize) optimize.textContent = '';
     return;
   }
   const count = (value, word) => `<strong>${plural(value, word)}</strong>`;
-  const repeats = Math.max(1, Number($('repeats').value) || 1);
-  const rounds = Math.max(1, Number($('rounds').value) || 1);
+  const repeats = Math.max(1, Number(state.run.repeats) || 1);
+  const rounds = Math.max(1, Number(state.run.rounds) || 1);
   const perCall = Number(state.program && state.program.expected_calls) || 1;
   const calls = perCall > 1 ? `, ${perCall} model calls each` : '';
 
   const single = examples * repeats;
   const methods = state.recs.length;
-  measure.innerHTML = `Benchmark: ${count(single, 'run')}${calls}.`
+  if (measure) measure.innerHTML = `Benchmark: ${count(single, 'run')}${calls}.`
     + (methods > 1 ? ` Compare all ${methods}: ${count(single * methods, 'run')}.` : '');
 
   // Mirrors the optimizer defaults: a 34% held-out split, baseline plus one
@@ -56,21 +96,71 @@ function updateEstimates() {
   const train = Math.max(1, examples - holdout);
   const versions = 2 + 3 * (rounds - 1);
   const runs = versions * train * repeats + 2 * holdout * repeats;
-  optimize.innerHTML = `Optimize: about ${count(runs, 'run')}${calls}`
+  if (optimize) optimize.innerHTML = `Optimize: about ${count(runs, 'run')}${calls}`
     + ` — up to ${versions} versions over ${plural(train, 'training example')},`
     + ` then baseline and winner on ${plural(holdout, 'held-out example')}.`
     + ' Writing each version costs one more call to the prompt engine.';
 }
 
-// Uploaded datasets enter the same named-dataset path used by every measure
-// action; no inline examples or client-only special cases are introduced.
-$('dataset-file').addEventListener('change', () => {
-  $('upload-btn').disabled = !$('dataset-file').files.length;
-  $('upload-status').textContent = '';
-  $('upload-status').className = 'upload-status';
-});
+/* --------------------------------------------------------------------------
+ * Bringing your own examples is a screen, not a file input tucked into a panel:
+ * it is one of the three answers to "where do examples come from". Uploaded
+ * sets enter the same named-dataset path every measure action uses; no inline
+ * examples and no client-only special cases.
+ *
+ * The screen is two blocks beside the rail rather than one column: the control
+ * that takes the file sits next to the rail, a block of its own rather than a
+ * field with four hints under it, and what the file has to be holds the wider
+ * half beside it — it is reference, and reference wants the room.
+ * -------------------------------------------------------------------------- */
+function renderDatasetUpload() {
+  return `<div class="screen-split">
+    <section class="screen-body">
+      <h2>Upload</h2>
+      <label for="dataset-file">Your examples, as JSONL</label>
+      <div class="upload-row">
+        <input id="dataset-file" type="file" accept=".jsonl,application/x-ndjson,application/jsonl" aria-describedby="upload-status">
+        <button id="upload-btn" class="primary upload-btn" type="button" data-action="upload-dataset" disabled>Upload</button>
+      </div>
+      <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
+      <p class="field-hint">One example per line, up to 10 MiB. The count you get back is the number of rows every later score is an average over.</p>
+    </section>
+    <aside class="screen-guide" data-testid="upload-guide">
+      <h2>What the file has to be</h2>
+      <p class="guide-lead">JSONL: one JSON object per line, not one array of objects. Blank lines are skipped, and the first line that will not parse fails the whole upload by its line number — nothing is kept from a file that has one.</p>
+      <pre class="guide-sample">{"id":"1","input":"Ada Lovelace worked in London.","expected":{"people":["Ada Lovelace"],"places":["London"]}}
+{"id":"2","input":"Nobody is named here.","expected":{"people":[],"places":[]}}</pre>
+      <dl class="guide-fields">
+        <div>
+          <dt>id</dt>
+          <dd>Required. Your name for the row, so a failure in a report points back at something you recognise.</dd>
+        </div>
+        <div>
+          <dt>input</dt>
+          <dd>Required. What the prompt is given, one row per run.</dd>
+        </div>
+        <div>
+          <dt>expected</dt>
+          <dd>The answer it should have produced — a string, or an object when the task returns JSON. This is what a score is measured against; leave it out and the graders that compare an answer have nothing to compare.</dd>
+        </div>
+        <div>
+          <dt>response_schema<br>graders<br>tags</dt>
+          <dd>Optional. A JSON Schema the answer must fit, the graders to run instead of the ones inferred from your rows, and labels of your own.</dd>
+        </div>
+      </dl>
+      <h3>What happens after you press Upload</h3>
+      <ol class="guide-steps">
+        <li>Every line is parsed and counted before anything is stored.</li>
+        <li>The set is selected for measurement straight away — the score you get next is computed against your rows, not the demo ones.</li>
+        <li>It appears in the <a href="#dataset-library" data-global-tab="dataset-library">dataset library</a>, named <code>uploaded:</code> plus your file name.</li>
+      </ol>
+      <p class="guide-note">Up to 10 MiB, UTF-8. The rows are held in this server's memory and are gone when it restarts: your own material is never written to disk here.</p>
+      <p class="guide-note">No file of your own yet? <a href="#dataset-hub" data-global-tab="dataset-hub">Import one from Hugging Face</a> or <a href="#dataset-builder" data-global-tab="dataset-builder">build one from your task</a>.</p>
+    </aside>
+  </div>`;
+}
 
-$('upload-btn').addEventListener('click', async () => {
+async function runUpload() {
   const input = $('dataset-file');
   const btn = $('upload-btn');
   const status = $('upload-status');
@@ -78,7 +168,7 @@ $('upload-btn').addEventListener('click', async () => {
   if (!file) return;
 
   btn.disabled = true;
-  btn.textContent = 'Uploading…';
+  btn.textContent = 'Uploading';
   btn.setAttribute('aria-busy', 'true');
   status.className = 'upload-status';
   status.textContent = `Uploading ${file.name}…`;
@@ -101,7 +191,18 @@ $('upload-btn').addEventListener('click', async () => {
     btn.textContent = 'Upload';
     btn.removeAttribute('aria-busy');
   }
-});
+}
+
+function wireDatasetUpload(panel) {
+  const input = panel.querySelector('#dataset-file');
+  const button = panel.querySelector('#upload-btn');
+  input?.addEventListener('change', () => {
+    button.disabled = !input.files.length;
+    const status = panel.querySelector('#upload-status');
+    status.textContent = ''; status.className = 'upload-status';
+  });
+  button?.addEventListener('click', runUpload);
+}
 
 // ---- finding examples on the Hugging Face Hub ------------------------------
 // Three deliberate clicks: search, open a candidate, import it. Nothing is
@@ -126,7 +227,7 @@ async function runHubSearch() {
   }
   const btn = $('hub-btn');
   btn.disabled = true;
-  btn.textContent = 'Searching…';
+  btn.textContent = 'Searching';
   btn.setAttribute('aria-busy', 'true');
   hubMessage('Asking the Hugging Face Hub…');
   $('hub-results').innerHTML = '';
@@ -156,16 +257,43 @@ async function runHubSearch() {
  * the three answers to "where do examples come from", and the only thing in the
  * app that touches the network. The task text is the same one the prompt uses —
  * edited here, it is edited there.
+ *
+ * Same two blocks beside the rail as the upload screen, for the same reason:
+ * the search next to the rail, and what an import is across the rest. Three
+ * deliberate clicks are hard to read off a button, so they are written down
+ * beside it rather than discovered one at a time.
  * -------------------------------------------------------------------------- */
 function renderDatasetHub() {
-  return `<section class="hub-search">
-    <label for="hub-task">What your prompt has to do</label>
-    <textarea id="hub-task" rows="3">${esc($('description')?.value || '')}</textarea>
-    <p class="field-hint">The query is built from these words — edit them here if the search comes back off-target. This is the same task the prompt uses.</p>
-    <button id="hub-btn" class="primary" type="button" data-testid="hub-search">Search Hugging Face</button>
-    <div id="hub-status" class="upload-status" role="status" aria-live="polite"></div>
-    <div id="hub-results" class="hub-results"></div>
-  </section>`;
+  return `<div class="screen-split">
+    <section class="screen-body hub-search">
+      <h2>Search</h2>
+      <label for="hub-task">What your prompt has to do</label>
+      <textarea id="hub-task" rows="3">${esc($('description')?.value || '')}</textarea>
+      <p class="field-hint">The query is built from these words — edit them here if the search comes back off-target. This is the same task the prompt uses.</p>
+      <button id="hub-btn" class="primary" type="button" data-testid="hub-search">Search Hugging Face</button>
+      <div id="hub-status" class="upload-status" role="status" aria-live="polite"></div>
+      <div id="hub-results" class="hub-results"></div>
+    </section>
+    <aside class="screen-guide" data-testid="hub-guide">
+      <h2>What an import gets you</h2>
+      <p class="guide-lead">Public material, not your traffic. Rows from the Hub tell you whether a prompt holds up on text that resembles your inputs — a score still speaks loudest about examples from your own.</p>
+      <h3>Three clicks, none of them automatic</h3>
+      <ol class="guide-steps">
+        <li><b>Search.</b> The queries are written from your task by the prompt engine, or taken from your own wording when it cannot. The line above the results says which, and exactly what was searched for.</li>
+        <li><b>Look at the columns.</b> A candidate opens on its real config, split and first rows. Nothing is chosen for you: the Hub's answer to a short query is often wrong, and only you can tell whether the material looks like your inputs.</li>
+        <li><b>Import.</b> You pick the column to send and the column holding the right answer — up to 500 rows, 60 by default.</li>
+      </ol>
+      <h3>What happens after you import</h3>
+      <ol class="guide-steps">
+        <li>The set is named <code>hf:</code> plus the dataset, selected for measurement straight away, and listed in the <a href="#dataset-library" data-global-tab="dataset-library">dataset library</a>.</li>
+        <li>Rows missing their input or their answer are skipped; the count you get back is what was actually kept.</li>
+        <li>Leave the right answer at <em>— none —</em> and there is nothing to compare against: the graders that score quality need it.</li>
+      </ol>
+      <p class="guide-note">Unlike an uploaded file, these rows are written to disk — the material is public, and re-importing would mean downloading it again and repeating your column choices.</p>
+      <p class="guide-note">This screen needs the network: <code>huggingface.co</code> for the catalogue, <code>datasets-server.huggingface.co</code> for columns and rows. Nothing else in the app leaves your machine.</p>
+      <p class="guide-note">Rather use your own? <a href="#dataset-upload" data-global-tab="dataset-upload">Upload a JSONL file</a> or <a href="#dataset-builder" data-global-tab="dataset-builder">build a set from your task</a>.</p>
+    </aside>
+  </div>`;
 }
 
 function wireDatasetHub(panel) {
@@ -274,7 +402,7 @@ function wireHubDetail() {
   importBtn.addEventListener('click', async () => {
     const preview = state.hub.preview;
     importBtn.disabled = true;
-    importBtn.textContent = 'Importing…';
+    importBtn.textContent = 'Importing';
     hubMessage(`Importing rows from ${state.hub.open}…`);
     try {
       const imported = await api('/v1/datasets/hub/import', {

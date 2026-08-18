@@ -3,7 +3,10 @@
 const resultTabs = ['prompt', 'report', 'comparison', 'optimization'];
 const platformTabs = ['dataset-builder', 'context-lab', 'judge', 'model-matrix', 'analysis', 'reviews', 'regressions', 'releases', 'production', 'dataset-library'];
 const sectionTabs = ['s-prompt', 's-examples', 's-check', 's-ship', 's-reference'];
-const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', ...platformTabs];
+// Screens whose body is already several surfaces beside one another: the panel
+// they sit in carries no plate of its own, or the parts would read as one.
+const unplatedScreens = new Set(['dataset-upload', 'dataset-hub', 'dataset-builder']);
+const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', 'dataset-upload', ...platformTabs];
 const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluation Guide'] };
 // One name per screen, written down once. The sidebar link, the heading in the
 // context bar and the browser tab all read from here, so a screen can never be
@@ -12,37 +15,59 @@ const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluat
 // the third entry, the one line that says what the screen is for. Screens no
 // longer carry a heading of their own — the context bar is already showing it.
 const screenMeta = {
-  prompt:['Prompt', 'Write the prompt'], report:['Prompt', 'Measurement'], comparison:['Prompt', 'Method comparison'], optimization:['Prompt', 'Optimization'],
-  'dataset-library':['Examples', 'Example library', 'Every set of examples this server can measure against — the bundled ones, your uploads, and anything imported.'],
-  'dataset-hub':['Examples', 'Import from Hugging Face', 'No examples of your own? Find a public dataset whose material resembles your task and import the rows you pick. This is the only thing here that needs an internet connection.'],
-  'dataset-builder':['Examples', 'Build examples', 'Generate edge cases and mutations from your task. Nothing becomes benchmark truth before you approve it.'],
+  prompt:['Prompt', 'Prompt text'], report:['Prompt', 'Measurement'], comparison:['Prompt', 'Method comparison'], optimization:['Prompt', 'Optimization'],
+  'dataset-library':['Datasets', 'Dataset library', 'Every set of examples this server can measure a prompt against: ready-made data sorted by the kind of work it stands for, and below it everything else here — the task benchmarks and the sets you brought yourself.'],
+  'dataset-upload':['Datasets', 'Upload your own', 'Your own examples, one per line, as JSONL. These are the rows a score actually means something against.'],
+  'dataset-hub':['Datasets', 'Import from Hugging Face', 'No examples of your own? Find a public dataset whose material resembles your task and import the rows you pick. This is the only thing here that needs an internet connection.'],
+  'dataset-builder':['Datasets', 'Build datasets', 'Generate rows along every axis of the taxonomy, or around the ones your last run got wrong. Deterministic rules object first; nothing becomes benchmark truth before you approve it.'],
   history:['Check', 'Results', 'Every run this server has recorded. Aggregate numbers only — prompts and raw model answers are not stored here.'],
-  judge:['Check', 'Side-by-side judging', 'Two answers, one rubric, and the order hidden from the judge. Every decision goes to your approvals.'],
-  'model-matrix':['Check', 'Across models', 'Run one prompt and one set of examples across models, to find wording that only works on the model you wrote it for.'],
-  'context-lab':['Check', 'Context test', 'The same prompt against different context: full documents, memory, retrieval results, or a compressed version.'],
-  analysis:['Check', 'Confidence', 'Is the difference real? Confidence intervals and per-slice scores, so a small noisy sample does not turn into a release decision.'],
-  regressions:['Ship', 'Before / after', 'Better or worse? Compare two recorded runs against the quality and the speed you are willing to lose.'],
-  reviews:['Ship', 'Your approvals', 'Generated examples, judge decisions, regressions and releases waiting for an explicit yes or no.'],
-  releases:['Ship', 'Releases', 'Draft → tested → approved → production, with a rollback that puts the previous prompt back.'],
-  production:['Ship', 'Live quality', 'Watch real inputs drift away from what you tested on, inspect agent runs, and try the prompt against injection attempts.'],
+  judge:['Check', 'Pairwise judging', 'Two answers, one rubric, and the order hidden from the judge. Every decision goes to Reviews.'],
+  'model-matrix':['Check', 'Model matrix', 'Run one prompt and one set of examples across models, to find wording that only works on the model you wrote it for.'],
+  'context-lab':['Check', 'Context lab', 'The same prompt against different context: full documents, memory, retrieval results, or a compressed version.'],
+  analysis:['Check', 'Significance', 'Is the difference real? Confidence intervals and per-slice scores, so a small noisy sample does not turn into a release decision.'],
+  regressions:['Production', 'Regressions', 'Better or worse? Compare two recorded runs against the quality and the speed you are willing to lose.'],
+  reviews:['Production', 'Reviews', 'Generated examples, judge decisions, regressions and releases waiting for an explicit yes or no.'],
+  releases:['Production', 'Releases', 'Draft → tested → approved → production, with a rollback that puts the previous prompt back.'],
+  production:['Production', 'Monitoring', 'Watch real inputs drift away from what you tested on, inspect agent runs, and try the prompt against injection attempts.'],
   techniques:['Reference', 'Techniques', 'Every method with its own task and a real prompt compiled from the live registry. Open the blueprint only when you need its source blocks.'],
   logs:['Reference', 'Jobs & logs', 'What is running right now, and what every finished run did.'],
-  settings:['Reference', 'Models & keys', 'Two models, and they do different jobs. The prompt engine writes the final prompt; the evaluation model runs it and produces every number you see.'],
+  settings:['Reference', 'Models & keys', 'Three models, and they do different jobs. The prompt engine writes the prompt and the generated rows; the evaluation model runs it and produces every number you see; the judge marks answers against each other, and must not be the model being marked.'],
   evaluation:['Reference', 'Evaluation guide'], help:['Reference', 'Help'],
   home:['Workspace', 'Prompt Playoff', 'Five places, and one button that walks you through all of them. Everything here runs on your machine.'],
-  's-prompt':['Prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.'],
-  's-examples':['Examples', 'Examples', 'The rows every score is computed against — bring your own, import public ones, or generate them. A number only means something when these look like your real inputs.'],
-  's-check':['Check', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?'],
-  's-ship':['Ship', 'Ship', 'The gate between a prompt that scores well here and a prompt running in front of real users.'],
+  's-prompt':['Prompt', 'Prompt', 'The prompt itself, and what is measured on it as it stands right now: one run, the methods that were in the running, and the search for a better wording.'],
+  's-examples':['Datasets', 'Datasets', 'The rows every score is computed against — bring your own, import public ones, or generate them. A number only means something when these look like your real inputs.'],
+  's-check':['Check', 'Check', 'Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves. If one measurement of the prompt as it stands is what you want, that lives in Prompt.'],
+  's-ship':['Production', 'Production', 'The gate between a prompt that scores well here and a prompt running in front of real users.'],
   's-reference':['Reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.']
 };
 
 // The one action a screen offers about itself lives in the same corner on every
 // screen, instead of somewhere inside its body.
 const screenActions = {
-  history: () => state.experiments.length ? '<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download CSV</a>' : '',
+  // The file the server writes is the whole history, so when the screen is
+  // showing one set the link says which of the two it is about to hand over.
+  history: () => state.experiments.length
+    ? `<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download CSV${showingOn('history') ? ' (all runs)' : ''}</a>`
+    : '',
   logs: () => '<button type="button" class="ghost log-refresh">Refresh</button>'
 };
+
+/* A screen narrowed to one thing has to say so, in one place, on every screen
+ * that can be narrowed — otherwise a table showing three of eleven runs is
+ * simply a table that lost eight runs. The band says what is being shown and
+ * carries the way back out; the verb differs because a prompt cannot be
+ * filtered down to one of its own messages without lying about what a prompt
+ * is, so there the part is picked out instead of the rest being removed. */
+const showingVerbs = {prompt:'Highlighting'};
+
+function showingBand(tab) {
+  const value = showingOn(tab);
+  if (!value) return '';
+  return `<div class="showing-band" data-testid="showing-band">
+      <span>${esc(showingVerbs[tab] || 'Showing')} <b>${esc(value)}</b></span>
+      <button type="button" class="ghost" data-action="show-everything">Show everything</button>
+    </div>`;
+}
 
 function screenShell(tab, body) {
   const [, title, lead] = screenMeta[tab] || screenMeta.home;
@@ -54,8 +79,17 @@ function screenShell(tab, body) {
       <div><h1 class="screen-title">${esc(title)}</h1>${lead ? `<p class="screen-lead">${esc(lead)}</p>` : ''}</div>
       ${actions ? `<div class="screen-actions">${actions}</div>` : ''}
     </div>`;
-  return `${head}${gate}${body}`;
+  const setup = typeof renderRunSetup === 'function' ? renderRunSetup(tab) : '';
+  // The prompt these screens work on is not part of the screen: it is the third
+  // zone of the workspace, held in the left column where the composer that
+  // wrote it stands. So one place to look for the prompt, on all four screens
+  // of this section.
+  return `${head}${gate}${showingBand(tab)}${setup}${body}`;
 }
+
+document.addEventListener('click', event => {
+  if (event.target.closest('[data-action="show-everything"]')) selectTab(state.tab, {focus:true});
+});
 // Appearance. "Auto" clears the attribute so the media query decides; the other
 // two override it in both directions. The head script has already applied the
 // stored choice — this only keeps the control in step with it.
@@ -73,10 +107,9 @@ applyTheme((() => {
   try { return localStorage.getItem('pp-theme') || 'dark'; } catch { return 'dark'; }
 })());
 
-// The sidebar and the mobile bar are static markup; their marks come from the
-// one icon set here, so a screen cannot end up with a different symbol in the
-// two places it is listed.
-document.querySelectorAll('.lifecycle-nav a[data-screen], .bottom-nav a[data-screen]').forEach(link => {
+// The mobile bar is static markup; its marks come from the one icon set here.
+// The rail alongside it carries none: there the name is the whole row.
+document.querySelectorAll('.bottom-nav a[data-screen]').forEach(link => {
   const mark = screenIcons[link.dataset.screen];
   if (mark) link.insertAdjacentHTML('afterbegin', icon(mark));
 });
@@ -86,10 +119,13 @@ document.querySelectorAll('.lifecycle-nav a[data-screen], .bottom-nav a[data-scr
  * what the twentieth visit needs — any screen one click away without going
  * through a menu. Only one section opens at a time, so the rail never grows
  * past ten rows, and the open one always follows where you actually are.
+ *
+ * The rail names the five and nothing more. Their drawings belong where a
+ * section is being introduced rather than navigated: the home tile and the
+ * section's own screen, which is the only place one is shown at full size.
  * -------------------------------------------------------------------------- */
-const sectionIcons = {prompt:'pencil', examples:'rows', check:'target', ship:'rocket', reference:'book'};
-document.querySelectorAll('[data-section-toggle]').forEach(button =>
-  button.insertAdjacentHTML('afterbegin', icon(sectionIcons[button.dataset.sectionToggle])));
+const sectionArt = (section, size) =>
+  `<img class="section-art" src="/assets/section-${section}.webp" alt="" width="${size}" height="${size}" decoding="async">`;
 const sectionOf = screen => screen.startsWith('s-') ? screen.slice(2)
   : [...document.querySelectorAll('.sidebar-group[data-section]')]
       .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section || '';
@@ -131,6 +167,33 @@ function refreshHomeIfVisible() {
   if (state.tab === 'home' || sectionTabs.includes(state.tab)) renderDetailPanel(state.tab);
 }
 
+/* A section screen now says how much of its own material exists, and two of the
+ * three lists behind that were only ever fetched when their own screen opened —
+ * so a section screen would have drawn an empty map over a server that is not
+ * empty. It asks for what it is about to show, once per session, and redraws
+ * itself when the answers land. */
+const SECTION_FACTS = {
+  check: [['experiments', '/v1/experiments', list => { state.experiments = list; }]],
+  ship: [
+    ['reviews', '/v1/reviews', list => { state.quality.reviews = list; }],
+    ['releases', '/v1/releases', list => { state.quality.releases = list; }]
+  ]
+};
+const askedFor = new Set();
+
+async function loadSectionFacts(section) {
+  const missing = (SECTION_FACTS[section] || []).filter(([key]) => !askedFor.has(key));
+  if (!missing.length) return;
+  missing.forEach(([key]) => askedFor.add(key));
+  await Promise.all(missing.map(async ([, path, apply]) => {
+    // A section screen is not the place to report a failed fetch: the map stays
+    // as it was, and the screen that owns the list says so properly.
+    try { apply(await api(path)); } catch { /* the map simply stays empty */ }
+  }));
+  refreshHomeIfVisible();
+  renderSectionCounts();
+}
+
 /* --------------------------------------------------------------------------
  * The model is not a setting you visit — it decides every number on every
  * screen. So it is visible in the bar at all times, switchable without leaving
@@ -156,7 +219,7 @@ function renderModelMenu() {
   const items = installed.slice(0, 8).map(item => `<button type="button" role="menuitem" class="model-option" data-model-id="${esc(item.model_id)}" aria-current="${item.model_id === current}">${esc(item.model_id)}</button>`).join('');
   return `<span class="model-pop-label">Runs the tests</span>
     ${items || '<span class="model-pop-empty">No installed models found on this provider.</span>'}
-    <div class="model-pop-foot"><button type="button" class="ghost" data-action="open-model-settings">Models &amp; keys…</button></div>`;
+    <div class="model-pop-foot"><button type="button" class="ghost" data-action="open-model-settings">Models &amp; keys</button></div>`;
 }
 
 function toggleModelMenu(open) {
@@ -210,7 +273,7 @@ document.addEventListener('click', event => {
 function wireSmartStart(button, status) {
   button?.addEventListener('click', async () => {
     const say = (kind, text) => { if (status) { status.textContent = text; status.className = `${status.classList[0]} ${kind}`; } };
-    button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Running…';
+    button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Running';
     try {
       await smartRun(say);
       say('done', 'Done — opening the improved prompt.');
@@ -233,13 +296,23 @@ function normalizedTab(tab) {
   return detailPanels.includes(resolved) ? resolved : 'home';
 }
 
-function tabFromLocation() {
-  return normalizedTab(decodeURIComponent(window.location.hash.slice(1)).split('/').pop() || 'home');
+/* The address is `#screen` or `#screen/thing`: the second segment is the one
+ * thing on that screen you came to look at. Anything else in the hash — a
+ * technique anchor, say — is a position on the page and not a route at all,
+ * which `known` is what tells the listeners apart. */
+function routeFromLocation() {
+  const raw = decodeURIComponent(window.location.hash.slice(1));
+  const [head, ...rest] = raw.split('/');
+  return {
+    tab: normalizedTab(head || 'home'),
+    showing: rest.join('/') || null,
+    known: !head || detailPanels.includes(routeAliases[head] || head)
+  };
 }
 
 function primaryDestination(tab) {
   if (resultTabs.includes(tab)) return 'prompt';
-  if (['dataset-library', 'dataset-hub', 'dataset-builder'].includes(tab)) return 'dataset-library';
+  if (['dataset-library', 'dataset-upload', 'dataset-hub', 'dataset-builder'].includes(tab)) return 'dataset-library';
   if (['history', 'judge', 'model-matrix', 'context-lab', 'analysis'].includes(tab)) return 'history';
   if (['regressions', 'reviews', 'releases', 'production'].includes(tab)) return 'regressions';
   return null;
@@ -307,7 +380,7 @@ document.addEventListener('keydown', event => {
 document.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
   event.preventDefault();
   closeDrawer(false);
-  selectTab(link.dataset.globalTab, {focus:true});
+  selectTab(link.dataset.globalTab, {focus:true, showing:link.dataset.showing});
 }));
 
 /* --------------------------------------------------------------------------
@@ -321,16 +394,16 @@ function sectionTiles() {
   return [
     ['s-prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.',
       technique ? ['ok', 'Prompt ready'] : ['idle', 'Not written yet']],
-    ['s-examples', 'Examples', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
+    ['s-examples', 'Datasets', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
       state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…']],
     ['s-check', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?',
       state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')} recorded`] : ['idle', 'Nothing measured yet']],
-    ['s-ship', 'Ship', 'The gate between a prompt that scores well here and a prompt running in front of real users.',
+    ['s-ship', 'Production', 'The gate between a prompt that scores well here and a prompt running in front of real users.',
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
     ['s-reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.',
       state.techniqueCatalog.size ? ['idle', `${plural(state.techniqueCatalog.size, 'technique')}`] : ['idle', 'Loading…']]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
-      <span class="tile-top">${icon(sectionIcons[tab.slice(2)] || 'pencil')}<strong>${esc(name)}</strong></span>
+      <span class="tile-top">${sectionArt(tab.slice(2), 34)}<strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
       <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
     </a>`).join('');
@@ -344,9 +417,10 @@ const tileDesc = {
   report:'The scorecard for the prompt as it stands, example by example.',
   comparison:'Every recommended technique scored side by side on the same examples.',
   optimization:'Rewrites the prompt over several rounds and keeps whichever version scores best.',
-  'dataset-library':'Every set available to this server — bundled, uploaded, imported, or built here.',
+  'dataset-library':'Ready-made data by kind of work, and every other set this server holds.',
+  'dataset-upload':'A JSONL file of your own rows — the only examples a score truly speaks about.',
   'dataset-hub':'No examples of your own? Find a public dataset whose material resembles your task.',
-  'dataset-builder':'Generate edge cases and mutations. Nothing becomes truth before you approve it.',
+  'dataset-builder':'Generate edge cases, or rows around the failures of the last run. Nothing becomes truth before you approve it.',
   history:'Every run this server has recorded, newest first, with a version-to-version diff.',
   judge:'Two answers, one rubric, order hidden from the judge.',
   'model-matrix':'The same prompt on several models, to catch wording that only works on one.',
@@ -358,7 +432,7 @@ const tileDesc = {
   production:'Input drift, agent runs, and injection attempts — three checks on what happens in production.',
   techniques:'Every method with its own task and a real prompt compiled from the live registry.',
   logs:'What is running right now, and what every finished run did.',
-  settings:'Two models: one writes the prompt, one runs the tests.',
+  settings:'Three models: one writes the prompt, one runs the tests, one marks the answers.',
   evaluation:'What the scores mean, and when a number is worth trusting.',
   help:'How the whole thing fits together, start to finish.'
 };
@@ -379,8 +453,12 @@ function screenState(tab) {
     case 'optimization': return state.optimization ? ['ok', 'Improved'] : ['idle', 'Not optimized'];
     case 'dataset-library': return state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…'];
     case 'dataset-builder': {
-      const unreviewed = state.quality.projects.reduce((total, project) =>
-        total + project.examples.filter(item => item.status === 'unreviewed').length, 0);
+      // Flagged rows outrank merely unreviewed ones: a rule already objected to
+      // those, so they are the part of the queue that is actually urgent.
+      const rows = state.quality.projects.flatMap(project => project.examples);
+      const flagged = rows.filter(item => item.checks?.length).length;
+      if (flagged) return ['wait', `${plural(flagged, 'row')} flagged`];
+      const unreviewed = rows.filter(item => item.status === 'unreviewed').length;
       return unreviewed ? ['wait', `${plural(unreviewed, 'example')} unreviewed`] : ['idle', 'Nothing generated'];
     }
     case 'history': return state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')}`] : ['idle', 'No runs yet'];
@@ -393,6 +471,10 @@ function screenState(tab) {
     case 'releases': return state.quality.releases.length ? ['ok', `${plural(state.quality.releases.length, 'release')}`] : ['idle', 'None yet'];
     case 'techniques': return state.techniqueCatalog.size ? ['idle', `${state.techniqueCatalog.size}`] : ['idle', 'Loading…'];
     case 'settings': return [state.settings.evaluation.model_id.trim() ? 'ok' : 'wait', state.settings.evaluation.model_id.trim() || 'No model set'];
+    case 'dataset-upload': {
+      const mine = [...state.datasetSizes.keys()].filter(name => name.startsWith('uploaded:')).length;
+      return mine ? ['ok', `${plural(mine, 'set')} of yours`] : ['idle', 'Nothing uploaded'];
+    }
     case 'dataset-hub': return ['idle', 'Needs internet'];
     case 'judge': return screenResultState('judge');
     case 'model-matrix': return screenResultState('model-matrix');
@@ -407,22 +489,383 @@ function screenState(tab) {
   }
 }
 
-function screenTile(tab) {
-  const [, name] = screenMeta[tab];
-  const lead = tileDesc[tab] || screenMeta[tab][2];
-  const chip = screenState(tab);
-  return `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
-      <span class="tile-top">${icon(screenIcons[tab] || 'pencil')}<strong>${esc(name)}</strong></span>
-      <span class="tile-lead">${esc(lead || '')}</span>
-      ${chip ? `<span class="tile-foot"><span class="state ${chip[0]}">${esc(chip[1])}</span></span>` : ''}
-    </a>`;
+const screenActionLabels = {
+  prompt:'Open Editor', report:'Measure Now', comparison:'Compare', optimization:'Optimize',
+  'dataset-library':'Browse Sets', 'dataset-upload':'Upload', 'dataset-hub':'Import Hub', 'dataset-builder':'Generate',
+  history:'View Runs', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', analysis:'Analyze',
+  regressions:'Check Diff', reviews:'Review', releases:'Manage', production:'Inspect',
+  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More'
+};
+
+const sectionSpotlights = {
+  prompt: {
+    tag: 'Your Prompt',
+    statusTitle: (st) => {
+      const isReady = Boolean(st.program?.technique_id || st.chosen);
+      return `<span>Prompt Health:</span> <span class="state ${isReady ? 'ok' : 'wait'}">${isReady ? 'Ready' : 'Requires Attention'}</span><span class="info-dot" title="Prompt status">ℹ</span>`;
+    },
+    desc: (st) => st.chosen 
+      ? 'Your prompt is authored and ready. Run measurements against test examples, compare alternative techniques, and optimize for top quality.'
+      : 'No prompt authored yet. Describe your task to generate a high-performing prompt with automatic technique selection.'
+  },
+  examples: {
+    tag: 'Your Datasets',
+    statusTitle: (st) => {
+      const count = st.datasetSizes.size || 0;
+      return `<span>Dataset Health:</span> <span class="state ${count ? 'ok' : 'wait'}">${count ? `${plural(count, 'set')} loaded` : 'No datasets'}</span><span class="info-dot" title="Dataset health">ℹ</span>`;
+    },
+    desc: () => 'Examples provide benchmark ground truth. Upload JSONL rows from production, import public sets from Hugging Face, or synthesize edge cases.'
+  },
+  check: {
+    tag: 'Evaluation Suite',
+    statusTitle: (st) => {
+      const count = st.experiments.length || 0;
+      return `<span>Validation Health:</span> <span class="state ${count ? 'ok' : 'idle'}">${count ? `${plural(count, 'run')} recorded` : 'Ready to test'}</span><span class="info-dot" title="Validation status">ℹ</span>`;
+    },
+    desc: () => 'Verify prompt quality across model families, blind judge side-by-side answers, and analyze statistical confidence before shipping.'
+  },
+  ship: {
+    tag: 'Deployment Gate',
+    statusTitle: (st) => {
+      const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
+      return `<span>Release Health:</span> <span class="state ${pending ? 'wait' : 'ok'}">${pending ? `${pending} Pending` : 'All Clear'}</span><span class="info-dot" title="Release status">ℹ</span>`;
+    },
+    desc: (st) => {
+      const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
+      return pending
+        ? `${pending} items are awaiting your manual approval before deployment. Check regression tolerances and promote with confidence.`
+        : 'All release pipelines are up to date. Monitor production quality, track input drift, and register version releases.';
+    }
+  },
+  reference: {
+    tag: 'Knowledge Base',
+    statusTitle: (st) => {
+      const count = st.techniqueCatalog.size || 61;
+      return `<span>Catalog Status:</span> <span class="state ok">${count} Methods</span><span class="info-dot" title="Catalog status">ℹ</span>`;
+    },
+    desc: () => 'Complete reference manual, live prompting technique blueprints, execution jobs telemetry, and evaluation benchmarks.'
+  }
+};
+
+function renderSectionTile(tab) {
+  const [, name] = screenMeta[tab] || ['', tab];
+  const lead = tileDesc[tab] || screenMeta[tab]?.[2] || '';
+  const actionLabel = screenActionLabels[tab] || 'Learn More';
+
+  return `<a class="section-tile-card" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
+    <div class="section-tile-info">
+      <strong>${esc(name)}</strong>
+      <p>${esc(lead)}</p>
+    </div>
+    <div class="section-tile-action">
+      <span class="section-tile-btn">${esc(actionLabel)}</span>
+    </div>
+  </a>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The third part of a section screen. The drawing says which section this is
+ * and the list says what you can do here; neither says how much of it there
+ * already is. So: the section's own stock, drawn to scale — one circle per
+ * thing, its area the size of that thing — and under it the single next move,
+ * which is the one line a section screen can answer that a list of links
+ * cannot. Sizes are read at a glance and compared without arithmetic, which is
+ * the whole reason a disk map is a map and not a table.
+ * -------------------------------------------------------------------------- */
+const compactNumber = value => value >= 10000
+  ? `${(value / 1000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, '')}k`
+  : String(value);
+
+// Group a list into {label, value} pairs, largest first.
+function tally(items, keyOf) {
+  const counts = new Map();
+  items.forEach(item => {
+    const key = keyOf(item);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return [...counts.entries()].map(([label, value]) => ({label, value}));
+}
+
+// What each section is holding, in its own unit. `empty` is what to say when it
+// is holding nothing yet — the map is then the shape of the work not yet done.
+const sectionStock = {
+  prompt() {
+    const program = state.program;
+    const items = [];
+    (program?.stages || []).forEach((stage, index) => stage.messages.forEach(message => items.push({
+      label: promptPartName(program, index, message),
+      value: message.content.length
+    })));
+    const characters = items.reduce((total, item) => total + item.value, 0);
+    return {
+      title:'What the prompt is made of', legend:'One circle per message, sized by how long it is.', unit:'chars', tab:'prompt', items,
+      caption: characters ? `${compactNumber(characters)} characters ≈ ${compactNumber(Math.round(characters / 4))} tokens` : '',
+      empty:'Nothing written yet. Once the prompt exists, every part of it is drawn here to scale.'
+    };
+  },
+  examples() {
+    const items = [...state.datasetSizes.entries()]
+      .map(([label, value]) => ({label, value: Number(value) || 0}))
+      .filter(item => item.value > 0);
+    const rows = items.reduce((total, item) => total + item.value, 0);
+    return {
+      title:'What you can measure against', legend:'One circle per set, sized by how many rows it has.', unit:'rows', tab:'dataset-library', items,
+      caption: items.length ? `${plural(items.length, 'set')} · ${compactNumber(rows)} rows` : '',
+      empty:'No examples on this server yet. Upload your own rows, or import a public set.'
+    };
+  },
+  check() {
+    const items = tally(state.experiments, record => record.dataset || 'unnamed');
+    return {
+      title:'Where you have measured', legend:'One circle per set you ran on, sized by how many runs it holds.', unit:'runs', tab:'history', items,
+      caption: state.experiments.length
+        ? `${plural(state.experiments.length, 'run')} over ${plural(items.length, 'set')}`
+        : '',
+      empty:'Nothing measured yet. Every recorded run lands here, sized by how often you ran on that set.'
+    };
+  },
+  ship() {
+    const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
+    const items = tally(state.quality.releases, release => release.status);
+    // The one circle that is not a release: it opens the approvals screen on
+    // what is still unanswered, which is a different screen entirely.
+    if (pending) items.push({label:'waiting for you', value:pending, tone:'wait', tab:'reviews', showing:'pending'});
+    return {
+      title:'What is in flight', legend:'One circle per stage, sized by how many releases sit in it.', unit:'', tab:'releases', items,
+      caption: state.quality.releases.length
+        ? `${plural(state.quality.releases.length, 'release')}${pending ? ` · ${pending} waiting` : ''}`
+        : (pending ? `${pending} waiting for you` : ''),
+      empty:'Nothing in flight. Releases and anything waiting for your yes or no are drawn here.'
+    };
+  },
+  reference() {
+    // Not by family: there are nearly as many families as techniques, and a map
+    // of sixty circles of one is a list with extra steps. What the catalogue is
+    // strong at is both coarse enough to draw and the thing you came to ask.
+    const strengths = [...state.techniqueCatalog.values()]
+      .flatMap(technique => technique.strong_tasks || []);
+    // Drawn with the underscore taken out, opened with the name the catalogue
+    // itself uses on every card.
+    const items = tally(strengths, task => String(task))
+      .map(item => ({...item, showing:item.label, label:item.label.replace(/_/g, ' ')}));
+    return {
+      title:'What the catalogue is strong at',
+      legend:'One circle per kind of task, sized by how many techniques suit it. A technique can suit several.',
+      unit:'', tab:'techniques', items,
+      caption: state.techniqueCatalog.size
+        ? `${state.techniqueCatalog.size} techniques · ${items.length} kinds of task`
+        : '',
+      empty:'The catalogue has not loaded.'
+    };
+  }
+};
+
+// The one move that follows from where this section actually stands. It is
+// allowed to point out of the section — the next thing to do after writing a
+// prompt is to measure it, and pretending otherwise would be a menu, not advice.
+const sectionNextStep = {
+  prompt() {
+    if (!state.program && !state.chosen) return ['prompt', 'Write the prompt', 'Describe the task in plain words; the technique is picked for you.'];
+    if (!state.report) return ['report', 'Measure it', 'One run over your examples, and the first scorecard.'];
+    if (!state.comparison) return ['comparison', 'Compare the methods', 'Every recommended technique, scored on the same examples.'];
+    return ['optimization', 'Search for better wording', 'A few rounds of rewriting; the best-scoring version is kept.'];
+  },
+  examples() {
+    const rows = state.quality.projects.flatMap(project => project.examples);
+    const flagged = rows.filter(item => item.checks?.length).length;
+    if (flagged) return ['dataset-builder', `Settle ${plural(flagged, 'flagged row')}`, 'A rule objected to these without needing a model; they are the only rows that need you.'];
+    const unreviewed = rows.filter(item => item.status === 'unreviewed').length;
+    if (unreviewed) return ['dataset-builder', `Approve ${plural(unreviewed, 'example')}`, 'Generated rows are not benchmark truth until you say so.'];
+    if (![...state.datasetSizes.keys()].some(name => name.startsWith('uploaded:'))) {
+      return ['dataset-upload', 'Upload your own rows', 'A score speaks loudest about examples from your own traffic.'];
+    }
+    // With a run behind you, the useful next rows are not the awkward ones in
+    // general — they are the ones this prompt has already been caught on.
+    if (state.report) return ['dataset-builder', 'Build from what it got wrong', 'Seed a new set from the rows the last run did not score full marks on.'];
+    return ['dataset-builder', 'Build the edge cases', 'Generate the awkward rows your uploads do not cover.'];
+  },
+  check() {
+    if (!state.experiments.length) return ['report', 'Take the first measurement', 'Nothing here can compare runs until one exists.'];
+    if (state.experiments.length === 1) return ['model-matrix', 'Try it on another model', 'Wording that only works on one model shows up here first.'];
+    return ['analysis', 'Ask whether it is real', 'Confidence intervals, so a noisy sample does not become a release.'];
+  },
+  ship() {
+    const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
+    // Advice lands where the circle for the same thing lands: on the unanswered
+    // ones, not on the whole history of decisions.
+    if (pending) return ['reviews', `Clear ${pending} waiting`, 'Nothing moves past this gate while something is unanswered.', 'pending'];
+    if (!state.quality.releases.length) return ['releases', 'Register a release', 'A named, hashed version is what a rollback puts back.'];
+    if (state.quality.releases.some(release => release.status === 'production')) {
+      return ['production', 'Watch for drift', 'Real inputs drift away from the ones you tested on.'];
+    }
+    return ['releases', 'Move the release along', 'Draft → tested → approved → production, one explicit step at a time.'];
+  },
+  reference() {
+    if (!state.experiments.length && !state.report) return ['evaluation', 'Read what the scores mean', 'Worth ten minutes before the first number arrives.'];
+    return ['techniques', 'Browse the catalogue', 'Every method with a real prompt compiled from the live registry.'];
+  }
+};
+
+/* Circle packing, the small way: the biggest circle lands in the middle and
+ * each next one takes the first free spot on a widening spiral. No randomness,
+ * so the same numbers always produce the same map — a layout that reshuffled on
+ * every render would read as something having changed. */
+function packCircles(sizes) {
+  const radii = sizes.map(size => Math.sqrt(size));
+  const gap = Math.max(...radii) * 0.04;
+  const placed = [];
+  const clearOf = (x, y, radius, ignore) => placed.every((circle, index) =>
+    index === ignore || Math.hypot(circle.x - x, circle.y - y) >= circle.r + radius + gap);
+  radii.forEach(radius => {
+    if (!placed.length) { placed.push({x:0, y:0, r:radius}); return; }
+    const step = Math.max(radius * 0.4, gap);
+    let spot = null;
+    for (let ring = 1; ring <= 300 && !spot; ring += 1) {
+      const distance = ring * step;
+      const points = Math.max(10, Math.round((2 * Math.PI * distance) / step));
+      for (let index = 0; index < points; index += 1) {
+        // The half-turn offset keeps successive rings from lining their seats up.
+        const angle = ((index / points) + ring * 0.5) * Math.PI * 2;
+        const x = Math.cos(angle) * distance;
+        const y = Math.sin(angle) * distance;
+        if (clearOf(x, y, radius)) { spot = {x, y, r:radius}; break; }
+      }
+    }
+    placed.push(spot || {x:0, y:0, r:radius});
+  });
+  // The spiral finds a free spot, not the nearest one, so the cluster comes out
+  // with holes in it. Let every circle fall toward the middle until something
+  // stops it: a few passes turn a ring of circles into a cluster.
+  for (let pass = 0; pass < 60; pass += 1) {
+    let settled = true;
+    placed.forEach((circle, index) => {
+      const distance = Math.hypot(circle.x, circle.y);
+      if (!index || distance < 1e-4) return;
+      const step = Math.min(distance, Math.max(circle.r * 0.06, gap));
+      const x = circle.x - (circle.x / distance) * step;
+      const y = circle.y - (circle.y / distance) * step;
+      if (clearOf(x, y, circle.r, index)) { circle.x = x; circle.y = y; settled = false; }
+    });
+    if (settled) break;
+  }
+  // Fit the whole cluster to a unit square, so the drawing fills its box
+  // whatever the numbers were.
+  const left = Math.min(...placed.map(c => c.x - c.r));
+  const right = Math.max(...placed.map(c => c.x + c.r));
+  const top = Math.min(...placed.map(c => c.y - c.r));
+  const bottom = Math.max(...placed.map(c => c.y + c.r));
+  const scale = 1 / Math.max(right - left, bottom - top, 1e-6);
+  const offsetX = (1 - (right - left) * scale) / 2;
+  const offsetY = (1 - (bottom - top) * scale) / 2;
+  return placed.map(circle => ({
+    x: (circle.x - left) * scale + offsetX,
+    y: (circle.y - top) * scale + offsetY,
+    r: circle.r * scale
+  }));
+}
+
+// Seven circles is as many as stay readable; everything past that is true but
+// unreadable, so it is added up into one and named as what it is.
+function stockBubbles(items) {
+  const sorted = [...items].sort((a, b) => b.value - a.value);
+  const shown = sorted.slice(0, 7);
+  const rest = sorted.slice(7);
+  if (rest.length) {
+    shown.push({label:`${rest.length} more`, value:rest.reduce((total, item) => total + item.value, 0), tone:'rest'});
+  }
+  return shown;
+}
+
+function renderSectionMap(section) {
+  const stock = sectionStock[section]?.();
+  if (!stock) return '';
+  const [nextTab, nextLabel, nextHint, nextShowing] = sectionNextStep[section]();
+  const bubbles = stockBubbles(stock.items);
+  const packed = packCircles(bubbles.map(item => item.value));
+  // The tally of everything that did not fit can outweigh any single thing in
+  // the section, and colouring that one as the leader would point at the one
+  // bubble you cannot open.
+  const largest = Math.max(...bubbles.filter(item => item.tone !== 'rest').map(item => item.value), 0);
+  // The packing fills its square edge to edge; the drawing keeps a margin, so
+  // the outermost rim is drawn rather than clipped by the panel.
+  const inset = 0.92;
+  const margin = (1 - inset) / 2;
+  const plot = bubbles.length
+    ? `<div class="map-plot">${bubbles.map((item, index) => {
+        const circle = packed[index];
+        const diameter = circle.r * 2 * inset * 100;
+        // A name only goes inside a circle wide enough to hold some of it —
+        // shortened to fit, as a disk map does. Below that the number stands
+        // alone, and below that the circle is its tooltip and nothing else.
+        const room = diameter > 19 ? 'full' : diameter > 10 ? 'value' : 'bare';
+        const tone = item.tone || (item.value === largest ? 'lead' : '');
+        // A circle stands for one thing, so it opens the screen on that thing
+        // rather than on the screen's front page. The tally of the ones too
+        // small to draw stands for no single thing, and opens the screen whole.
+        const target = item.tab || stock.tab;
+        const showing = item.tone === 'rest' ? null : (item.showing ?? item.label);
+        // Spoken aloud and hovered over, so the number is exact and the unit
+        // agrees with it: one run, not 1 runs.
+        const reading = `${item.label} — ${stock.unit
+          ? plural(item.value, stock.unit.replace(/s$/, ''))
+          : compactNumber(item.value)}`;
+        return `<a class="map-bubble ${tone} ${room}" href="#${target}${showing ? `/${encodeURIComponent(showing)}` : ''}"
+          data-global-tab="${target}" data-screen="${target}"${showing ? ` data-showing="${esc(showing)}"` : ''}
+          style="left:${((margin + circle.x * inset) * 100).toFixed(2)}%;top:${((margin + circle.y * inset) * 100).toFixed(2)}%;width:${diameter.toFixed(2)}%"
+          title="${esc(reading)}"><span class="sr-only">${esc(reading)}</span>
+          <span class="map-bubble-text" aria-hidden="true"><b>${esc(compactNumber(item.value))}</b><i>${esc(item.label)}</i></span></a>`;
+      }).join('')}</div>`
+    : `<div class="map-plot empty-plot"><p>${esc(stock.empty)}</p></div>`;
+
+  return `<aside class="section-map" aria-label="${esc(stock.title)}">
+      <div class="map-head">
+        <strong>${esc(stock.title)}</strong>
+        ${stock.caption ? `<span class="map-caption">${esc(stock.caption)}</span>` : ''}
+      </div>
+      ${plot}
+      ${bubbles.length ? `<p class="map-legend">${esc(stock.legend)}</p>` : ''}
+      <a class="map-next" href="#${nextTab}${nextShowing ? `/${encodeURIComponent(nextShowing)}` : ''}"
+        data-global-tab="${nextTab}" data-screen="${nextTab}"${nextShowing ? ` data-showing="${esc(nextShowing)}"` : ''}>
+        <span class="map-next-kicker">Next step</span>
+        <strong>${esc(nextLabel)}</strong>
+        <small>${esc(nextHint)}</small>
+      </a>
+    </aside>`;
 }
 
 function renderSection(tab) {
   const section = tab.slice(2);
   const group = document.querySelector(`.sidebar-group[data-section="${section}"]`);
   const screens = group ? [...group.querySelectorAll('.sidebar-links a')].map(link => link.dataset.screen) : [];
-  return `<div class="tiles">${screens.map(screenTile).join('')}</div>`;
+  const spotlight = sectionSpotlights[section];
+
+  if (!spotlight) {
+    return `<div class="tiles">${screens.map(screenTile).join('')}</div>`;
+  }
+
+  const statusTitle = typeof spotlight.statusTitle === 'function' ? spotlight.statusTitle(state) : spotlight.statusTitle;
+  const desc = typeof spotlight.desc === 'function' ? spotlight.desc(state) : spotlight.desc;
+
+  return `
+    <div class="section-showcase">
+      <div class="section-spotlight">
+        <div class="spotlight-aura">
+          <div class="spotlight-ring">
+            ${sectionArt(section, 218)}
+          </div>
+          <span class="spotlight-tag">${esc(spotlight.tag)}</span>
+        </div>
+        <div class="spotlight-footer">
+          <div class="spotlight-status-title">${statusTitle}</div>
+          <p class="spotlight-desc">${esc(desc)}</p>
+        </div>
+      </div>
+      <div class="section-tiles-stack">
+        ${screens.map(renderSectionTile).join('')}
+      </div>
+      ${renderSectionMap(section)}
+    </div>
+  `;
 }
 
 function renderHome() {
@@ -445,9 +888,10 @@ function detailBody(tab) {
   if (tab === 'home') body = renderHome();
   if (sectionTabs.includes(tab)) body = renderSection(tab);
   if (tab === 'prompt' && state.program) body = renderProgram(state.program);
-  if (tab === 'report') body = state.report ? renderReport(state.report) : renderBenchmarkPrerequisites();
+  if (tab === 'report' && state.report) body = renderReport(state.report);
   if (tab === 'comparison' && state.comparison) body = renderComparison(state.comparison);
   if (tab === 'optimization' && state.optimization) body = renderOptimization(state.optimization);
+  if (tab === 'dataset-upload') body = renderDatasetUpload();
   if (tab === 'dataset-hub') body = renderDatasetHub();
   if (tab === 'techniques') body = renderTechniqueCatalog();
   if (tab === 'logs') body = renderLogs();
@@ -459,21 +903,6 @@ function detailBody(tab) {
     body = `<iframe class="doc-frame" src="${src}" title="${title}"></iframe>`;
   }
   return body;
-}
-
-function renderBenchmarkPrerequisites() {
-  const checks = [
-    ['Prompt selected', Boolean(state.program)],
-    ['Dataset selected', Boolean($('dataset')?.value)],
-    ['Model configured', Boolean(state.settings.evaluation.model_id.trim())]
-  ];
-  return `<section class="benchmark-setup" data-testid="benchmark-prerequisites" aria-labelledby="benchmark-setup-title">
-    <span class="section-eyebrow">Ready the run</span>
-    <h2 id="benchmark-setup-title">Benchmark setup</h2>
-    <p class="meta">Confirm the inputs, then open the measurement controls to run this prompt against representative examples.</p>
-    <ul class="setup-checklist">${checks.map(([label, ready]) => `<li class="${ready ? 'ready' : ''}"><span aria-hidden="true"></span>${esc(label)}<small>${ready ? 'Ready' : 'Required'}</small></li>`).join('')}</ul>
-    <button type="button" class="primary setup-benchmark" data-action="setup-benchmark" data-testid="setup-benchmark">Set up benchmark</button>
-  </section>`;
 }
 
 function ensureDetailShell() {
@@ -490,10 +919,20 @@ function fitDocFrame(frame) {
   if (!doc) { frame.style.height = '80vh'; return; }
   const main = doc.querySelector('main');
   if (main) main.style.margin = '0 auto 8px';
-  const resize = () => { frame.style.height = `${doc.documentElement.scrollHeight + 8}px`; };
+  // The height has to be taken once the document has actually laid out. The
+  // load event fires before its own stylesheet has finished, so the first
+  // measurement came back a fraction of the real height and the frame scrolled
+  // inside itself — which is exactly what the wheel handler below assumes never
+  // happens. Measure again as fonts and styles settle, and keep watching the
+  // element that actually grows.
+  const resize = () => {
+    const height = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0);
+    if (height > 0) frame.style.height = `${height + 8}px`;
+  };
   resize();
-  window.setTimeout(resize, 60);
-  if (window.ResizeObserver && doc.body) new ResizeObserver(resize).observe(doc.body);
+  [60, 250, 800].forEach(delay => window.setTimeout(resize, delay));
+  doc.fonts?.ready.then(resize).catch(() => {});
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(doc.documentElement);
   // The frame is as tall as its content, so it never scrolls itself: pass the wheel on to the page.
   doc.addEventListener('wheel', event => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -508,9 +947,10 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   if (!panel) return;
   panel.innerHTML = screenShell(tab, body);
   panel.dataset.rendered = 'true';
+  panel.dataset.showing = showingOn(tab) || '';
   if (tab === 'settings') {
     hydrateSettingsSecrets();
-    ['engine', 'evaluation'].forEach(loadInstalledModels);
+    ['engine', 'judge', 'similarity', 'evaluation'].forEach(loadInstalledModels);
     wireProfileControls(panel);
   }
   if (docPages[tab]) {
@@ -525,10 +965,26 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
       else state.openLogs.delete(item.dataset.jobId);
     }));
   }
-  if (tab === 'home' || sectionTabs.includes(tab)) {
-    panel.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
-      event.preventDefault(); selectTab(link.dataset.globalTab, {focus:true});
-    }));
+  // Any link a screen draws to another screen is wired the same way, wherever
+  // it is: the map's circles, the home tiles, and a run's example blocks all go
+  // through one handler rather than each screen inventing its own.
+  panel.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
+    event.preventDefault(); selectTab(link.dataset.globalTab, {focus:true, showing:link.dataset.showing});
+  }));
+  if (sectionTabs.includes(tab)) loadSectionFacts(tab.slice(2));
+  if (tab === 'dataset-library' && showingOn(tab)) loadDatasetRows(showingOn(tab));
+  // A run records what the model answered, never what it was asked — that lives
+  // in the set it ran on. The measurement screen fetches the set so every
+  // answer it shows, opened or not, has the question back beside it.
+  if (tab === 'report' && state.report) loadDatasetRows(state.report.dataset);
+  // A screen that marks one part rather than filtering to it has to bring that
+  // part to the reader, or the mark is somewhere below the fold. The panel is
+  // still hidden at this point — it is shown a step later — and a hidden
+  // element cannot be scrolled to, so this waits for the frame it appears in.
+  const picked = panel.querySelector('[data-picked="true"]');
+  if (picked) {
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.requestAnimationFrame(() => picked.scrollIntoView({block:'center', behavior: still ? 'auto' : 'smooth'}));
   }
   if (tab === 'home') {
     wireSmartStart(panel.querySelector('.smart-start'), panel.querySelector('.smart-status'));
@@ -541,15 +997,14 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
       if (state.tab === 'report' && list.length) renderDetailPanel('report');
     }).catch(() => { /* the verdict simply omits the comparison line */ });
   }
+  // Platform screens finish loading after the shell has already decided what to
+  // show, so the bands they render must be judged again once they are here.
+  applyModelGate();
+  if (RUN_SETUP[tab]) wireRunSetup(panel);
+  if (tab === 'dataset-upload') wireDatasetUpload(panel);
   if (tab === 'dataset-hub') wireDatasetHub(panel);
   if (tab === 'history') wireHistoryControls(panel);
   if (platformTabs.includes(tab)) wirePlatformTab(tab, panel);
-  panel.querySelector('[data-action="setup-benchmark"]')?.addEventListener('click', () => {
-    const steps = $('prompt-steps');
-    if (!steps) return;
-    steps.scrollIntoView({behavior:'smooth', block:'start'});
-    window.requestAnimationFrame(() => $('dataset')?.focus({preventScroll:true}));
-  });
 }
 
 function activateDetailTab() {
@@ -557,11 +1012,29 @@ function activateDetailTab() {
   if (resultTabs.includes(state.tab)) state.lastResultTab = state.tab;
   // Only the screen you write on keeps the composer beside it. A measurement is
   // something you read, so it gets the full width, like every other screen.
-  const globalView = state.tab !== 'prompt';
+  // The left column is the prompt's: the composer on the screen that writes it,
+  // the prompt itself on the three that run it. Every other screen has nothing
+  // to put there and takes the full width.
+  const runs = typeof RUN_SETUP === 'object' && Boolean(RUN_SETUP[state.tab]);
+  const globalView = state.tab !== 'prompt' && !runs;
   $('workspace-layout').classList.toggle('global-view', globalView);
+  const aside = $('run-aside');
+  const composer = $('composer-panel');
+  if (aside) {
+    aside.hidden = !runs;
+    if (runs) aside.innerHTML = renderRunSubject(state.tab);
+  }
+  if (composer) composer.hidden = state.tab !== 'prompt';
   $('workspace-layout').dataset.screen = state.tab;
   // Recommendations belong to the authored prompt, not to the measurements taken on it.
   $('results').hidden = state.tab !== 'prompt';
+  // A section screen is three things — its name, the drawing that stands for
+  // it, and the screens under it — and each stands on a surface of its own.
+  // The screen's own panel would put all three on one, so it steps aside. The
+  // screens that run something are built the same way, for the same reason.
+  // Upload is the same shape: a name, what the file has to be, and the control
+  // that takes it, side by side rather than stacked on one plate.
+  $('detail').classList.toggle('unplated', sectionTabs.includes(state.tab) || unplatedScreens.has(state.tab));
   $('detail').querySelectorAll('[data-tab-panel]').forEach(panel => {
     panel.hidden = panel.dataset.tabPanel !== state.tab;
   });
@@ -601,46 +1074,88 @@ function crumbTrail(tab) {
   const section = sectionOf(tab);
   if (section) trail.push([`s-${section}`, screenMeta[`s-${section}`][1]]);
   if (!sectionTabs.includes(tab)) trail.push([tab, (screenMeta[tab] || screenMeta.home)[1]]);
+  // The thing you opened the screen on is a step of the path like any other, so
+  // the screen it sits on becomes something you can click back to, and the back
+  // button widens the screen instead of leaving it.
+  const value = showingOn(tab);
+  if (value) trail.push([tab, value]);
   return trail;
 }
 
 function renderCrumbs(tab) {
   const trail = crumbTrail(tab);
   const parent = trail.length > 1 ? trail[trail.length - 2][0] : null;
-  $('crumbs').innerHTML = trail.slice(0, -1).map(([target, label]) =>
-    `<button type="button" data-crumb="${target}">${esc(label)}</button>${icon('chevron')}`).join('');
+  // Where you have been, not where you are: the last step of the path is the
+  // screen you are looking at, which names itself. So the marks go between the
+  // steps and never after the last one — an arrow pointing at nothing read as a
+  // path that had lost its end.
+  $('crumbs').innerHTML = trail.slice(0, -1).map(([target, label], index) =>
+    `${index ? icon('chevron') : ''}<button type="button" data-crumb="${target}">${esc(label)}</button>`).join('');
   const back = $('back-button');
   if (back) { back.hidden = !parent; back.dataset.crumb = parent || ''; if (!back.firstChild) back.innerHTML = icon('chevronLeft'); }
 }
 
 function updateWorkspaceContext() {
   const [, title] = screenMeta[state.tab] || screenMeta.home;
+  const value = showingOn(state.tab);
   renderCrumbs(state.tab);
-  document.title = `${title} · Prompt Playoff`;
+  document.title = `${value ? `${value} · ` : ''}${title} · Prompt Playoff`;
   const technique = state.program?.technique_id || state.chosen;
   const prompt = technique ? (state.techniqueCatalog.get(technique)?.title || technique) : 'Draft';
-  const dataset = $('dataset')?.value || 'Not selected';
+  const dataset = state.run.dataset || 'Not selected';
   const model = state.settings.evaluation.model_id.trim() || 'Not set';
   [['context-prompt', prompt], ['context-dataset', dataset], ['context-model', model], ['rail-model-name', model]].forEach(([id, value]) => { const node=$(id); if (node) node.textContent=value; });
+  // The dataset named in the bar opens the library on that set, the same door
+  // the circle for it opens on the section screen.
+  const datasetLink = $('context-dataset-link');
+  if (datasetLink) {
+    const chosen = state.run.dataset;
+    datasetLink.dataset.showing = chosen || '';
+    datasetLink.href = `#dataset-library${chosen ? `/${encodeURIComponent(chosen)}` : ''}`;
+  }
   applyModelGate();
   renderSectionCounts();
 }
 
 function selectTab(tab, options={}) {
   tab = normalizedTab(tab);
-  const targetHash = `#${tab}`;
+  // Arriving anywhere without naming a thing means the whole screen: a
+  // narrowing never outlives the click that asked for it.
+  // A narrowing is a statement about something that exists. A measurement is
+  // held in this page and nowhere else, so a link to one example of one, opened
+  // in a fresh session, has nothing to point at — better to drop the name than
+  // to print it over an empty screen.
+  const nothingToShow = tab === 'report' && !state.report;
+  const showing = (options.showing && !nothingToShow) ? options.showing : null;
+  const arrived = state.tab !== tab && options.syncUrl !== false;
+  state.showing = showing ? {tab, value:showing} : null;
+  const targetHash = `#${tab}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
   if (options.syncUrl !== false && window.location.hash !== targetHash) {
-    window.history[options.replace ? 'replaceState' : 'pushState']({screen:tab}, '', targetHash);
+    window.history[options.replace ? 'replaceState' : 'pushState']({screen:tab, showing}, '', targetHash);
   }
   state.tab = tab;
   if (state.logTimer) { window.clearTimeout(state.logTimer); state.logTimer = null; }
   ensureDetailShell();
   const panel = $('detail').querySelector(`[data-tab-panel="${tab}"]`);
   const platformNeedsLoad = platformTabs.includes(tab) && !state.quality.loaded.has(tab);
-  if (panel && (panel.dataset.rendered !== 'true' || (tab === 'report' && !state.report))) {
+  // A screen is drawn once and then left alone — half of them hold something
+  // half-typed. What it was narrowed to is part of that drawing, so a screen is
+  // drawn again when, and only when, that has changed under it.
+  const restated = panel && (panel.dataset.showing || '') !== (showing || '');
+  // Home and the five section screens are the exception: they report what
+  // exists rather than hold anything, and arriving at one to read counts that
+  // stopped being true two screens ago is worse than drawing it again.
+  const reports = tab === 'home' || sectionTabs.includes(tab);
+  if (panel && (panel.dataset.rendered !== 'true' || restated || reports || (tab === 'report' && !state.report))) {
     renderDetailPanel(tab, platformNeedsLoad ? '<div class="empty">Loading…</div>' : detailBody(tab));
   }
   activateDetailTab();
+  // A new screen starts at its own beginning. Without this you land halfway
+  // down it, at whatever height the screen you left happened to be scrolled to
+  // — and the deeper the path gets, the further from the top that is. Going
+  // back is left alone: the browser restores where you were reading. A screen
+  // that has a part to point at overrides this a frame later.
+  if (arrived) window.scrollTo({top:0, behavior:'auto'});
   if (tab === 'logs') refreshLogs();
   if (tab === 'history') refreshHistory();
   if (platformNeedsLoad) refreshPlatformTab(tab);
@@ -648,18 +1163,25 @@ function selectTab(tab, options={}) {
 }
 
 function initializeNavigation() {
-  const requested = decodeURIComponent(window.location.hash.slice(1)).split('/').pop();
-  const tab = tabFromLocation();
-  if (!requested || normalizedTab(requested) !== requested) {
-    window.history.replaceState({screen:tab}, '', `#${tab}`);
-  }
-  selectTab(tab, {syncUrl:false});
+  const route = routeFromLocation();
+  if (!route.known) window.history.replaceState({screen:route.tab}, '', `#${route.tab}`);
+  selectTab(route.tab, {syncUrl:false, showing:route.showing});
 }
 
-window.addEventListener('popstate', () => selectTab(tabFromLocation(), {syncUrl:false}));
+/* A hash that names no screen is a position on the current one — the technique
+ * index links to its own cards that way. Reading it as a route sent the reader
+ * back to the front of the app, which is what both listeners guard against. */
+window.addEventListener('popstate', () => {
+  const route = routeFromLocation();
+  if (!route.known) return;
+  selectTab(route.tab, {syncUrl:false, showing:route.showing});
+});
 window.addEventListener('hashchange', () => {
-  const tab = tabFromLocation();
-  if (tab !== state.tab) selectTab(tab, {syncUrl:false});
+  const route = routeFromLocation();
+  if (!route.known) return;
+  if (route.tab !== state.tab || route.showing !== showingOn(route.tab)) {
+    selectTab(route.tab, {syncUrl:false, showing:route.showing});
+  }
 });
 
 function wireProfileControls(panel) {
@@ -785,11 +1307,17 @@ function renderExperimentComparison(result) {
 
 function renderHistory() {
   if (!state.experiments.length) return '<div class="empty">No recorded benchmarks, comparisons, or optimizations yet.</div>';
+  // Arriving from the section map means arriving to look at one set: the chart,
+  // the two version pickers and the table all speak about that set alone, so
+  // the line you came to read is not one point among eleven.
+  const only = showingOn('history');
+  const records = only ? state.experiments.filter(item => item.dataset === only) : state.experiments;
+  if (!records.length) return `<div class="empty">No runs recorded on ${esc(only)}.</div>`;
   // One row per measured variant, numbers unformatted. The server writes the
   // file; the link only names it.
-  const options = state.experiments.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');
-  const rows = state.experiments.map(item => { const m = experimentMetric(item); return `<tr><td>v${item.version}</td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${esc(item.dataset)}</td><td>${m ? m.quality.toFixed(3) : '—'}</td><td>${m ? m.mean_latency_seconds.toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${m.mean_cost_usd.toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
-  return `${historyChart(state.experiments)}
+  const options = records.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');
+  const rows = records.map(item => { const m = experimentMetric(item); return `<tr><td>v${item.version}</td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${esc(item.dataset)}</td><td>${m ? m.quality.toFixed(3) : '—'}</td><td>${m ? m.mean_latency_seconds.toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${m.mean_cost_usd.toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
+  return `${historyChart(records)}
     <div class="quality-form"><label for="history-before">Before<select id="history-before">${options}</select></label><label for="history-after">After<select id="history-after">${options}</select></label></div>
     <div class="form-actions"><button type="button" class="primary history-compare">Compare versions</button></div>
     ${renderExperimentComparison(state.experimentComparison)}

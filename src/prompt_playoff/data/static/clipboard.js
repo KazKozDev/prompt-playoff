@@ -32,7 +32,7 @@ document.addEventListener('click', async event => {
   const retry = event.target.closest('.retry-catalog');
   if (retry) {
     retry.disabled = true;
-    retry.textContent = 'Loading…';
+    retry.textContent = 'Loading';
     await loadTechniqueCatalog();
     return;
   }

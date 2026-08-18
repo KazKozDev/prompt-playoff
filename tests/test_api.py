@@ -9,6 +9,7 @@ from prompt_playoff import __version__, api, providers
 from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
 from prompt_playoff.engine import EngineCache, TaskEngine
+from prompt_playoff.evals import BenchmarkExample
 from prompt_playoff.optimizer import BACKENDS
 
 
@@ -118,6 +119,7 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         ("comparison", "comparison"),
         ("optimization", "optimization"),
         ("dataset-library", "dataset-library"),
+        ("dataset-upload", "dataset-upload"),
         # Importing from the Hub is one of the three answers to "where do
         # examples come from", so it is a destination, not a button in a panel.
         ("dataset-hub", "dataset-hub"),
@@ -154,6 +156,16 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
 @pytest.mark.parametrize("path", ["/assets/missing.js", "/assets/.hidden.js", "/assets/index.html"])
 def test_static_asset_route_rejects_unknown_or_unsupported_files(client, path):
     assert client.get(path).status_code == 404
+
+
+@pytest.mark.parametrize("section", ["prompt", "examples", "check", "ship", "reference"])
+def test_section_drawings_are_packaged_and_served(client, section):
+    # The frontend builds these paths from the section id, so nothing else here
+    # would notice a drawing that was left out of the package or misnamed.
+    response = client.get(f"/assets/section-{section}.webp")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/webp")
+    assert response.content[:4] == b"RIFF"
 
 
 def test_home_exposes_the_complete_technique_catalog(client):
@@ -458,6 +470,77 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
         assert job["result"]["scorecard"]["failures"] >= 0
 
 
+def test_a_benchmark_measures_the_prompt_it_is_handed(client):
+    """The authored prompt travels with the request and is what runs.
+
+    The Prompt text screen can have an engine model write text into the compiled
+    scaffold. A run that named only the technique recompiled it and measured
+    words the person had never seen, so the prompt goes with the request and the
+    preview in the report is the evidence of which text was sent.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"  # nothing listening
+    compiled = client.post(
+        "/v1/compile",
+        json={
+            "task": task,
+            "user_input": "{input}",
+            "technique_id": "structured.schema-first",
+        },
+    ).json()
+    stage = compiled["stages"][0]
+    for message in stage["messages"]:
+        if message["role"] == "user":
+            message["content"] = "HOUSE RULE: never invent a place.\n" + message["content"]
+    compiled["source_input"] = "{input}"
+
+    started = client.post(
+        "/v1/benchmark",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "dataset": "entity-extraction",
+            "record": False,
+            "prompt": compiled,
+        },
+    )
+    assert started.status_code == 200
+    job = wait_for_job(client, started.json()["id"])
+    # An unreachable model is counted as a failure per row, so the run still
+    # finishes and still reports the text it sent.
+    assert job["status"] == "done"
+    sent = job["result"]["prompt_preview"]["stages"][0]["user"]
+    assert sent.startswith("HOUSE RULE: never invent a place.")
+    assert "{input}" not in sent
+
+
+def test_a_prompt_from_another_technique_is_refused(client):
+    """Numbers filed under the wrong method are worse than no numbers."""
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    compiled = client.post(
+        "/v1/compile",
+        json={"task": task, "user_input": "{input}", "technique_id": "structured.schema-first"},
+    ).json()
+    started = client.post(
+        "/v1/benchmark",
+        json={
+            "task": task,
+            "technique_id": "direct.explicit-constraints",
+            "dataset": "entity-extraction",
+            "record": False,
+            "prompt": compiled,
+        },
+    )
+    job = wait_for_job(client, started.json()["id"])
+    assert job["status"] == "error"
+    assert "structured.schema-first" in job["error"]
+
+
 def test_unknown_job_is_404(client):
     assert client.get("/v1/jobs/deadbeef").status_code == 404
 
@@ -513,3 +596,39 @@ def test_recommend_returns_rejections_the_ui_can_render(client):
     rejected = response.json()["rejected"]
     assert rejected, "the ruled-out block has nothing to show without these"
     assert all(item["technique_id"] and item["title"] and item["reasons"] for item in rejected)
+
+
+def test_uploaded_dataset_can_be_deleted_but_bundled_cannot(client: TestClient):
+    rows = '{"id":"1","input":"hello","expected":"hi"}\n{"id":"2","input":"bye","expected":"ok"}\n'
+    uploaded = client.post(
+        "/v1/datasets/upload",
+        files={"file": ("mine.jsonl", rows.encode(), "application/x-ndjson")},
+    ).json()
+    name = uploaded["name"]
+    assert any(item["name"] == name for item in client.get("/v1/datasets").json())
+
+    refused = client.delete("/v1/datasets/agents")
+    assert refused.status_code == 422
+    assert "bundled" in refused.json()["detail"]
+
+    deleted = client.delete(f"/v1/datasets/{name}")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+    assert not any(item["name"] == name for item in client.get("/v1/datasets").json())
+    assert client.delete(f"/v1/datasets/{name}").status_code == 404
+
+
+def test_deleting_a_saved_dataset_removes_its_file(client: TestClient, tmp_path):
+    service = app.state.service
+    service.dataset_store.directory = tmp_path
+    path = service.add_user_dataset(
+        "builder:gone",
+        [BenchmarkExample(id="1", input="x", expected="y")],
+        persist=True,
+    )
+    assert path.exists()
+
+    response = client.delete("/v1/datasets/builder:gone")
+
+    assert response.json()["removed_file"] == str(path)
+    assert not path.exists()

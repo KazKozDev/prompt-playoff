@@ -187,7 +187,14 @@ function techniqueSource(source) {
 function renderTechniqueCatalog() {
   if (state.catalogStatus === 'loading') return '<div class="empty">Loading all techniques…</div>';
   if (state.catalogStatus === 'error') return `<div class="method-error"><span>Could not load the technique catalog: ${esc(state.catalogError)}</span><button type="button" class="retry-catalog">Retry</button></div>`;
-  const techniques = [...state.techniqueCatalog.values()].sort((a, b) => a.title.localeCompare(b.title));
+  // Sixty-one methods is a catalogue you read, not one you scan. Arriving from
+  // the section map means arriving with a kind of task in hand, and then the
+  // catalogue is only the methods that are strong at it.
+  const only = showingOn('techniques');
+  const techniques = [...state.techniqueCatalog.values()]
+    .filter(technique => !only || (technique.strong_tasks || []).includes(only))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  if (!techniques.length) return `<div class="empty">No technique in the registry is strong at ${esc(only)}.</div>`;
   const anchorFor = id => `technique-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const grouped = new Map();
   techniques.forEach(technique => {
@@ -219,7 +226,9 @@ function renderTechniqueCatalog() {
     </article>`;
   }).join('');
   return `<div class="techniques-shell">
-    <div class="techniques-intro"><div class="meta">${techniques.length} techniques in the live registry</div></div>
+    <div class="techniques-intro"><div class="meta">${only
+      ? `${plural(techniques.length, 'technique')} strong at ${esc(only)}, of ${state.techniqueCatalog.size} in the live registry`
+      : `${techniques.length} techniques in the live registry`}</div></div>
     <nav class="technique-index" id="technique-index" aria-labelledby="technique-index-title">
       <h3 id="technique-index-title">Technique index</h3>
       ${index}

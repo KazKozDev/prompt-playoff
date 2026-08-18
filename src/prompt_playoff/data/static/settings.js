@@ -24,14 +24,30 @@ function safeSettingsSummary(role) {
     const evaluation = state.settings.evaluation;
     return `${providerLabels[evaluation.provider]} · Use evaluation model (${evaluation.model_id.trim() || 'Not set'})`;
   }
+  // A blank card stands for whoever covers for it, named — "blank" on its own
+  // reads as "off", and this one is never off, it is delegated.
+  if (role === 'judge' && !setting.model_id.trim()) {
+    const engine = state.settings.engine.model_id.trim();
+    return engine
+      ? `${providerLabels[state.settings.engine.provider]} · Use prompt engine (${engine})`
+      : 'No judge and no prompt engine';
+  }
   return `${providerLabels[setting.provider]} · ${setting.model_id.trim() || 'Not set'}`;
 }
+
+// What a blank field means, per card. Only the judge's blank has a rule behind
+// it worth stating twice, so only it is spelled out at length.
+const roleHints = {
+  engine: '<p class="field-hint">Leave blank to use the evaluation model for prompt authoring too.</p>',
+  judge: '<p class="field-hint">Leave blank to borrow the prompt engine. Never the evaluation model: a model marking its own answers marks them generously, and pairwise verdicts are the easiest place for that to go unnoticed.</p>',
+  similarity: '<p class="field-hint">An embedding model — <code>bge-m3</code>, <code>nomic-embed-text</code> — not a chat model. It writes nothing, so it cannot invent a row, and pinning it keeps the verdict repeatable. Blank leaves exact text matches as the only duplicate rule.</p>'
+};
 
 function settingsCard(role, title, eyebrow, description) {
   const setting = state.settings[role];
   const prefix = `settings-${role}`;
   const custom = setting.provider === 'custom';
-  const modelPlaceholder = role === 'engine' ? 'Use evaluation model' : 'llama3.2:3b';
+  const modelPlaceholder = {engine:'Use evaluation model', judge:'Use prompt engine', similarity:'Off — exact matches only'}[role] || 'llama3.2:3b';
   return `<section class="settings-card" aria-labelledby="${prefix}-title">
     <div class="settings-role">${eyebrow}</div>
     <h3 id="${prefix}-title">${title}</h3>
@@ -41,7 +57,7 @@ function settingsCard(role, title, eyebrow, description) {
     <label for="${prefix}-model">Model ID</label>
     <input id="${prefix}-model" data-settings-role="${role}" data-field="model_id" value="${esc(setting.model_id)}" placeholder="${modelPlaceholder}" spellcheck="false"${role === 'evaluation' ? ' required' : ''}${setting.provider === 'ollama' ? ` list="${prefix}-installed"` : ''}>
     ${setting.provider === 'ollama' ? `<datalist id="${prefix}-installed">${installedOptions(role)}</datalist><p class="field-hint" data-installed-hint="${role}">${esc(installedHint(role))}</p>` : ''}
-    ${role === 'engine' ? '<p class="field-hint">Leave blank to use the evaluation model for prompt authoring too.</p>' : ''}
+    ${roleHints[role] || ''}
     <label for="${prefix}-base-url">Base URL</label>
     <input id="${prefix}-base-url" data-settings-role="${role}" data-field="base_url" value="${esc(setting.base_url)}" placeholder="Provider default" spellcheck="false"${custom ? ' required' : ''} aria-describedby="${prefix}-url-hint">
     <p class="field-hint" id="${prefix}-url-hint">${custom ? 'Required for a custom OpenAI-compatible provider.' : 'Optional. Leave blank to use the provider default.'}</p>
@@ -108,7 +124,7 @@ function refreshInstalledHints() {
   document.querySelectorAll('[data-installed-hint]').forEach(node => {
     node.textContent = installedHint(node.dataset.installedHint);
   });
-  ['engine', 'evaluation'].forEach(role => {
+  ['engine', 'judge', 'similarity', 'evaluation'].forEach(role => {
     const list = document.getElementById(`settings-${role}-installed`);
     if (list) list.innerHTML = installedOptions(role);
   });
@@ -116,9 +132,14 @@ function refreshInstalledHints() {
 
 function renderSettings() {
   const profileOptions = state.profiles.map(item => `<option value="${esc(item.id)}">${esc(item.name)} · ${esc(item.profile.provider)}/${esc(item.profile.model_id)}</option>`).join('');
+  // Three roles, three cards, in the order the work happens: something writes
+  // the prompt, something runs it, something marks the answers. Keeping the
+  // third one implicit is what let the model under test mark its own paper.
   return `<div class="settings-grid">
-      ${settingsCard('engine', 'Prompt engine', 'Writes the prompt', 'Authors the final prompt from the selected technique. It can be a stronger model than the one under evaluation.')}
+      ${settingsCard('engine', 'Prompt engine', 'Writes the prompt', 'Authors the final prompt from the selected technique, and writes generated dataset rows. It can be a stronger model than the one under evaluation.')}
       ${settingsCard('evaluation', 'Evaluation model', 'Runs the tests', 'Executes prompts and provides the measurements used by benchmark, comparison, and optimization.')}
+      ${settingsCard('judge', 'Judge model', 'Marks the answers', 'Decides pairwise comparisons and rubric scores. Keep it out of the family being measured, or the verdict flatters its own lineage.')}
+      ${settingsCard('similarity', 'Similarity model', 'Compares the rows', 'Turns generated rows into vectors, so the builder can see rows that are one sentence reworded and say how varied a set really is.')}
     </div>
     <section class="settings-card" style="margin-top:18px">
       <div class="settings-role">Reusable connections</div><h3>Saved evaluation profiles</h3>
@@ -143,7 +164,7 @@ function savedProfileSetting(item) {
 }
 
 function hydrateSettingsSecrets() {
-  ['engine','evaluation'].forEach(role => {
+  ['engine', 'judge', 'similarity', 'evaluation'].forEach(role => {
     const input = document.querySelector(`[data-settings-role="${role}"][data-field="api_key"]`);
     if (input) input.value = state.settings[role].api_key;
   });
@@ -182,13 +203,16 @@ function updateSetting(event) {
     setting[target.dataset.field] = target.value;
   }
   if (role === 'evaluation') state.task = null;
-  else {
+  else if (role === 'engine') {
     ++state.compileVersion;
     state.program = null;
   }
   refreshSettingsIndicators(role);
   updateWorkspaceContext();
+  // A blank card's summary names the model standing in for it, so changing that
+  // model is a change to the blank card's line too.
   if (role === 'evaluation' && !state.settings.engine.model_id.trim()) refreshSettingsIndicators('engine');
+  if (role !== 'judge' && !state.settings.judge.model_id.trim()) refreshSettingsIndicators('judge');
   // Switching provider changes which fields exist, so the card is rebuilt; the
   // rebuild is also what asks the new provider for its models.
   if (target.dataset.field === 'provider') renderDetailPanel('settings');

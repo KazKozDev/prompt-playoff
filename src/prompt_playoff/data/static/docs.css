@@ -1,0 +1,154 @@
+/* --------------------------------------------------------------------------
+ * The two reading screens — Help and the Evaluation guide — in four files, two
+ * languages each. They used to carry a copy of the app's tokens inside their
+ * own <style> block, which meant the app grew a light theme and the documents
+ * stayed dark inside it. One stylesheet, loaded from /assets, so a token can
+ * only be changed in one place and the pages cannot drift apart.
+ *
+ * The tokens are the app's, value for value: these pages are shown inside it,
+ * in a frame sitting on a panel, so they start from the panel surface. Light is
+ * the base and dark answers both the explicit choice and the system setting,
+ * exactly as in styles.css.
+ * -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --bg:#f2f5f9; --panel:#ffffff; --panel2:#f8fafc; --sunken:#eef1f6;
+  --border:#e3e8f0; --border-strong:#cfd7e2; --wash:rgba(20,26,36,.04); --wash-2:rgba(20,26,36,.07);
+  --text:#141a24; --text-2:#46505f; --muted:#626b79;
+  --accent:#e0a726; --accent-hover:#cf9718; --accent-ink:#8a5a00; --accent-line:#e9d09a; --accent-soft:#fdf4e1; --on-accent:#2a1c00;
+  --good:#1d9d68; --good-ink:#16764e; --good-line:rgba(29,157,104,.34); --good-soft:#e7f6ef;
+  --warn:#c2871f; --warn-ink:#8a5f12; --warn-line:rgba(194,135,31,.4); --warn-soft:#fdf3e2;
+  --bad:#c2453f; --bad-text:#9e332e; --bad-line:rgba(194,69,63,.38); --bad-soft:#fdeeed;
+  --fs-micro:11px; --fs-sm:13px; --fs-base:14px; --fs-body:15px; --fs-lead:19px; --fs-h2:22px;
+  --sans:Inter,ui-sans-serif,system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:#0e1014; --panel:#14171d; --panel2:#101319; --sunken:#0c0e13;
+    --border:#232831; --border-strong:#333a46; --wash:rgba(255,255,255,.04); --wash-2:rgba(255,255,255,.07);
+    --text:#e8eaee; --text-2:#b8bec9; --muted:#8b93a1;
+    --accent:#e3b341; --accent-hover:#eec158; --accent-ink:#e3b341; --accent-line:rgba(227,179,65,.34); --accent-soft:rgba(227,179,65,.09); --on-accent:#17110a;
+    --good:#5fb87a; --good-ink:#9bd8b3; --good-line:rgba(95,184,122,.32); --good-soft:rgba(95,184,122,.1);
+    --warn:#dcaa46; --warn-ink:#e0bf78; --warn-line:rgba(220,170,70,.5); --warn-soft:rgba(220,170,70,.1);
+    --bad:#e08585; --bad-text:#e9b6b6; --bad-line:rgba(224,133,133,.4); --bad-soft:rgba(224,133,133,.09);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#0e1014; --panel:#14171d; --panel2:#101319; --sunken:#0c0e13;
+  --border:#232831; --border-strong:#333a46; --wash:rgba(255,255,255,.04); --wash-2:rgba(255,255,255,.07);
+  --text:#e8eaee; --text-2:#b8bec9; --muted:#8b93a1;
+  --accent:#e3b341; --accent-hover:#eec158; --accent-ink:#e3b341; --accent-line:rgba(227,179,65,.34); --accent-soft:rgba(227,179,65,.09); --on-accent:#17110a;
+  --good:#5fb87a; --good-ink:#9bd8b3; --good-line:rgba(95,184,122,.32); --good-soft:rgba(95,184,122,.1);
+  --warn:#dcaa46; --warn-ink:#e0bf78; --warn-line:rgba(220,170,70,.5); --warn-soft:rgba(220,170,70,.1);
+  --bad:#e08585; --bad-text:#e9b6b6; --bad-line:rgba(224,133,133,.4); --bad-soft:rgba(224,133,133,.09);
+}
+
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+body { margin:0; font-family:var(--sans); background:var(--panel); color:var(--text); font-size:var(--fs-body); line-height:1.65; -webkit-font-smoothing:antialiased; }
+/* 600 is the heaviest weight in the app, here too. */
+strong, b { font-weight:600; }
+/* A measure, not a width: past about 78 characters the eye loses the line. */
+main { width:min(760px,calc(100% - 24px)); margin:0 auto 24px; }
+
+/* Links read as links from the underline, not from being gold. */
+a { color:var(--text); text-decoration-color:var(--accent-line); text-underline-offset:3px; }
+a:hover { text-decoration-color:var(--accent); }
+a:focus-visible, summary:focus-visible, .table-scroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+
+/* --------------------------------------------------------------------------
+ * Headings. The same three tiers as the app: h2 is a section title at lead
+ * size, h3 is a subsection at control size, and the uppercase micro tier is
+ * spent on table headers and kickers — labels that mark structure, never
+ * importance. A section rule earns its place in a document this long: it is
+ * the only thing telling a scrolling reader that one subject has ended.
+ * -------------------------------------------------------------------------- */
+h1 { margin:0; font-size:var(--fs-h2); font-weight:600; letter-spacing:-.01em; }
+h2 { margin:40px 0 14px; padding-top:20px; border-top:1px solid var(--border); font-size:var(--fs-lead); font-weight:600; letter-spacing:-.01em; }
+h3 { margin:26px 0 6px; font-size:var(--fs-base); font-weight:600; letter-spacing:-.01em; }
+p, li { color:var(--text-2); font-size:var(--fs-body); line-height:1.65; }
+ul { margin:12px 0 0; padding-left:20px; }
+li { margin-bottom:6px; }
+li::marker { color:var(--muted); }
+
+/* The head is for the page read on its own. Inside the app the screen already
+   carries its name and its one line, so the document does not say them again. */
+.doc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:26px; }
+:root.embed .doc-head { display:none; }
+.doc-head .lede { margin:6px 0 0; max-width:56ch; color:var(--muted); font-size:var(--fs-base); }
+/* Same box as the app's export link, so a link out of a page always looks the same. */
+.lang { flex:0 0 auto; padding:6px 11px; border:1px solid var(--border); border-radius:var(--r-sm); color:var(--muted); font-size:var(--fs-sm); font-weight:500; line-height:1.5; text-decoration:none; white-space:nowrap; }
+.lang:hover { border-color:var(--border-strong); color:var(--text); }
+/* Read on its own, the page needs a way back; inside the app the rail is it. */
+.doc-foot { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
+.doc-foot a { color:var(--muted); }
+.doc-foot a:hover { color:var(--text); }
+
+/* A card is a step or a part — a short bold name and one line under it. They
+   stack in a grid so three parts read as three, not as a list of paragraphs. */
+.cards { display:grid; gap:10px; margin:16px 0; }
+.cards.two { grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+.card { padding:15px 17px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
+.card b { display:block; color:var(--text); font-size:var(--fs-base); font-weight:600; }
+.card p { margin:6px 0 0; font-size:var(--fs-base); line-height:1.6; }
+.card .step-no { color:var(--muted); font-variant-numeric:tabular-nums; }
+
+/* A metric gets its name in code and its explanation in words, on one line. */
+.num { display:block; margin:26px 0 6px; color:var(--text); font-size:var(--fs-base); font-weight:600; }
+.num code { padding:0; border:0; background:none; color:var(--text); font-family:inherit; font-size:var(--fs-base); }
+
+/* A score band: the tint carries the range, the text stays readable on it. */
+.scale { display:flex; margin:12px 0 6px; border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden; font-size:var(--fs-sm); }
+.scale div { flex:1; padding:8px 10px; text-align:center; }
+.s-bad { background:var(--bad-soft); color:var(--bad-text); }
+.s-mid { background:var(--warn-soft); color:var(--warn-ink); }
+.s-good { background:var(--good-soft); color:var(--good-ink); }
+
+/* An aside is the app's prerequisite band: two pixels of colour on the left and
+   a tinted ground. Gold is a thing worth knowing; red is a way to get burned. */
+.note { margin:16px 0; padding:12px 15px; border-left:2px solid var(--accent-line); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--accent-soft); color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
+.note.warn { border-left-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
+.note p { margin:0; color:inherit; font-size:inherit; }
+.note p + p { margin-top:9px; }
+.note b { color:var(--text); font-weight:600; }
+
+code { padding:2px 6px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sunken); color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
+pre { margin:14px 0; padding:15px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--panel2); overflow-x:auto; font:var(--fs-sm)/1.6 var(--mono); }
+pre code { padding:0; border:0; background:none; }
+
+/* Every table can outgrow its column, so every table scrolls inside its own
+   box rather than pushing the page sideways. */
+.table-scroll { width:100%; max-width:100%; margin:16px 0; overflow-x:auto; overscroll-behavior-inline:contain; }
+.table-scroll table { min-width:520px; }
+table { width:100%; border-collapse:collapse; font-size:var(--fs-base); }
+th, td { padding:9px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; line-height:1.55; }
+th { color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+td { color:var(--text-2); }
+td b { color:var(--text); }
+td code { white-space:nowrap; }
+.count td:nth-child(2) { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.terms td:first-child { width:34%; }
+.sub { display:block; color:var(--muted); font-size:var(--fs-sm); }
+
+/* The same two pills the app puts beside a number, for the same two meanings. */
+.pill { display:inline-block; padding:2px 8px; border:1px solid var(--border); border-radius:var(--r-pill); color:var(--muted); font-size:var(--fs-micro); white-space:nowrap; }
+.pill.measured { border-color:var(--good-line); background:var(--good-soft); color:var(--good-ink); font-weight:600; }
+.pill.prior { color:var(--muted); }
+.tag.pub { border-color:var(--good-line); background:var(--good-soft); color:var(--good-ink); }
+
+/* What a reader needs only once, folded away until they do. */
+details { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); }
+summary { cursor:pointer; color:var(--muted); font-size:var(--fs-base); font-weight:600; }
+summary:hover { color:var(--text); }
+details[open] summary { margin-bottom:14px; color:var(--text); }
+details h3:first-of-type { margin-top:18px; }
+details p, details li, details td { font-size:var(--fs-base); }
+
+@media (max-width:600px) {
+  main { width:calc(100% - 20px); }
+  h2 { margin:32px 0 12px; }
+}

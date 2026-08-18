@@ -21,7 +21,10 @@ function renderProgram(p) {
       ${messages.map((message, messageIndex) => {
         const role = String(message.role || 'message').toUpperCase();
         const key = registerCopy(`compiled:stage:${stageIndex}:message:${messageIndex}`, message.content || '');
-        return `<div class="prompt-msg">
+        // A prompt is one thing made of parts, so the part you came for is
+        // marked where it stands rather than lifted out of its own prompt.
+        const picked = showingOn('prompt') === promptPartName(p, stageIndex, message);
+        return `<div class="prompt-msg${picked ? ' picked' : ''}"${picked ? ' data-picked="true"' : ''}>
           <div class="prompt-msg-head"><span class="prompt-role">${esc(role)}</span>${copyButton(key, 'Copy', `Copy the ${role} message of stage ${s.stage}`)}</div>
           <pre>${esc(message.content || '')}</pre>
         </div>`;
@@ -58,6 +61,130 @@ function renderProgram(p) {
     ${notes}`;
 }
 
+/* --------------------------------------------------------------------------
+ * A run is set up on the screen that runs it. Measurement asks for examples,
+ * Method comparison asks for the same, Optimization also asks how long to
+ * search — and each carries only its own button, so nothing on screen belongs
+ * to something happening elsewhere.
+ * -------------------------------------------------------------------------- */
+const RUN_SETUP = {
+  report: {lead:'Runs your prompt over every example and scores the answers.',
+    fields:['dataset', 'repeats'], estimate:'measure-estimate',
+    button:{id:'bench-btn', label:'Measure now', action:'benchmark-prompt'}},
+  comparison: {lead:'Scores every recommended method on the same examples, so the ranking is measured rather than assumed.',
+    fields:['dataset', 'repeats'], estimate:'measure-estimate',
+    button:{id:'compare-btn', label:'Compare all recommended', action:'compare-prompts'}},
+  optimization: {lead:'Rewrites the prompt, scores every version, keeps the best one.',
+    fields:['dataset', 'repeats', 'rounds', 'backend'], estimate:'optimize-estimate',
+    button:{id:'optimize-btn', label:'Optimize the prompt', action:'optimize-prompt'}}
+};
+
+/* --------------------------------------------------------------------------
+ * What these three screens are working on. They all act on one thing — the
+ * prompt written on the Prompt text screen — and none of them used to show it:
+ * the screen named a method in one grey line and then asked which examples to
+ * run it over, so the thing under measurement was the one thing not on screen. It
+ * is stated here instead: whose prompt, in what words, its opening lines, what
+ * this screen is about to do to it, and the way back to where it is edited.
+ * -------------------------------------------------------------------------- */
+const RUN_SUBJECT = {
+  report: ['The prompt being measured',
+    'This exact text is what runs — only the input changes, one example at a time.'],
+  comparison: ['The prompt in the running',
+    'Yours runs as written. The other recommended methods have no written text of their own, so each is compiled from your task, and all of them are scored on the same examples.'],
+  // The search works from the method in the registry, not from this wording. It
+  // is said here because the other two screens now promise the opposite, and a
+  // screen that borrows a neighbour's promise is how a number gets misread.
+  optimization: ['The prompt being improved',
+    'The search starts from the method itself rather than from this wording, writes several versions of it, and keeps whichever scores best.']
+};
+
+// The first thing the model is actually sent, which is what "the prompt" means
+// to the person reading this screen.
+function promptOpening() {
+  const messages = state.program?.stages?.[0]?.messages || [];
+  const spoken = messages.find(message => message.role === 'user') || messages[0];
+  return (spoken?.content || '').trim();
+}
+
+// The third zone of the workspace: the rail, the screen, and — on every screen
+// of the Prompt section — the prompt itself, in the left column where the
+// composer that wrote it stands.
+function renderRunSubject(tab) {
+  if (!RUN_SUBJECT[tab]) return '';
+  return `<div class="run-subject" id="run-subject" data-subject-for="${tab}">${runSubject(tab)}</div>`;
+}
+
+function runSubject(tab) {
+  const [kicker, note] = RUN_SUBJECT[tab] || RUN_SUBJECT.report;
+  if (!state.chosen) {
+    return `<div class="subject-empty">Nothing to run yet. These screens work on the prompt from
+      <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> — write it there first.</div>`;
+  }
+  const task = (state.task?.description || $('description')?.value || '').trim();
+  const opening = promptOpening();
+  const alternatives = tab === 'comparison' && state.recs.length > 1
+    ? ` <span class="subject-more">and ${plural(state.recs.length - 1, 'other recommended method')}</span>` : '';
+  return `<div class="subject-top">
+      <span class="stage-title">${esc(kicker)}</span>
+      <a class="subject-open" href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a>
+    </div>
+    <p class="subject-name"><strong>${esc(techniqueTitle(state.chosen))}</strong>${alternatives}</p>
+    ${task ? `<p class="subject-task">Your task: ${esc(task.slice(0, 220))}${task.length > 220 ? '…' : ''}</p>` : ''}
+    ${opening ? `<pre class="subject-opening">${esc(opening.slice(0, 260))}${opening.length > 260 ? '…' : ''}</pre>` : ''}
+    <p class="subject-note">${esc(note)}</p>`;
+}
+
+function runField(name) {
+  const options = [...state.datasetSizes.entries()]
+    .map(([label, size]) => `<option value="${esc(label)}"${label === state.run.dataset ? ' selected' : ''}>${esc(label)} — ${size} examples</option>`).join('');
+  switch (name) {
+    case 'dataset': return `<label for="run-dataset">Measure against<select id="run-dataset" data-run-field="dataset">${options}</select></label>`;
+    case 'repeats': return `<label for="run-repeats">Runs per example<input id="run-repeats" type="number" min="1" max="10" value="${esc(state.run.repeats)}" data-run-field="repeats"></label>`;
+    case 'rounds': return `<label for="run-rounds">Rounds<input id="run-rounds" type="number" min="1" max="6" value="${esc(state.run.rounds)}" data-run-field="rounds"></label>`;
+    case 'backend': return `<label for="run-backend">How to search<select id="run-backend" data-run-field="backend">${state.backendOptions}</select></label>`;
+    default: return '';
+  }
+}
+
+function renderRunSetup(tab) {
+  const setup = RUN_SETUP[tab];
+  if (!setup) return '';
+  // A section of the screen, not a card on it: the screen already stands on a
+  // surface, and a second one of the same colour inside it turns the screen's
+  // own name into something floating above a card.
+  // No heading of its own: the screen is already named one line above, and the
+  // setup is the first thing on it. A second title there only asked the reader
+  // to tell two names apart that stand for the same screen.
+  return `<section class="run-setup" data-run-setup="${tab}">
+    <p class="run-lead">${esc(setup.lead)}</p>
+    <div class="quality-form">${setup.fields.map(runField).join('')}</div>
+    <div class="meta estimate" id="${setup.estimate}"></div>
+    <div class="form-actions"><button id="${setup.button.id}" class="primary" type="button" data-action="${setup.button.action}" disabled>${esc(setup.button.label)}</button></div>
+    <div class="progress" id="progress"></div>
+  </section>`;
+}
+
+const RUN_ACTIONS = {'bench-btn':() => runBenchmark(), 'compare-btn':() => runComparison(), 'optimize-btn':() => runOptimization()};
+
+function wireRunSetup(panel) {
+  panel.querySelectorAll('[data-run-field]').forEach(field => field.addEventListener('change', () => {
+    state.run[field.dataset.runField] = field.value;
+    updateEstimates();
+    refreshActions();
+  }));
+  const button = panel.querySelector('.form-actions button[id]');
+  if (button && RUN_ACTIONS[button.id]) button.addEventListener('click', RUN_ACTIONS[button.id]);
+  refreshActions();
+}
+
+// The dataset list and the backend list both arrive after the first paint.
+function refreshRunSetup() {
+  const host = document.querySelector('[data-run-setup]');
+  if (!host || host.dataset.runSetup !== state.tab) return;
+  renderDetailPanel(state.tab);
+}
+
 // ---- step 3: measure -------------------------------------------------------
 async function pollJob(id, onProgress) {
   for (;;) {
@@ -70,8 +197,10 @@ async function pollJob(id, onProgress) {
 }
 
 function showProgress(p) {
-  if (p.completed != null) $('progress').textContent = `${p.completed}/${p.total} runs — ${p.example_id || ''}`;
-  else if (p.phase) $('progress').textContent = `${p.phase} · round ${p.round || '-'} · ${p.candidate || p.generated + ' candidates'}`;
+  const node = $('progress');
+  if (!node) return;
+  if (p.completed != null) node.textContent = `${p.completed}/${p.total} runs — ${p.example_id || ''}`;
+  else if (p.phase) node.textContent = `${p.phase} · round ${p.round || '-'} · ${p.candidate || p.generated + ' candidates'}`;
 }
 
 function techniqueTitle(id) {
@@ -84,7 +213,10 @@ function techniqueTitle(id) {
 // A greyed-out button has to say why it is grey. The shared line covers the
 // gate both halves depend on; each button carries its own reason on hover.
 function setAction(id, disabled, reason) {
+  // The three run buttons live on the three screens that run them, so on any
+  // other screen there is nothing to disable.
   const button = $(id);
+  if (!button) return;
   button.disabled = disabled;
   if (disabled && reason) button.title = reason;
   else button.removeAttribute('title');
@@ -102,9 +234,11 @@ function refreshActions(running = false) {
   setAction('optimize-btn', running || noModel || !state.chosen, running ? inFlight : noModel ? missing : noMethod);
   setAction('compare-btn', running || noModel || state.recs.length < 2,
     running ? inFlight : noModel ? missing : 'Comparing needs at least two recommended methods.');
-  $('chosen').innerHTML = state.chosen
-    ? `Ready to measure <strong>${esc(techniqueTitle(state.chosen))}</strong>.`
-    : 'Create a prompt first, then pick a method — both steps below measure the method you picked.';
+  // The prompt can be written, or rewritten, while one of these screens is
+  // open, so what the screen says it is working on is redrawn with the buttons
+  // that would run it.
+  const subject = $('run-subject');
+  if (subject) subject.innerHTML = runSubject(subject.dataset.subjectFor || state.tab);
   refreshHomeIfVisible();
   updateEstimates();
 }
@@ -116,39 +250,44 @@ function busy(on) {
   if (!on) $('progress').textContent = '';
 }
 
-$('bench-btn').addEventListener('click', async () => {
+async function runBenchmark() {
   busy(true);
   try {
+    // The prompt itself goes with the request, not just the name of the method
+    // it came from: what is measured has to be the text on the Prompt text
+    // screen, including whatever the engine wrote into it.
     const job = await api('/v1/benchmark', {
-      task: await taskProfile(), technique_id: state.chosen,
-      dataset: $('dataset').value, repeats: Number($('repeats').value)
+      task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
+      dataset: state.run.dataset, repeats: Number(state.run.repeats)
     });
     state.report = await pollJob(job.id, showProgress);
     state.tab = 'report'; renderDetail();
   } catch (e) { showDetailMessage('report', `<div class="error">${esc(e.message)}</div>`); }
   finally { busy(false); }
-});
+}
 
-$('compare-btn').addEventListener('click', async () => {
+async function runComparison() {
   busy(true);
   try {
+    // Your prompt runs as written; the other methods have no written text of
+    // their own, so they are compiled — which is the question being asked.
     const job = await api('/v1/compare', {
       task: await taskProfile(), technique_ids: state.recs.map(r => r.technique_id),
-      dataset: $('dataset').value, repeats: Number($('repeats').value)
+      prompt: state.program, dataset: state.run.dataset, repeats: Number(state.run.repeats)
     });
     const result = await pollJob(job.id, showProgress);
     state.comparison = result.comparison;
     state.tab = 'comparison'; renderDetail();
   } catch (e) { showDetailMessage('comparison', `<div class="error">${esc(e.message)}</div>`); }
   finally { busy(false); }
-});
+}
 
-$('optimize-btn').addEventListener('click', async () => {
+async function runOptimization() {
   busy(true);
   try {
     const job = await api('/v1/optimize', {
       task: await taskProfile(), technique_id: state.chosen,
-      dataset: $('dataset').value, repeats: Number($('repeats').value),
+      dataset: state.run.dataset, repeats: Number(state.run.repeats),
       rounds: Number($('rounds').value), backend: $('backend').value,
       engine_model: engineProfile()
     });
@@ -156,7 +295,7 @@ $('optimize-btn').addEventListener('click', async () => {
     state.tab = 'optimization'; renderDetail();
   } catch (e) { showDetailMessage('optimization', `<div class="error">${esc(e.message)}</div>`); }
   finally { busy(false); }
-});
+}
 
 /* --------------------------------------------------------------------------
  * Smart run. The three steps a person has to find and press in order — write,
@@ -165,9 +304,9 @@ $('optimize-btn').addEventListener('click', async () => {
  * because a chain that hides where it broke is worse than three buttons.
  * -------------------------------------------------------------------------- */
 async function smartRun(report) {
-  const dataset = $('dataset').value;
-  const repeats = Number($('repeats').value);
-  if (!dataset) throw new Error('Choose a set of examples first — Examples › Example library.');
+  const dataset = state.run.dataset;
+  const repeats = Number(state.run.repeats);
+  if (!dataset) throw new Error('Choose a set of examples first — Datasets › Dataset library.');
 
   report('step', 'Writing the prompt…');
   if (!await createPrompt()) throw new Error('Describe the task first, then start again.');
@@ -177,10 +316,10 @@ async function smartRun(report) {
   const benchmark = await api('/v1/benchmark', {task: await taskProfile(), technique_id: state.chosen, dataset, repeats});
   state.report = await pollJob(benchmark.id, showProgress);
 
-  report('step', `Improving it over ${plural(Number($('rounds').value), 'round')}…`);
+  report('step', `Improving it over ${plural(Number(state.run.rounds), 'round')}…`);
   const optimize = await api('/v1/optimize', {
     task: await taskProfile(), technique_id: state.chosen, dataset, repeats,
-    rounds: Number($('rounds').value), backend: $('backend').value, engine_model: engineProfile()
+    rounds: Number(state.run.rounds), backend: state.run.backend, engine_model: engineProfile()
   });
   state.optimization = await pollJob(optimize.id, showProgress);
   return state.optimization;
@@ -224,6 +363,18 @@ function verdictCautions(report) {
   }
   if (c.failures) {
     notes.push(`${plural(c.failures, 'answer')} failed outright and count as zero — worth reading before trusting the average.`);
+  }
+  // A score over rows a model invented is a score about invented rows. It is
+  // said here rather than on the builder screen, because here is where the
+  // number gets read and believed.
+  const held = state.datasetRows.get(report.dataset);
+  if (held?.status === 'ready' && held.rows.length) {
+    const written = held.rows.filter(row => (row.tags || []).some(tag => tag === 'synthetic' || tag === 'model-generated')).length;
+    if (written === held.rows.length) {
+      notes.push('Every example here was written by a model. The score describes generated inputs, not traffic you have seen — keep some real rows in the set.');
+    } else if (written) {
+      notes.push(`${written} of ${held.rows.length} examples were written by a model rather than observed.`);
+    }
   }
   return notes;
 }
@@ -269,32 +420,154 @@ function renderVerdict(report) {
   </section>`;
 }
 
+/* --------------------------------------------------------------------------
+ * One number for a hundred answers hides the only thing that decides what to do
+ * next: whether 0.87 means every answer was slightly off, or that nine in ten
+ * were perfect and the rest collapsed. Those two runs need opposite work, so
+ * the run is drawn example by example — one block each, worst first — and every
+ * block opens the example it stands for.
+ * -------------------------------------------------------------------------- */
+function runScore(run, grader) {
+  if (run.error) return 0;
+  if (grader && run.grades[grader] != null) return run.grades[grader];
+  const values = Object.values(run.grades);
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+}
+
+// One entry per example, holding every repeat of it, ordered worst first.
+function exampleScores(report) {
+  const grader = report.scorecard.quality_grader;
+  const byExample = new Map();
+  report.runs.forEach(run => {
+    const entry = byExample.get(run.example_id) || {id:run.example_id, runs:[], total:0};
+    entry.runs.push(run);
+    entry.total += runScore(run, grader);
+    byExample.set(run.example_id, entry);
+  });
+  return [...byExample.values()]
+    .map(entry => ({...entry, score: entry.total / entry.runs.length}))
+    .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id));
+}
+
+// Three states, because that is what a person does about them: right, needs
+// reading, wrong. A partly-right answer is not a shade of right.
+const scoreTone = score => (score >= 0.999 ? 'good' : score > 0 ? 'part' : 'bad');
+
+function renderRunStrip(report, here) {
+  const entries = exampleScores(report);
+  if (!entries.length) return '';
+  const counted = {good:0, part:0, bad:0};
+  entries.forEach(entry => { counted[scoreTone(entry.score)] += 1; });
+  const blocks = entries.map(entry => {
+    const tone = scoreTone(entry.score);
+    const reading = `${entry.id} — ${entry.score.toFixed(2)}`;
+    return `<a class="strip-cell ${tone}${entry.id === here ? ' here' : ''}" href="#report/${encodeURIComponent(entry.id)}"
+      data-global-tab="report" data-showing="${esc(entry.id)}" title="${esc(reading)}"><span class="sr-only">${esc(reading)}</span></a>`;
+  }).join('');
+  const parts = [
+    counted.good ? `${counted.good} right` : '',
+    counted.part ? `${counted.part} partly right` : '',
+    counted.bad ? `${counted.bad} wrong` : ''
+  ].filter(Boolean).join(' · ');
+  return `<div class="stage-title">Example by example</div>
+    <p class="meta">${esc(parts)}. One block per example, worst first — open one to see what the model actually answered.</p>
+    <div class="run-strip">${blocks}</div>`;
+}
+
+// The row as the dataset holds it. An inline run has no set behind it, so the
+// card shows what the run itself recorded and says nothing it cannot know.
+function datasetRow(report, id) {
+  const held = state.datasetRows.get(report.dataset);
+  if (!held || held.status !== 'ready') return null;
+  return held.rows.find(row => row.id === id) || null;
+}
+
+function renderExampleCard(report, entry, full) {
+  const source = datasetRow(report, entry.id);
+  const tone = scoreTone(entry.score);
+  const grader = report.scorecard.quality_grader;
+  const cut = (value, limit) => esc(String(value ?? '').slice(0, limit));
+  const answers = (full ? entry.runs : entry.runs.slice(0, 1)).map(run => {
+    const grades = Object.entries(run.grades)
+      .map(([name, value]) => `<span class="grade ${value >= 0.999 ? 'good' : value > 0 ? 'part' : 'bad'}"><b>${esc(name)}</b> ${value.toFixed(2)}</span>`).join('');
+    const trouble = run.error || run.schema_errors.join('; ');
+    return `<div class="example-answer">
+      ${entry.runs.length > 1 ? `<div class="meta">Run ${run.repeat + 1} of ${entry.runs.length} · ${run.latency_seconds.toFixed(2)} s · ${run.prompt_tokens + run.completion_tokens} tokens</div>` : ''}
+      <pre>${cut(run.output, full ? 4000 : 300) || '<span class="meta">empty answer</span>'}</pre>
+      ${grades ? `<div class="example-grades">${grades}</div>` : ''}
+      ${trouble ? `<p class="example-trouble">${esc(trouble)}</p>` : ''}
+    </div>`;
+  }).join('');
+  const asked = source ? `<div class="example-field"><dt>Asked</dt><dd><pre>${cut(source.input, full ? 4000 : 300)}</pre></dd></div>` : '';
+  const wanted = source
+    ? `<div class="example-field"><dt>Right answer</dt><dd><pre>${source.expected == null || source.expected === '' ? 'none — the graders judge the answer on its own' : cut(source.expected, 1200)}</pre></dd></div>`
+    : '';
+  return `<article class="example-card ${tone}">
+    <div class="example-head">
+      <strong>${esc(entry.id)}</strong>
+      <span class="state ${tone === 'good' ? 'ok' : tone === 'part' ? 'wait' : 'bad-chip'}">${entry.score.toFixed(2)}${grader ? ` ${esc(grader)}` : ''}</span>
+      ${full ? '' : `<a class="example-open" href="#report/${encodeURIComponent(entry.id)}" data-global-tab="report" data-showing="${esc(entry.id)}">Open</a>`}
+    </div>
+    <dl class="example-fields">${asked}${wanted}
+      <div class="example-field"><dt>Answered</dt><dd>${answers}</dd></div>
+    </dl>
+  </article>`;
+}
+
+// Every number on the screen in its own unit. Six decimal places on a count of
+// failures said "0.000000 failures", which reads as a measurement rather than
+// as none.
+const METRIC_FORMAT = {
+  ratio: value => Number(value).toFixed(3),
+  seconds: value => `${Number(value).toFixed(2)} s`,
+  tokens: value => Number(value).toFixed(0),
+  calls: value => Number(value).toFixed(1),
+  money: value => `$${Number(value).toFixed(6)}`,
+  count: value => String(Math.round(value))
+};
+
 function renderReport(r) {
   const c = r.scorecard;
+  const only = showingOn('report');
+  // Opened on one example: the verdict stays, because it says which prompt, on
+  // which model, over which set the answer below was produced. The strip stays
+  // too — it is how you walk to the next failure without going back up.
+  if (only) {
+    const entry = exampleScores(r).find(item => item.id === only);
+    return `${renderVerdict(r)}
+      ${entry ? renderExampleCard(r, entry, true) : `<div class="empty">This run has no example called ${esc(only)}.</div>`}
+      ${renderRunStrip(r, only)}`;
+  }
   const rows = [
-    ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality],
-    ['reliability', c.reliability, r.declared.reliability],
-    ['contract pass rate', c.contract_pass_rate, null],
-    ['stability across repeats', c.stability, null],
-    ['mean latency (s)', c.mean_latency_seconds, null],
-    ['p95 latency (s)', c.p95_latency_seconds, null],
-    ['mean tokens', c.mean_total_tokens, null],
-    ['mean cost (USD)', c.mean_cost_usd, null],
-    ['total cost (USD)', c.total_cost_usd, null],
-    ['mean calls', c.mean_calls, null],
-    ['failures', c.failures, null]
-  ].map(([label, measured, declared]) => `<tr><td>${esc(label)}</td><td>${measured == null ? 'unknown' : Number(measured).toFixed(6)}</td><td>${declared == null ? '—' : Number(declared).toFixed(3)}</td></tr>`).join('');
+    ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality, 'ratio'],
+    ['reliability', c.reliability, r.declared.reliability, 'ratio'],
+    ['contract pass rate', c.contract_pass_rate, null, 'ratio'],
+    ['stability across repeats', c.stability, null, 'ratio'],
+    ['mean latency', c.mean_latency_seconds, null, 'seconds'],
+    ['p95 latency', c.p95_latency_seconds, null, 'seconds'],
+    ['mean tokens', c.mean_total_tokens, null, 'tokens'],
+    ['mean cost', c.mean_cost_usd, null, 'money'],
+    ['total cost', c.total_cost_usd, null, 'money'],
+    ['mean calls', c.mean_calls, null, 'calls'],
+    ['failures', c.failures, null, 'count']
+  ].map(([label, measured, declared, kind]) => `<tr><td>${esc(label)}</td><td>${measured == null ? 'unknown' : METRIC_FORMAT[kind](measured)}</td><td>${declared == null ? '—' : Number(declared).toFixed(3)}</td></tr>`).join('');
   const graders = Object.entries(c.grades).map(([k, v]) => `<tr><td>${esc(k)}${k === c.quality_grader ? ' <span class="pill">headline</span>' : ''}</td><td class="what">${esc(graderMeaning(k))}</td><td>${v.toFixed(3)}</td></tr>`).join('');
-  const worst = [...r.runs].sort((a, b) => Math.min(...Object.values(a.grades), 1) - Math.min(...Object.values(b.grades), 1)).slice(0, 3)
-    .map(run => `<div class="meta"><strong>${esc(run.example_id)}</strong> ${esc(JSON.stringify(run.grades))} ${esc(run.error || run.schema_errors.join('; '))}</div><pre>${esc(run.output.slice(0, 400))}</pre>`).join('');
+  // The work is in the answers that did not come back right — and only those.
+  // Three of them, because a fourth is read the same way as the third.
+  const worst = exampleScores(r)
+    .filter(entry => scoreTone(entry.score) !== 'good')
+    .slice(0, 3)
+    .map(entry => renderExampleCard(r, entry, false)).join('');
   return `${renderVerdict(r)}
-    <div class="stage-title">every measurement</div>
-    <div class="meta">${esc(r.strategy)} strategy</div>
+    ${renderRunStrip(r)}
+    <div class="stage-title">Where it went wrong</div>
+    ${worst || '<div class="empty">Nothing scored below the top — every example came back right.</div>'}
+    <div class="stage-title">Every measurement</div>
+    <p class="meta">Measured is what just happened on your examples; declared is what the registry claims for ${esc(r.technique_title || r.technique_id)}. Run with the ${esc(r.strategy)} strategy.</p>
     <table><thead><tr><th>Metric</th><th>Measured</th><th>Declared</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="stage-title">graders</div>
+    <div class="stage-title">Graders</div>
     <table><thead><tr><th>Grader</th><th class="what">What it measures</th><th>Mean</th></tr></thead><tbody>${graders}</tbody></table>
-    ${r.prior != null ? `<div class="warning">Registry prior was ${r.prior.toFixed(2)}; measured quality is ${c.quality.toFixed(2)}. Ranking now uses the measured value.</div>` : ''}
-    <div class="stage-title">weakest examples</div>${worst}`;
+    ${r.prior != null ? `<div class="warning">Registry prior was ${r.prior.toFixed(2)}; measured quality is ${c.quality.toFixed(2)}. Ranking now uses the measured value.</div>` : ''}`;
 }
 
 function renderComparison(c) {

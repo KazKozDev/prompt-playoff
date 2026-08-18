@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from prompt_playoff import __version__
+from prompt_playoff.business_catalog import CatalogError, catalog
 from prompt_playoff.deployment import DeploymentBundle, export_runtime
 from prompt_playoff.domain import (
     AuthorRequest,
@@ -49,9 +50,12 @@ from prompt_playoff.providers import (
     InstalledModel,
     ProviderError,
     check_model_connection,
+    embed_texts,
     ollama_models,
 )
 from prompt_playoff.quality import (
+    PERSONAS,
+    DataMix,
     DatasetBuildRequest,
     DatasetProject,
     DatasetReviewRequest,
@@ -63,12 +67,16 @@ from prompt_playoff.quality import (
     ReleaseRecord,
     ReviewDecision,
     ReviewItem,
+    SeedNote,
     SignificanceResult,
     TrajectoryRequest,
+    apply_similarity,
     build_dataset,
+    data_mix,
     evaluate_trajectory,
     production_drift,
     security_suite,
+    shares_family,
     significance,
     slice_analysis,
 )
@@ -122,6 +130,11 @@ class BenchmarkRequest(BaseModel):
     repeats: int = Field(default=1, ge=1, le=10)
     timeout_seconds: float = Field(default=120, gt=0, le=1800)
     record: bool = True
+    #: The prompt as it was authored, when the caller is holding one. Sent so a
+    #: measurement is of that prompt rather than of a fresh compile of the same
+    #: technique, which drops whatever an engine model wrote into it. Omitted,
+    #: the technique is compiled per example exactly as before.
+    prompt: CompiledProgram | None = None
 
 
 class CompareRequest(BenchmarkRequest):
@@ -212,6 +225,9 @@ class PairwiseJudgeRequest(BaseModel):
     answer_b: str = Field(min_length=1, max_length=100_000)
     rubric: list[str] = Field(min_length=1, max_length=12)
     judge_model: ModelProfile
+    #: Models that produced the answers being judged. Supplied so the answer can
+    #: say when the judge is the same lineage as the thing it is scoring.
+    subject_models: list[str] = Field(default_factory=list, max_length=8)
     seed: int = 20260816
     timeout_seconds: float = Field(default=120, gt=0, le=1800)
 
@@ -279,9 +295,9 @@ def index() -> HTMLResponse:
 
 @app.get("/assets/{asset_name}", include_in_schema=False)
 def static_asset(asset_name: str) -> Response:
-    """Serve only the frontend's packaged, single-segment CSS and JavaScript assets."""
+    """Serve only the frontend's packaged, single-segment style, script, and image assets."""
     suffix = Path(asset_name).suffix
-    media_types = {".css": "text/css", ".js": "text/javascript"}
+    media_types = {".css": "text/css", ".js": "text/javascript", ".webp": "image/webp"}
     if (
         asset_name != Path(asset_name).name
         or asset_name.startswith(".")
@@ -441,6 +457,31 @@ def datasets(request: Request) -> list[dict[str, Any]]:
     return entries
 
 
+# Ahead of /v1/datasets/{name:path}, which would otherwise read "catalog" as the
+# name of a set nobody has.
+@app.get("/v1/datasets/catalog")
+def dataset_catalog(request: Request) -> dict[str, Any]:
+    """Fifty business cases, the set that measures each, and which ones are here.
+
+    Counting examples means reading every bundled file, and the catalogue is a
+    browsing screen — so the count comes from a name-only pass, and a set that
+    fails to parse is reported as absent rather than taking the screen down.
+    """
+    service = _service(request)
+    available: dict[str, int] = {}
+    for name in service.dataset_names:
+        if not name.startswith("business:"):
+            continue
+        try:
+            available[name] = len(service.dataset(name))
+        except Exception:
+            continue
+    try:
+        return catalog(available)
+    except CatalogError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.post("/v1/datasets/upload", status_code=status.HTTP_201_CREATED)
 async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
     """Validate a JSONL file and keep it available for this server session."""
@@ -564,6 +605,40 @@ async def hub_import(request: Request, payload: HubImportRequest) -> dict[str, A
     }
 
 
+@app.delete("/v1/datasets/{name:path}")
+def delete_dataset(name: str, request: Request) -> dict[str, Any]:
+    """Remove a set the user brought in. Bundled sets are refused, not hidden.
+
+    Deleting rows is not undoable, so the answer says exactly what went: the
+    name, and the file that was unlinked if the set had one on disk.
+    """
+    service = _service(request)
+    try:
+        removed = service.remove_user_dataset(name)
+    except KeyError as exc:
+        if name in service.registry.datasets:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{name} is bundled with Prompt Playoff and cannot be deleted here. "
+                    "Only sets you uploaded, imported or built can be removed."
+                ),
+            ) from exc
+        raise HTTPException(status_code=404, detail=f"Unknown dataset: {name}") from exc
+    return {"deleted": True, "name": name, "removed_file": str(removed) if removed else None}
+
+
+# Ahead of the catch-all below, which would otherwise read "agents/mix" as a
+# dataset name and answer 404 for a set that exists.
+@app.get("/v1/datasets/{name:path}/mix", response_model=DataMix)
+def dataset_mix(name: str, request: Request) -> DataMix:
+    """How much of a named set a model wrote, for the scorecard to say so."""
+    try:
+        return data_mix(_service(request).dataset(name))
+    except RegistryError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 # `:path` because an imported Hub dataset is named after its repo, and a repo id
 # carries a slash. Declared after the /hub/ routes, which therefore still win.
 @app.get("/v1/datasets/{name:path}", response_model=list[BenchmarkExample])
@@ -577,6 +652,182 @@ def dataset_examples(name: str, request: Request) -> list[BenchmarkExample]:
 # --------------------------------------------------------------------------- #
 # dataset builder + review-safe synthetic data
 # --------------------------------------------------------------------------- #
+
+#: The seed inputs only. Answers are a second phase, because an answer sampled
+#: once alongside the question it belongs to cannot be checked against anything.
+_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "examples": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "input": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["input", "tags"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["examples"],
+    "additionalProperties": False,
+}
+
+_ANSWER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+    "additionalProperties": False,
+}
+
+
+def _generator_prompt(
+    payload: DatasetBuildRequest, persona: str | None, sample: int
+) -> CompiledPrompt:
+    voice = (
+        f"Write every input as {persona} would type it — their vocabulary, their "
+        "length, and what they leave unsaid.\n"
+        if persona
+        else ""
+    )
+    return CompiledPrompt(
+        technique_id="dataset-builder",
+        stage="generate",
+        messages=[
+            Message(
+                role="system",
+                content=(
+                    "Write evaluation inputs, not answers. Cover normal, boundary, malformed, "
+                    "long-context and adversarial cases, and make the hard ones genuinely hard "
+                    "rather than long. Return the requested JSON.\n" + voice
+                ),
+            ),
+            Message(
+                role="user",
+                content=f"Write {payload.count} inputs for this task:\n{payload.description}",
+            ),
+        ],
+        response_schema=_INPUT_SCHEMA,
+        # One sample is one voice; several samples are only worth drawing if they
+        # are allowed to diverge, so the temperature rises with the sample count.
+        generation_options={"temperature": 0.4 if payload.candidates == 1 else 0.8, "top_p": 0.95}
+        | ({"seed": payload.seed + sample} if payload.candidates > 1 else {}),
+    )
+
+
+async def _sampled_inputs(
+    service: PromptSelectorService, payload: DatasetBuildRequest
+) -> list[tuple[str, list[str], str | None]]:
+    """Seed inputs pooled from ``candidates`` independent samples, deduplicated.
+
+    Taken round-robin rather than sample by sample: one sample's list would
+    otherwise fill the whole set and the other calls would be paid for nothing.
+    """
+    model = payload.generator_model
+    assert model is not None
+    provider = service.provider(
+        TaskProfile(task_type=TaskType.summarization, model=model), phase="dataset-builder"
+    )
+    personas = PERSONAS if payload.personas else (None,)
+    lists: list[list[tuple[str, list[str], str | None]]] = []
+    for sample in range(payload.candidates):
+        persona = personas[sample % len(personas)]
+        generated = await provider.generate(_generator_prompt(payload, persona, sample), model)
+        rows = json.loads(generated.content).get("examples", [])
+        lists.append(
+            [
+                (row["input"], list(row.get("tags", [])), persona)
+                for row in rows
+                if isinstance(row, dict) and str(row.get("input", "")).strip()
+            ]
+        )
+    pooled: list[tuple[str, list[str], str | None]] = []
+    seen: set[str] = set()
+    for index in range(max((len(item) for item in lists), default=0)):
+        for rows in lists:
+            if index >= len(rows):
+                continue
+            key = re.sub(r"\s+", " ", rows[index][0]).strip().casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            pooled.append(rows[index])
+    return pooled[: payload.count]
+
+
+async def _agreed_answer(
+    service: PromptSelectorService, payload: DatasetBuildRequest, text: str
+) -> tuple[str | None, float | None]:
+    """Sample an answer ``candidates`` times; keep the modal one and its share.
+
+    The share is the reason this exists. It is not a quality score — it is how
+    much the generator agreed with itself, which is what sorts the review queue.
+    """
+    model = payload.generator_model
+    assert model is not None
+    provider = service.provider(
+        TaskProfile(task_type=TaskType.summarization, model=model), phase="dataset-builder"
+    )
+    answers: list[str] = []
+    for sample in range(payload.candidates):
+        prompt = CompiledPrompt(
+            technique_id="dataset-builder",
+            stage="answer",
+            messages=[
+                Message(
+                    role="system",
+                    content=(
+                        "Answer the input exactly as the task requires. Be brief and literal. "
+                        "This answer is a proposal a person will check."
+                    ),
+                ),
+                Message(role="user", content=f"TASK:\n{payload.description}\n\nINPUT:\n{text}"),
+            ],
+            response_schema=_ANSWER_SCHEMA,
+            generation_options={"temperature": 0.8, "top_p": 0.95, "seed": payload.seed + sample},
+        )
+        result = await provider.generate(prompt, model)
+        answer = str(json.loads(result.content).get("answer", "")).strip()
+        if answer:
+            answers.append(answer)
+    if not answers:
+        return None, None
+    grouped: dict[str, list[str]] = {}
+    for answer in answers:
+        grouped.setdefault(re.sub(r"\s+", " ", answer).strip().casefold(), []).append(answer)
+    modal = max(grouped.values(), key=len)
+    return modal[0], round(len(modal) / payload.candidates, 4)
+
+
+async def _generated_seeds(
+    service: PromptSelectorService, payload: DatasetBuildRequest
+) -> tuple[list[BenchmarkExample], dict[str, SeedNote]]:
+    model = payload.generator_model
+    assert model is not None
+    pooled = await _sampled_inputs(service, payload)
+    if not pooled:
+        raise ValueError("Generator returned no usable inputs")
+    examples: list[BenchmarkExample] = []
+    notes: dict[str, SeedNote] = {}
+    for index, (text, tags, persona) in enumerate(pooled, 1):
+        answer, agreement = (None, None)
+        if payload.propose_answers:
+            answer, agreement = await _agreed_answer(service, payload, text)
+        seed_id = f"model-seed-{index:03d}"
+        examples.append(
+            BenchmarkExample(
+                id=seed_id,
+                input=text,
+                expected=answer,
+                tags=[*tags, "model-generated"],
+            )
+        )
+        notes[seed_id] = SeedNote(
+            generator=model.model_id, persona=persona, agreement=agreement
+        )
+    return examples, notes
 
 
 @app.get("/v1/dataset-projects", response_model=list[DatasetProject])
@@ -604,80 +855,57 @@ async def create_dataset_project(payload: DatasetBuildRequest, request: Request)
             payload = payload.model_copy(update={"examples": examples, "count": len(examples)})
         except (ImportError, RuntimeError, ValueError) as exc:
             raise HTTPException(status_code=502, detail=f"Trace import failed: {exc}") from exc
-    if payload.generator_model is not None and not payload.examples:
-        schema = {
-            "type": "object",
-            "properties": {
-                "examples": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "input": {"type": "string"},
-                            "expected": {},
-                            "tags": {"type": "array", "items": {"type": "string"}},
-                        },
-                        "required": ["input", "tags"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
-            "required": ["examples"],
-            "additionalProperties": False,
-        }
-        prompt = CompiledPrompt(
-            technique_id="dataset-builder",
-            stage="generate",
-            messages=[
-                Message(
-                    role="system",
-                    content=(
-                        "Generate diverse evaluation inputs, including normal, boundary, "
-                        "malformed, "
-                        "long-context, and adversarial cases. Expected answers are proposals only."
-                    ),
-                ),
-                Message(
-                    role="user",
-                    content=(
-                        f"Create {payload.count} examples for this task:\n{payload.description}"
-                    ),
-                ),
-            ],
-            response_schema=schema,
-            generation_options={"temperature": 0.4},
+    if payload.mode == "failures" and not payload.examples:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Building from failures needs the examples the prompt failed on. "
+                "Run a benchmark first, then build from its report."
+            ),
         )
+    if payload.generator_model is not None and not payload.examples:
         try:
-            generated = await _service(request).provider(
-                TaskProfile(task_type=TaskType.summarization, model=payload.generator_model),
-                phase="dataset-builder",
-            ).generate(prompt, payload.generator_model)
-            rows = json.loads(generated.content).get("examples", [])
-            examples = [
-                BenchmarkExample(
-                    id=f"model-seed-{index + 1:03d}",
-                    input=row["input"],
-                    expected=row.get("expected"),
-                    tags=[*row.get("tags", []), "model-generated"],
-                )
-                for index, row in enumerate(rows[: payload.count])
-                if isinstance(row, dict) and row.get("input")
-            ]
-            if not examples:
-                raise ValueError("Generator returned no usable examples")
-            payload = payload.model_copy(update={"examples": examples, "count": len(examples)})
-        except (ProviderError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            examples, notes = await _generated_seeds(_service(request), payload)
+            payload = payload.model_copy(
+                update={"examples": examples, "count": len(examples), "seed_notes": notes}
+            )
+        except (ProviderError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
             raise HTTPException(
                 status_code=502, detail=f"Dataset generation failed: {exc}"
             ) from exc
-    project = _quality(request).add_dataset(build_dataset(payload))
+    project = build_dataset(payload)
+    # The one model call in this endpoint that cannot invent anything: it turns
+    # the rows into vectors and says which of them are the same row reworded.
+    # A failure here loses the two numbers, never the set — the rows are already
+    # built, and refusing to hand them over because a check could not run would
+    # throw away work the deterministic rules already verified.
+    if payload.similarity_model is not None and len(project.examples) > 1:
+        try:
+            vectors = await embed_texts(
+                payload.similarity_model,
+                [item.example.input for item in project.examples],
+            )
+            project.diversity = apply_similarity(
+                project.examples, vectors, payload.similarity_threshold
+            )
+            project.similarity_model = payload.similarity_model.model_id
+        except ProviderError as exc:
+            project.similarity_model = f"unavailable: {exc}"
+    project = _quality(request).add_dataset(project)
     _quality(request).add_review(
         ReviewItem(
             id=f"review_{project.id}",
             kind="dataset",
             created_at=project.created_at,
             title=f"Review generated dataset: {project.name}",
-            payload={"project_id": project.id, "examples": len(project.examples)},
+            payload={
+                "project_id": project.id,
+                "examples": len(project.examples),
+                # What a reviewer needs before opening the set: how much of it a
+                # rule already objected to, and who wrote it.
+                "flagged": sum(1 for item in project.examples if item.checks),
+                "generator": project.generator,
+            },
         )
     )
     return project
@@ -788,6 +1016,7 @@ async def start_benchmark(payload: BenchmarkRequest, request: Request) -> Job:
             timeout_seconds=payload.timeout_seconds,
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
+            prompt=payload.prompt,
         )
         return report.model_dump(mode="json")
 
@@ -811,6 +1040,7 @@ async def start_compare(payload: CompareRequest, request: Request) -> Job:
             timeout_seconds=payload.timeout_seconds,
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
+            prompt=payload.prompt,
         )
         return {
             "comparison": comparison.model_dump(mode="json"),
@@ -896,6 +1126,19 @@ def get_experiment(experiment_id: str, request: Request) -> ExperimentRecord:
 # --------------------------------------------------------------------------- #
 
 
+def _judge_leakage(payload: PairwiseJudgeRequest) -> str | None:
+    judge = payload.judge_model.model_id
+    same = [item for item in payload.subject_models if shares_family(judge, item)]
+    if not same:
+        return None
+    return (
+        f"{judge} is judging answers from {', '.join(sorted(set(same)))} — the same model "
+        "family. A judge tends to score text from its own lineage higher, so treat this "
+        "verdict as weaker evidence than a benchmark score, and prefer a judge from "
+        "another family."
+    )
+
+
 @app.post("/v1/evaluate/pairwise")
 async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dict[str, Any]:
     """Blind pairwise judging with seeded order randomisation and human review."""
@@ -952,6 +1195,10 @@ async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dic
         "blind_order": order,
         "judge_model": payload.judge_model.model_id,
         "status": "pending_human_review",
+        # Blinding hides which answer is which; it cannot hide that a model
+        # tends to prefer text from its own lineage. That is the one thing this
+        # verdict cannot notice about itself, so it is recorded next to it.
+        "self_preference_warning": _judge_leakage(payload),
     }
     review = _quality(request).add_review(
         ReviewItem(

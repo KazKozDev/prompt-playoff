@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from prompt_playoff.domain import ModelProfile
 from prompt_playoff.evals import BenchmarkExample, ExampleRun
@@ -34,6 +34,18 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9._-]+", "-", value.lower()).strip("-._") or "dataset"
 
 
+class ExampleCheck(BaseModel):
+    """One deterministic objection to a generated row, raised before review.
+
+    Nothing here is a model's opinion: each check is a rule that can be decided
+    by looking at the row, so the reviewer's attention goes to the rows a rule
+    could not settle.
+    """
+
+    code: str
+    detail: str
+
+
 class ManagedExample(BaseModel):
     example: BenchmarkExample
     status: Literal["synthetic", "unreviewed", "reviewed", "approved"] = "unreviewed"
@@ -41,31 +53,116 @@ class ManagedExample(BaseModel):
     source: str = "generated"
     mutation: str | None = None
     reviewer_note: str | None = None
+    #: Objections raised by :func:`verify_examples`; empty means no rule fired.
+    checks: list[ExampleCheck] = Field(default_factory=list)
+    #: Share of independent samples that proposed the answer kept here, when the
+    #: answer was sampled more than once. ``None`` when nothing was sampled.
+    agreement: float | None = None
+    #: Model that wrote the row, and the voice it was asked to write in.
+    generator: str | None = None
+    persona: str | None = None
+
+    @property
+    def review_priority(self) -> tuple[int, float]:
+        """Flagged rows first, then the least agreed-on answers."""
+        return (0 if self.checks else 1, self.agreement if self.agreement is not None else 1.0)
+
+
+class CoverageCell(BaseModel):
+    """One axis of the build taxonomy and how much of the set landed on it."""
+
+    axis: str
+    intent: str
+    examples: int
+    approved: int
+    held_out: int
+    flagged: int
 
 
 class DatasetProject(BaseModel):
     id: str
     name: str
     description: str
-    mode: Literal["description", "expand", "edge_cases", "traces"]
+    mode: Literal["description", "expand", "edge_cases", "traces", "failures"]
     created_at: str
     seed: int
     examples: list[ManagedExample]
+    #: Model that generated the rows, when a model was used at all.
+    generator: str | None = None
+    #: Mean distance between rows, 0..1, when a similarity model was used.
+    #: Coverage says which axes were hit; this says whether the rows that hit
+    #: them are actually different sentences. ``None`` means it was not measured.
+    diversity: float | None = None
+    #: Embedding model the two numbers above came from, so a set can say what
+    #: measured it — the thresholds are only comparable within one model.
+    similarity_model: str | None = None
 
     @property
     def approved_examples(self) -> list[BenchmarkExample]:
         return [item.example for item in self.examples if item.status == "approved"]
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def coverage(self) -> list[CoverageCell]:
+        """Every axis this mode can produce, including the ones still empty.
+
+        Counting only what was generated would show a set of six full cells and
+        call it coverage. The empty cells are the point.
+        """
+        present = {item.mutation or "baseline" for item in self.examples}
+        axes = [axis for axis in MUTATION_INTENT if axis in present or axis in MUTATIONS]
+        axes += sorted(present - set(axes))
+        cells = []
+        for axis in axes:
+            rows = [item for item in self.examples if (item.mutation or "baseline") == axis]
+            cells.append(
+                CoverageCell(
+                    axis=axis,
+                    intent=MUTATION_INTENT.get(axis, "Unlabelled axis"),
+                    examples=len(rows),
+                    approved=sum(1 for item in rows if item.status == "approved"),
+                    held_out=sum(1 for item in rows if item.split == "held-out"),
+                    flagged=sum(1 for item in rows if item.checks),
+                )
+            )
+        return cells
+
+
+class SeedNote(BaseModel):
+    """Where one seed row came from, kept so the built rows can say so too."""
+
+    generator: str | None = None
+    persona: str | None = None
+    agreement: float | None = None
+
 
 class DatasetBuildRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=3, max_length=4000)
-    mode: Literal["description", "expand", "edge_cases", "traces"] = "edge_cases"
+    mode: Literal["description", "expand", "edge_cases", "traces", "failures"] = "edge_cases"
     examples: list[BenchmarkExample] = Field(default_factory=list, max_length=100)
     count: int = Field(default=12, ge=2, le=100)
     seed: int = 20260816
     held_out_ratio: float = Field(default=0.2, ge=0, le=0.5)
     generator_model: ModelProfile | None = None
+    #: Embedding model used to spot near-duplicates and measure variety. It
+    #: writes nothing, so it cannot invent a row; blank skips the check and
+    #: leaves the exact-match rule as the only duplicate rule.
+    similarity_model: ModelProfile | None = None
+    #: Cosine above which two rows are called the same row said differently.
+    #: A calibration, not a truth: it belongs to the embedding model, and the
+    #: check reports the number it saw rather than dropping anything.
+    similarity_threshold: float = Field(default=0.9, ge=0.5, le=0.999)
+    #: Independent samples drawn for the seed inputs. One sample is one call and
+    #: writes in one voice, so a single sample is a single voice repeated.
+    candidates: int = Field(default=1, ge=1, le=8)
+    #: Sample an answer per input and keep the one the samples agree on. Costs
+    #: ``count * candidates`` further calls, so it is off unless asked for.
+    propose_answers: bool = False
+    #: Ask each sample to write as a different reader of the task.
+    personas: bool = True
+    #: Provenance for the rows in :attr:`examples`, keyed by their id.
+    seed_notes: dict[str, SeedNote] = Field(default_factory=dict)
     trace_session_id: str | None = Field(default=None, max_length=200)
     trace_user_id: str | None = Field(default=None, max_length=200)
     trace_tags: list[str] = Field(default_factory=list, max_length=20)
@@ -86,6 +183,225 @@ MUTATIONS = (
     "prompt_injection",
     "long_context",
 )
+
+#: What each axis is here to find out. The builder samples axes rather than
+#: writing free variations, so this table is the coverage map: a set that fills
+#: three of these cells is a set that tested three things, whatever its size.
+MUTATION_INTENT: dict[str, str] = {
+    "baseline": "The task exactly as it normally arrives",
+    "as_failed": "The input the prompt already got wrong, unchanged",
+    "production_trace": "A real recorded input, unchanged",
+    "typo": "Surface damage: does a slip in one word change the answer",
+    "noise": "Wrapped in the debris real inputs arrive with",
+    "field_order": "The same facts in a different order",
+    "missing_data": "Half the input is gone: does it refuse or invent",
+    "conflicting_instruction": "The input argues with the prompt",
+    "prompt_injection": "Untrusted text asking for the system prompt",
+    "long_context": "The answer buried in filler",
+}
+
+#: Voices the generator writes in. Asked for inputs with no one in particular in
+#: mind, a model writes the same neutral sentence at every temperature; naming
+#: who is typing changes the vocabulary, the length, and what goes unsaid.
+PERSONAS = (
+    "a support agent pasting a customer's ticket verbatim",
+    "a backend engineer quoting a stack trace and asking in shorthand",
+    "a data analyst working from a half-filled spreadsheet",
+    "a lawyer quoting one clause out of a long contract",
+    "a first-time user who does not know the correct words for anything",
+    "a frustrated customer who repeats themselves and buries the question",
+    "a security reviewer probing for anything the system will leak",
+    "a domain expert using internal abbreviations without explaining them",
+)
+
+
+def model_family(model_id: str) -> str:
+    """The family a model id belongs to, ignoring tag, size and namespace.
+
+    ``qwen3:8b`` and ``qwen3:32b`` are one family; ``org/gpt-oss-120b`` is
+    ``gpt-oss``. Used to tell a caller that its judge and its generator are the
+    same lineage, which is the one comparison a score cannot make for itself.
+    """
+    head = model_id.split("/")[-1].strip().lower()
+    head = re.split(r"[:@]", head)[0]
+    head = re.sub(r"[-_.]?\d+(?:\.\d+)?b$", "", head)
+    return head.strip("-_.") or model_id.strip().lower()
+
+
+def shares_family(left: str, right: str) -> bool:
+    return bool(left and right) and model_family(left) == model_family(right)
+
+
+def _normalized(value: Any) -> str:
+    return re.sub(r"\s+", " ", str("" if value is None else value)).strip().casefold()
+
+
+def _schema_objections(expected: Any, schema: dict[str, Any]) -> list[str]:
+    """A shallow read of the declared shape — top-level type and required keys.
+
+    Deliberately not a JSON Schema implementation: this runs to catch an answer
+    that is plainly the wrong shape, and a rule that needs a new dependency to
+    fire is a rule that does not fire.
+    """
+    kinds: dict[str, type | tuple[type, ...]] = {
+        "object": dict,
+        "array": list,
+        "string": str,
+        "number": (int, float),
+        "integer": int,
+        "boolean": bool,
+    }
+    declared = schema.get("type")
+    wanted = kinds.get(declared) if isinstance(declared, str) else None
+    if wanted and not isinstance(expected, wanted):
+        got = type(expected).__name__
+        return [f"the schema declares {declared}, the answer is {got}"]
+    if isinstance(expected, dict):
+        missing = [key for key in schema.get("required", []) if key not in expected]
+        if missing:
+            return [f"required keys are missing: {', '.join(missing)}"]
+    return []
+
+
+#: Mutations that remove or reorder information, so an answer carried over from
+#: the intact row may no longer be the right answer to the row it now sits on.
+_LOSSY = {
+    "missing_data": "half the input was removed, but the answer was copied from the intact row",
+    "field_order": "the lines were reordered, and the answer still assumes the original order",
+}
+
+
+def _cosine(left: list[float], right: list[float]) -> float:
+    """Cosine similarity, clamped to 0..1. Written out because three floats of
+    arithmetic are not worth a numeric dependency."""
+    dot = sum(a * b for a, b in zip(left, right, strict=False))
+    size_left = math.sqrt(sum(a * a for a in left))
+    size_right = math.sqrt(sum(b * b for b in right))
+    if not size_left or not size_right:
+        return 0.0
+    return max(0.0, min(1.0, dot / (size_left * size_right)))
+
+
+def apply_similarity(
+    items: list[ManagedExample],
+    vectors: list[list[float]],
+    threshold: float = 0.9,
+) -> float | None:
+    """Flag near-duplicate rows and return how varied the set is, 0..1.
+
+    Two things the exact-match rule cannot see. "Please cancel my subscription"
+    and "I would like to cancel my subscription" are two rows to a string
+    comparison and one row to a reader, and a set whose rows are all one
+    sentence reworded fills its coverage grid while testing one thing.
+
+    The row keeps the number rather than being dropped: where the line falls
+    between "reworded" and "different" depends on the embedding model and on the
+    material, so this reports and a person decides — the same bargain every
+    other rule on this screen makes.
+
+    Returns the mean pairwise distance, or ``None`` when there is nothing to
+    compare. That number is comparable between sets measured by the same model
+    and meaningless between different ones.
+    """
+    if len(items) != len(vectors) or len(items) < 2:
+        return None
+    distances: list[float] = []
+    for index, item in enumerate(items):
+        nearest_score = 0.0
+        nearest_id = ""
+        for other_index in range(index):
+            score = _cosine(vectors[index], vectors[other_index])
+            distances.append(1.0 - score)
+            if score > nearest_score:
+                nearest_score = score
+                nearest_id = items[other_index].example.id
+        # Only the closest neighbour is worth naming: a row that is a near-copy
+        # of four others is still one problem, and four chips say it four times.
+        if nearest_id and nearest_score >= threshold:
+            exact = any(check.code == "duplicate-input" for check in item.checks)
+            if not exact:
+                item.checks.append(
+                    ExampleCheck(
+                        code="near-duplicate",
+                        detail=f"{round(nearest_score * 100)}% the same as {nearest_id}",
+                    )
+                )
+    return round(sum(distances) / len(distances), 4) if distances else None
+
+
+def verify_examples(items: list[ManagedExample]) -> list[ManagedExample]:
+    """Fill in :attr:`ManagedExample.checks` for a freshly generated set.
+
+    Every rule here is decidable without calling a model, which is the whole
+    point: the review queue should open on the rows no rule could settle.
+    """
+    seen: dict[str, str] = {}
+    for item in items:
+        example = item.example
+        checks: list[ExampleCheck] = []
+        key = _normalized(example.input)
+        if key in seen:
+            checks.append(
+                ExampleCheck(code="duplicate-input", detail=f"same input as {seen[key]}")
+            )
+        else:
+            seen[key] = example.id
+        if not key:
+            checks.append(ExampleCheck(code="empty-input", detail="the input is blank"))
+        if example.expected is not None and not _normalized(example.expected):
+            checks.append(
+                ExampleCheck(code="empty-answer", detail="an answer is set, but it is blank")
+            )
+        stale = _LOSSY.get(item.mutation or "")
+        if stale and example.expected is not None:
+            checks.append(ExampleCheck(code="stale-answer", detail=stale))
+        if item.mutation == "prompt_injection" and "system prompt" in _normalized(example.expected):
+            checks.append(
+                ExampleCheck(
+                    code="injection-echo",
+                    detail="the answer repeats what the injected text asked for",
+                )
+            )
+        if example.response_schema and example.expected is not None:
+            for objection in _schema_objections(example.expected, example.response_schema):
+                checks.append(ExampleCheck(code="schema-mismatch", detail=objection))
+        if item.agreement is not None and item.agreement < 0.5:
+            share = f"{round(item.agreement * 100)}%"
+            checks.append(
+                ExampleCheck(
+                    code="low-agreement",
+                    detail=f"only {share} of the samples proposed this answer",
+                )
+            )
+        item.checks = checks
+    return items
+
+
+class DataMix(BaseModel):
+    """How much of a benchmark set was written by a model rather than observed."""
+
+    total: int
+    synthetic: int
+    real: int
+    synthetic_ratio: float
+    note: str
+
+
+def data_mix(examples: list[BenchmarkExample]) -> DataMix:
+    total = len(examples)
+    synthetic = sum(1 for item in examples if {"synthetic", "model-generated"} & set(item.tags))
+    ratio = round(synthetic / total, 4) if total else 0.0
+    if not total:
+        note = "The set is empty."
+    elif not synthetic:
+        note = "Every example was uploaded, imported or recorded."
+    elif synthetic == total:
+        note = "Every example was written by a model. Scores describe generated inputs only."
+    else:
+        note = f"{synthetic} of {total} examples were written by a model."
+    return DataMix(
+        total=total, synthetic=synthetic, real=total - synthetic, synthetic_ratio=ratio, note=note
+    )
 
 
 def _mutate(text: str, kind: str, rng: random.Random) -> str:
@@ -134,21 +450,27 @@ def build_dataset(payload: DatasetBuildRequest) -> DatasetProject:
         mutation = MUTATIONS[index % len(MUTATIONS)]
         if payload.mode == "traces":
             input_text, mutation = source.input, "production_trace"
+        elif payload.mode == "failures" and index < len(seeds):
+            # The row the prompt already failed on belongs in the set verbatim:
+            # mutations around a failure are only worth having next to it.
+            input_text, mutation = source.input, "as_failed"
         elif payload.mode == "description" and index == 0:
             input_text, mutation = source.input, "baseline"
         else:
             input_text = _mutate(source.input, mutation, rng)
+        extra = ["from-failure"] if payload.mode == "failures" else []
         example = source.model_copy(
             deep=True,
             update={
                 "id": f"gen-{index + 1:03d}",
                 "input": input_text,
-                "tags": sorted({*source.tags, mutation, "synthetic"}),
+                "tags": sorted({*source.tags, *extra, mutation, "synthetic"}),
             },
         )
         # Expected values copied from user-provided seeds remain proposals until
         # review.  A description-only build has no fabricated answer at all.
         split = "held-out" if rng.random() < payload.held_out_ratio else "train"
+        note = payload.seed_notes.get(source.id) or SeedNote()
         generated.append(
             ManagedExample(
                 example=example,
@@ -156,10 +478,14 @@ def build_dataset(payload: DatasetBuildRequest) -> DatasetProject:
                 split=split,
                 source=source.id if payload.examples else "description",
                 mutation=mutation,
+                generator=note.generator,
+                persona=note.persona,
+                agreement=note.agreement,
             )
         )
     if payload.held_out_ratio and not any(item.split == "held-out" for item in generated):
         generated[-1].split = "held-out"
+    verify_examples(generated)
     return DatasetProject(
         id=f"ds_{uuid.uuid4().hex[:12]}",
         name=_slug(payload.name),
@@ -168,6 +494,7 @@ def build_dataset(payload: DatasetBuildRequest) -> DatasetProject:
         created_at=_now(),
         seed=payload.seed,
         examples=generated,
+        generator=next((item.generator for item in generated if item.generator), None),
     )
 
 

@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The business catalogue: 50 jobs businesses pay a model to do, in ten categories — email, customer
+  support, meetings, document routing, invoices and receipts, legal and contracts, finance, privacy
+  and compliance, HR and recruiting, marketing and e-commerce — each mapped to the public dataset
+  closest to its input → output shape. 17 cases get a
+  direct match, 23 a near neighbour, and 10 are recorded as having no public set at all, because a
+  benchmark that does not match the work is worse than no benchmark. The mapping lives in
+  `data/business_cases.yaml`, is validated on load, and is served by `GET /v1/datasets/catalog`.
+  Each case carries the company that reported it, what they pointed a model at, which vendor's
+  customer story it comes from, and the figure they published where there is one — 4 hours to 1 on
+  contract review, 8 weeks to 8 hours on product content, 8,000 hours a month on call summaries.
+  Those figures are labelled claims and nothing here has checked one; a case is refused at load
+  time if it has half a claim, a figure with nothing under it.
+- 17 bundled datasets behind that mapping, named `business:*` and registered like any other set:
+  email thread → reply, email → subject, subject → marketing email, transcript → minutes, live
+  translation, support question → answer and → intent, retail and banking intent, invoice OCR →
+  JSON fields, contract clause → type, clause → obligation, LegalBench reasoning, filing → figure,
+  brief → product description, review → rating, résumé → fit. Each is a 50–60-row sample of a
+  public Hugging Face repository, bundled so a first run needs no network, and each carries its
+  source repository and licence in the UI. `scripts/fetch_business_datasets.py` re-downloads them.
+- The Dataset library screen now has three zones: the catalogue of business cases, the business
+  sets on this server with their sources and licences, and the task benchmarks and the sets you
+  brought yourself — which stays the only zone where a set can be deleted. The catalogue is a shelf
+  of ten tiles, each an illustration, the work it stands for in large type, and the verbs a person
+  would search for if they did not know what the category was called; the count at its foot is
+  counted from what this server can actually read, so a category described here with nothing
+  bundled for it says so rather than borrowing a figure. It opens one
+  category at a time into a card per case, built around the reported figure where there is one, with
+  the match carried on the card's left edge as colour so a group reads at a glance and the dataset
+  at its foot, one click from the rows. Opened on one set, the screen names the business cases that
+  set stands for before it shows a row of it.
 - `start.bat`, the Windows counterpart of `start.command`: it finds a Python 3.11+ through the
   `py` launcher, builds `.venv`, installs the extras and reports the ones that failed to build,
   starts Ollama and offers to install it with winget, takes a free port in 8000–8020, and opens

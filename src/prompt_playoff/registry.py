@@ -29,7 +29,7 @@ class Registry:
 
     @classmethod
     def load(cls, root: Path | None = None) -> Registry:
-        root = root or _default_data_root()
+        root = root or default_data_root()
         technique_files = sorted((root / "techniques").glob("*.yaml"))
         model_files = sorted((root / "models").glob("*.yaml"))
         if not technique_files:
@@ -38,6 +38,13 @@ class Registry:
         techniques = [_load_model(path, TechniqueSpec) for path in technique_files]
         models = [_load_model(path, ModelProfile) for path in model_files]
         datasets = {path.stem: path for path in sorted((root / "datasets").glob("*.jsonl"))}
+        # The business catalogue lives one directory down and keeps the prefix
+        # the rest of the app already uses to say where a set came from, so a
+        # row reading `business:support-reply` needs no new rule to place it.
+        datasets |= {
+            f"business:{path.stem}": path
+            for path in sorted((root / "datasets" / "business").glob("*.jsonl"))
+        }
         return cls(techniques=techniques, models=models, datasets=datasets)
 
     def technique(self, technique_id: str) -> TechniqueSpec:
@@ -57,7 +64,7 @@ class Registry:
             raise RegistryError(f"Unknown dataset: {name}. Available: {known}") from exc
 
 
-def _default_data_root() -> Path:
+def default_data_root() -> Path:
     custom = os.getenv("PROMPT_PLAYOFF_REGISTRY")
     if custom:
         return Path(custom).expanduser().resolve()

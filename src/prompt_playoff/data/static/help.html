@@ -4,129 +4,67 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <title>Prompt Playoff — help</title>
-  <style>
-    /* Same tokens as the app: these pages are shown inside it, in an iframe
-       sitting on a panel, so they start from the panel surface. */
-    :root {
-      color-scheme: dark;
-      --bg:#0e1014; --panel:#14171d; --panel2:#101319; --sunken:#0c0e13;
-      --border:#232831; --border-strong:#333a46; --wash:rgba(255,255,255,.04);
-      --text:#e8eaee; --text-2:#b8bec9; --muted:#8b93a1;
-      --accent:#e3b341; --accent-hover:#eec158; --accent-line:rgba(227,179,65,.34); --accent-soft:rgba(227,179,65,.09); --on-accent:#17110a;
-      --good:#5fb87a; --good-line:rgba(95,184,122,.32); --good-soft:rgba(95,184,122,.1);
-      --bad:#e08585; --bad-text:#e9b6b6; --bad-line:rgba(224,133,133,.4); --bad-soft:rgba(224,133,133,.09);
-      --fs-micro:11px; --fs-sm:12px; --fs-base:13px; --fs-body:15px; --fs-lead:17px; --fs-h2:21px;
-      --sans:Inter,ui-sans-serif,system-ui,sans-serif;
-      --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
-      --r-sm:6px; --r-md:10px; --r-lg:14px;
-    }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:var(--sans); background:var(--panel); color:var(--text); font-size:var(--fs-body); line-height:1.65; -webkit-font-smoothing:antialiased; }
-    strong, b { font-weight:600; }
-    main { width:min(780px,calc(100% - 24px)); margin:0 auto 24px; }
-    /* Links read as links from the underline, not from being gold. */
-    a { color:var(--text); text-decoration-color:var(--accent-line); text-underline-offset:3px; }
-    a:hover { text-decoration-color:var(--accent); }
-    a:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
-    h1 { margin:0 0 4px; font-size:var(--fs-h2); font-weight:600; letter-spacing:-.01em; }
-    h2 { margin:32px 0 12px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
-    h3 { margin:20px 0 4px; font-size:var(--fs-body); font-weight:600; letter-spacing:-.01em; }
-    p, li { color:var(--text-2); font-size:var(--fs-body); line-height:1.65; }
-    ul { padding-left:20px; margin:12px 0 0; }
-    li { margin-bottom:6px; }
-    .lede { margin:4px 0 0; color:var(--muted); font-size:var(--fs-sm); }
-    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-    .topbar a { padding:6px 12px; border:1px solid var(--border); border-radius:var(--r-sm); background:transparent; color:var(--muted); font-size:var(--fs-base); font-weight:500; line-height:1.4; text-decoration:none; }
-    .topbar a:hover { border-color:var(--border-strong); color:var(--text); }
-    .step { margin:12px 0; padding:14px 16px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
-    .step b { color:var(--text); font-size:var(--fs-base); font-weight:600; }
-    .step p { margin:6px 0 0; font-size:var(--fs-base); }
-    .num { display:block; margin:24px 0 4px; font-size:var(--fs-base); font-weight:600; }
-    .num code { padding:0; border:0; background:none; color:var(--text); font-family:inherit; font-size:var(--fs-base); }
-    /* A score band: the tint carries the range, the text stays readable. */
-    .scale { display:flex; margin:10px 0 4px; border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden; font-size:var(--fs-sm); }
-    .scale div { flex:1; padding:7px 10px; text-align:center; }
-    .s-bad { background:var(--bad-soft); color:var(--bad-text); }
-    .s-mid { background:var(--accent-soft); color:var(--accent); }
-    .s-good { background:var(--good-soft); color:var(--good); }
-    .box { margin:14px 0; padding:10px 14px; border-left:2px solid var(--accent-line); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--accent-soft); color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
-    .box.warn { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
-    .box p { margin:0; color:inherit; font-size:inherit; }
-    .box p + p { margin-top:8px; }
-    .box b { color:var(--text); font-weight:600; }
-    .box.warn b { color:var(--text); }
-    code { padding:2px 6px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sunken); color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
-    pre { margin:12px 0; padding:14px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sunken); overflow-x:auto; font:var(--fs-sm)/1.6 var(--mono); }
-    pre code { padding:0; border:0; background:none; }
-    .wrap { overflow-x:auto; }
-    table { width:100%; margin:14px 0; border-collapse:collapse; font-size:var(--fs-base); }
-    th, td { padding:8px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
-    th { color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
-    td { color:var(--text-2); }
-    td code { white-space:nowrap; }
-    .cheat td:first-child { white-space:normal; }
-    .cheat td:nth-child(2) { white-space:nowrap; }
-    .nums td:nth-child(2) { white-space:nowrap; text-align:right; }
-    .tag { padding:2px 8px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:var(--fs-micro); white-space:nowrap; }
-    .tag.pub { border-color:var(--good-line); background:var(--good-soft); color:var(--good); }
-    details { margin-top:32px; padding-top:16px; border-top:1px solid var(--border); }
-    summary { cursor:pointer; color:var(--muted); font-size:var(--fs-base); font-weight:600; }
-    summary:hover { color:var(--text); }
-    details[open] summary { margin-bottom:12px; color:var(--text); }
-    details h3 { margin:18px 0 4px; }
-    details p, details li, details td { font-size:var(--fs-base); }
-  </style>
+  <title>Help · Prompt Playoff</title>
+  <script>
+    // The same two decisions the app makes before its first paint, made here
+    // too: the document is shown inside the app, so it follows the app's theme
+    // instead of flashing the other one, and it drops its own title when the
+    // screen around it is already carrying one.
+    try {
+      var choice = localStorage.getItem('pp-theme') || 'dark';
+      if (choice !== 'auto') document.documentElement.setAttribute('data-theme', choice);
+    } catch (error) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    if (location.search.indexOf('embed') !== -1) document.documentElement.classList.add('embed');
+  </script>
+  <link rel="stylesheet" href="/assets/docs.css">
 </head>
 <body>
 <main>
-  <div class="topbar">
+  <div class="doc-head">
     <div>
       <h1>Help</h1>
-      <p class="lede">What happens here, and how to read the numbers.</p>
+      <p class="lede">What the workspace does, in the order you meet it, and how to read every number it gives back.</p>
     </div>
-    <a href="/help/ru">Русский</a>
+    <a class="lang" href="/help/ru">Русский</a>
   </div>
 
-  <h2>Cheat sheet: what goes where</h2>
-  <table class="cheat">
-    <tr><th>Field</th><th>Put this</th><th>Why</th></tr>
-    <tr><td><b>Task and constraints</b></td><td>Describe the task in your own words</td><td>The task type is detected from keywords, so plain English works best.</td></tr>
-    <tr><td><b>Model</b></td><td><code>qwen2.5:7b</code></td><td>The exact model name in Ollama. Fast, not a thinking model.</td></tr>
-    <tr><td><b>Model class</b></td><td><code>medium</code></td><td>Rough size. 3B → small, 7–13B → medium, bigger → large. Some techniques are ruled out for small ones.</td></tr>
-    <tr><td><b>Provider</b></td><td><code>ollama</code></td><td>Where the model runs. The other option is your own OpenAI-compatible endpoint.</td></tr>
-    <tr><td><b>Structured output</b></td><td>✅</td><td>The model can be forced to emit JSON matching a schema. Required for extraction.</td></tr>
-    <tr><td><b>System messages</b></td><td>✅</td><td>It understands a system instruction. Almost everything does.</td></tr>
-    <tr><td><b>Tool calling</b></td><td>❌</td><td>Only for agent tasks that call tools.</td></tr>
-    <tr><td><b>Reasoning control</b></td><td>❌</td><td>Only if the model is a thinking one and you want to speed it up by turning that off.</td></tr>
-    <tr><td><b>Dataset</b></td><td><code>multiconer-en</code></td><td>What to measure against. Use 100+ examples or the numbers mean nothing.</td></tr>
-    <tr><td><b>Repeats</b></td><td><code>3</code></td><td>How many times each example runs. At 1, stability reports a fake 1.000.</td></tr>
-    <tr><td><b>Optimizer rounds</b></td><td><code>2</code></td><td>Only used by the Optimize button. Ignored by Benchmark and Compare.</td></tr>
-    <tr><td><b>Optimizer search</b></td><td><code>DSPy MIPROv2</code></td><td>Also Optimize only. Of the four, this is the one that actually improved anything.</td></tr>
-  </table>
-  <p><b>Button order:</b> Create my prompt → Create with this technique → Benchmark this prompt → Compare all recommended. Optimize the prompt last, if you want to push further.</p>
+  <h2>What this is for</h2>
+  <p>The usual way to write a prompt is to guess, change it until it feels better, and ship the feeling. There is nothing to check the feeling against.</p>
+  <p>Here you describe the task in your own words. A method with a track record is picked for it, the finished prompt is written out, and that exact text is run on a real model across examples whose answers are known. What comes back is two numbers and a record of how they were produced. Everything runs on your machine.</p>
 
-  <h2>What this does</h2>
-  <p>The usual way to write a prompt is to guess, then keep changing it until it feels better. There is nothing to check that feeling against.</p>
-  <p>This works differently: the tool picks a way to build the prompt, shows you the finished text, and runs it on a real model across dozens of examples. At the end you get numbers instead of impressions.</p>
+  <h2>If you do only one thing</h2>
+  <p><b>Smart run</b> sits at the top of the rail and on the home screen. It writes the prompt, measures it on your examples, improves it over a few rounds, and stops at the first step that needs a decision from you. Minutes, not seconds.</p>
+  <p>Everything below is that same path with the steps pulled apart, for when you want to see one of them or change it.</p>
 
-  <h2>Four buttons, in order</h2>
+  <h2>Five sections</h2>
+  <p>The rail has five, and they are the life of a prompt in order. Each opens to name its screens; the home screen shows the same five as tiles, each carrying the one fact that decides whether you need to go there.</p>
+  <div class="cards">
+    <div class="card"><b>Prompt</b><p>The prompt itself, and the three measurements taken on it as it stands: one run over your examples, the methods that were in the running scored side by side, and the search for a better wording.</p></div>
+    <div class="card"><b>Datasets</b><p>The rows every score is computed against. Bring your own, import a public set, or generate them here — and the library opens on a catalogue of fifty jobs businesses pay a model to do, each mapped to the set closest to it. A number only means something when these look like your real inputs.</p></div>
+    <div class="card"><b>Check</b><p>Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves.</p></div>
+    <div class="card"><b>Production</b><p>The gate between a prompt that scores well here and a prompt running in front of real users: regressions, reviews, releases, and monitoring.</p></div>
+    <div class="card"><b>Reference</b><p>The catalogue of methods, the job log, and the reading. Nothing here changes your prompt.</p></div>
+  </div>
 
-  <div class="step">
-    <b>1. Create my prompt</b>
-    <p>Describe your task in your own words. You get the ranked methods with the reasoning for each, and the prompt for the top one is ready to copy.</p>
+  <h2>Three models, three jobs</h2>
+  <p>The workspace uses three, and confusing them explains most surprises. <b>Models &amp; keys</b> — in the corner of the rail, and behind the model chip in the bar at the top — is where all three are set.</p>
+  <div class="cards">
+    <div class="card"><b>The prompt engine</b><p>Writes the finished prompt from your description, and writes the rows the dataset builder generates. It never produces a score.</p></div>
+    <div class="card"><b>The evaluation model</b><p>Runs the prompt on your examples. Every number you see anywhere in the app came out of this one.</p></div>
+    <div class="card"><b>The judge</b><p>Marks answers against each other in pairwise judging. Leave it blank and the prompt engine stands in — never the evaluation model, which would be marking its own paper.</p></div>
   </div>
-  <div class="step">
-    <b>2. Create with this technique</b>
-    <p>On any other method in the list. Shows the finished prompt that one compiles to — the exact text that will be sent to the model.</p>
-  </div>
-  <div class="step">
-    <b>3. Benchmark this prompt</b>
-    <p>Runs that prompt on a live model across every example in the dataset. This is the button that matters.</p>
-  </div>
-  <div class="step">
-    <b>4. Compare all recommended</b>
-    <p>The same thing for all three techniques at once, so you can pick the best.</p>
+  <p>Until an evaluation model is set, every screen that would run something says so and links to the one place that fixes it. The chip in the bar shows which model is answering for the numbers on screen, and switches it without leaving the screen.</p>
+
+  <h2>The path, step by step</h2>
+  <div class="cards">
+    <div class="card"><b><span class="step-no">1.</span> Describe the task</b><p>In the left column, in plain words: what the model should do, what comes out, and the constraints that matter. Choose whether you want a prompt ready for this one task or a reusable template with a placeholder, then press <b>Create my prompt</b>.</p></div>
+    <div class="card"><b><span class="step-no">2.</span> Read what was written</b><p><b>Prompt → Prompt text</b> shows the finished text — exactly what will be sent to the model — with the ranked methods and the reason each was suggested beside it. Any of them can be compiled instead.</p></div>
+    <div class="card"><b><span class="step-no">3.</span> Choose the examples</b><p><b>Datasets</b>. Eleven task sets ship with the app, and 17 more covering work businesses pay a model to do — email, meetings, support, invoices, contracts, marketing. Your own are one JSONL file away, and public sets can be imported. This is the choice that decides whether the number means anything.</p></div>
+    <div class="card"><b><span class="step-no">4.</span> Measure</b><p><b>Prompt → Measurement</b>. Set what to measure against and how many runs per example, then <b>Measure now</b>. This is the step that turns an opinion into a number.</p></div>
+    <div class="card"><b><span class="step-no">5.</span> Compare the methods</b><p><b>Prompt → Method comparison</b> scores every recommended method on the same examples, so the ranking is measured rather than assumed.</p></div>
+    <div class="card"><b><span class="step-no">6.</span> Push further</b><p><b>Prompt → Optimization</b> rewrites the prompt over several rounds, scores every version, and keeps the best. Read the held-out numbers only — see below.</p></div>
+    <div class="card"><b><span class="step-no">7.</span> Question the result</b><p><b>Check → Significance</b> puts an interval around the difference. <b>Model matrix</b> and <b>Context lab</b> ask whether it survives a different model or a different amount of context.</p></div>
+    <div class="card"><b><span class="step-no">8.</span> Ship it</b><p><b>Production → Regressions</b> compares two recorded runs against the quality and speed you are willing to lose; <b>Reviews</b> collects everything waiting for a yes or no; <b>Releases</b> carries the prompt from draft to production, with a rollback.</p></div>
   </div>
 
   <h2>The two numbers that matter</h2>
@@ -140,92 +78,121 @@
   <p>It gives partial credit. If the model found three of the four things it should have, that is roughly 0.85, not zero. So 0.78 means "mostly copes, but regularly drops one".</p>
 
   <span class="num"><code>reliability</code> — whether the answer is shaped correctly</span>
-  <p>This is about form, not meaning. The answer came back the way it should: valid JSON, all required fields, nothing extra around it.</p>
+  <p>This is about form, not meaning: the answer came back the way it should — valid JSON, all required fields, nothing extra wrapped around it — and it came back the same way each time.</p>
 
-  <div class="box warn">
+  <div class="note warn">
     <p><b>Do not confuse the two.</b> You will see reliability 1.00 next to quality 0.4. That means the model is neatly and correctly formatting the wrong answers.</p>
   </div>
 
   <h2>The other numbers</h2>
-  <table>
+  <div class="table-scroll">
+  <table class="terms">
     <tr><td><code>mean latency</code></td><td>Seconds spent on one example.</td></tr>
     <tr><td><code>mean tokens</code></td><td>Tokens spent on one example. That is money, if the model is paid.</td></tr>
     <tr><td><code>mean calls</code></td><td>How many times the model is called per example. More calls means slower and pricier.</td></tr>
     <tr><td><code>failures</code></td><td>Examples that did not run at all. Should be 0.</td></tr>
     <tr><td><code>stability</code></td><td>Whether the model gives the same answer to the same question.</td></tr>
   </table>
-
-  <h2>Three ways to get burned</h2>
-
-  <div class="box warn">
-    <p><b>1. Set Repeats to 3.</b> At Repeats = 1 stability always reads 1.000. That does not mean "stable", it means "nobody checked". The model can answer differently every time and you would never see it.</p>
   </div>
 
-  <div class="box warn">
-    <p><b>2. Few examples, worthless numbers.</b> On 6 examples a 5% difference means nothing. Use a dataset of a hundred or more if you intend to decide anything from the result.</p>
-  </div>
-
-  <div class="box warn">
-    <p><b>3. Numbers belong to one model.</b> Measure on one model and it is a guess again for another. The tool says <span style="color:var(--good)">measured</span> when it measured, and <span style="color:var(--muted)">prior only</span> when it is guessing.</p>
-  </div>
-
-  <h2>What to do about it</h2>
+  <h2>What to do about what you see</h2>
+  <div class="table-scroll">
   <table>
     <tr><th>What you see</th><th>What to do</th></tr>
-    <tr><td>Low quality, high reliability</td><td>The shape is fine, the meaning is not. Look at <b>Weakest examples</b> at the bottom — the three worst cases. Low quality usually hides one repeated mistake.</td></tr>
-    <tr><td>Low reliability</td><td>The model is padding the answer with chatter. Tick <b>Structured output</b> — then the format is enforced by the runtime instead of politely requested.</td></tr>
-    <tr><td>failures above zero</td><td>The model is too slow to answer in time. Use a faster one — "thinking" models can spend 40 seconds per example.</td></tr>
-    <tr><td>Good but expensive</td><td>Compare against a simpler technique. Three model calls often do not pay for themselves in quality.</td></tr>
-    <tr><td>Numbers jump between runs</td><td>Too few examples, or Repeats = 1. Raise both.</td></tr>
+    <tr><td>Low quality, high reliability</td><td>The shape is fine, the meaning is not. Look at <b>Weakest examples</b> at the bottom of the measurement — the three worst cases. Low quality usually hides one repeated mistake.</td></tr>
+    <tr><td>Low reliability</td><td>The model is padding the answer with chatter. Tick <b>Structured output</b> in Models &amp; keys — then the format is enforced by the runtime instead of politely requested.</td></tr>
+    <tr><td><code>failures</code> above zero</td><td>The model is too slow to answer in time. Use a faster one — a thinking model can spend forty seconds on one example.</td></tr>
+    <tr><td>Good but expensive</td><td>Compare against a simpler method. Three model calls often do not pay for themselves in quality.</td></tr>
+    <tr><td>Numbers jump between runs</td><td>Too few examples, or one run per example. Raise both.</td></tr>
+    <tr><td>Good here, wrong in production</td><td>Your examples do not look like your real inputs. <b>Production → Monitoring</b> watches for exactly that drift.</td></tr>
   </table>
-
-  <h2>The Optimize button</h2>
-  <p>It tries rewriting the prompt itself and checks whether that helped.</p>
-  <p>Look only at the <b>Held-out validation</b> table — that is the check on examples the optimizer never saw. If it shows zeros or a minus, nothing improved, whatever the table above it says.</p>
-  <div class="box">
-    <p><b>This happens often.</b> The optimizer easily fits itself to the examples it trained on and does no better on new ones. That is normal — just do not trust the numbers from the upper table.</p>
   </div>
 
-  <h2>Your own data</h2>
-  <p>The bundled examples are for finding your way around. Draw conclusions from your own. One task per line:</p>
+  <h2>Optimization, and the one table to read</h2>
+  <p>Optimization rewrites the prompt itself and checks whether that helped. It splits your examples: most are used for the search, and a held-out part is kept back, unseen.</p>
+  <p>Look only at the <b>Held-out validation</b> table. If it shows zeros or a minus, nothing improved, whatever the table above it says.</p>
+  <div class="note">
+    <p><b>This happens often.</b> The search easily fits itself to the examples it trained on and does no better on new ones. That is normal — just do not trust the numbers from the upper table.</p>
+  </div>
+
+  <h2>Four ways to get burned</h2>
+  <div class="note warn">
+    <p><b>1. One run per example measures nothing about stability.</b> At <b>Runs per example</b> = 1, stability always reads 1.000. That does not mean "stable", it means "nobody checked". Set it to 3. The model can answer differently every time and you would never see it.</p>
+  </div>
+  <div class="note warn">
+    <p><b>2. Few examples, worthless numbers.</b> On six examples a 5% difference is one example moving. Use a hundred or more if you intend to decide anything from the result.</p>
+  </div>
+  <div class="note warn">
+    <p><b>3. A number belongs to one model.</b> Measure on one model and it is a guess again for another. The app says <span class="pill measured">measured</span> where it measured and <span class="pill prior">prior only</span> where it is assuming. <b>Check → Model matrix</b> is how you find wording that only works on the model you wrote it for.</p>
+  </div>
+  <div class="note warn">
+    <p><b>4. A model's verdict is not truth.</b> Pairwise judging is a model reading two answers. Every verdict goes to <b>Reviews</b> and waits for a person; nothing is promoted to a benchmark result on a model's say-so.</p>
+  </div>
+
+  <h2>Your own examples</h2>
+  <p>The bundled sets are for finding your way around. Draw conclusions from your own. A <code>.jsonl</code> file, one task per line, uploaded straight from <b>Datasets → Upload your own</b>:</p>
   <pre><code>{"id": "1", "input": "Mara entered Veyr with Captain Orin.",
  "expected": {"people": ["Mara", "Captain Orin"], "places": ["Veyr"]}}</code></pre>
   <p>Only <code>id</code> and <code>input</code> are required. The rest is worked out for you.</p>
-  <div class="box">
+  <div class="note">
     <p><b>One rule.</b> The correct answer has to appear in the text <em>word for word</em>. If the text says "Captain Orin" and your answer says "Orin, captain", the model is marked wrong for not guessing your way of writing it.</p>
+    <p>And keep the examples where the right answer is empty. Without them, a prompt that simply guesses looks excellent: its invented answers have nowhere to show up.</p>
+  </div>
+
+  <h2>The fields you fill in</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Field</th><th>Put this</th><th>Why</th></tr>
+    <tr><td><b>What should the model do?</b></td><td>The task in your own words</td><td>The task type is read out of your description, so plain language works best.</td></tr>
+    <tr><td><b>Create</b></td><td>Ready prompt / Reusable template</td><td>A template keeps a placeholder for the input, so the same prompt serves many cases later.</td></tr>
+    <tr><td><b>Provider</b></td><td><code>ollama</code></td><td>Where the model runs. The other option is any OpenAI-compatible endpoint.</td></tr>
+    <tr><td><b>Model ID</b></td><td><code>qwen2.5:7b</code></td><td>The exact name the provider knows it by.</td></tr>
+    <tr><td><b>Model class</b></td><td><code>medium</code></td><td>Rough size: 3B → small, 7–13B → medium, bigger → large. Some methods are ruled out for small models.</td></tr>
+    <tr><td><b>Structured output</b></td><td>on</td><td>The model can be forced to emit JSON matching a schema. Worth having for extraction.</td></tr>
+    <tr><td><b>System messages</b></td><td>on</td><td>It understands a system instruction. Almost everything does.</td></tr>
+    <tr><td><b>Tool calling</b></td><td>off</td><td>Only for agent tasks that call tools.</td></tr>
+    <tr><td><b>Reasoning control</b></td><td>off</td><td>Only if the model is a thinking one and you want to speed it up by turning that off.</td></tr>
+    <tr><td><b>Input / output $ per 1M</b></td><td>your rate</td><td>Left empty, cost is reported as unknown rather than guessed.</td></tr>
+    <tr><td><b>Measure against</b></td><td><code>multiconer-en</code></td><td>Which set of examples to score on. A hundred or more, or the numbers mean nothing.</td></tr>
+    <tr><td><b>Runs per example</b></td><td><code>3</code></td><td>How many times each example runs. At 1, stability reports a meaningless 1.000.</td></tr>
+    <tr><td><b>Rounds</b></td><td><code>2</code></td><td>Optimization only. How many rewriting passes to make.</td></tr>
+    <tr><td><b>How to search</b></td><td><code>DSPy MIPROv2</code></td><td>Optimization only. Of the four, this is the one that improved anything in our own measurements.</td></tr>
+  </table>
   </div>
 
   <details>
     <summary>Details — if you need to dig deeper</summary>
 
     <h3>Where quality comes from</h3>
-    <p>It is the <code>field_f1</code> metric: it counts both what the model missed and what it invented. In the <b>Graders</b> table it is marked headline. Next to it sits <code>exact_match</code> — did everything match outright, with no allowances. It is almost always far lower, and that is expected.</p>
+    <p>For extraction it is the <code>field_f1</code> grader: it counts both what the model missed and what it invented. In the <b>Graders</b> table it is marked headline. Next to it sits <code>exact_match</code> — did everything match outright, with no allowances. It is almost always far lower, and that is expected.</p>
     <p>The format checks live there too: <code>json_validity</code> (did it parse), <code>json_schema</code> (did it match the schema fully), <code>no_prose</code> (no chatter around it). If <code>json_validity</code> is 1.00 while <code>field_f1</code> is low, the problem is comprehension, not format.</p>
 
     <h3>Where reliability comes from</h3>
-    <p>It is the share of correctly formatted answers multiplied by stability. Hence the catch with Repeats: on a single run stability is 1 by definition, so reliability looks inflated.</p>
+    <p>It is the share of correctly formatted answers multiplied by stability. Hence the catch with runs per example: on a single run stability is 1 by definition, so reliability looks inflated.</p>
 
     <h3>p95 latency</h3>
     <p>The time 95% of examples fit inside. If it is far above the mean, there are occasional very slow answers. For interactive use that matters more than the mean.</p>
 
-    <h3>Measured versus Declared</h3>
-    <p>Declared is the estimate written into the technique's config before anything was measured. Measured is what actually happened. A gap between them is the point, not a mistake — once measured, the config stops being used.</p>
+    <h3>Measured versus declared</h3>
+    <p>Declared is the estimate written into the method's own config before anything was measured. Measured is what actually happened on your model and your examples. A gap between them is the point, not a mistake — once measured, the config stops being used.</p>
 
-    <h3>Comparing techniques</h3>
-    <p>The <b>Weighted</b> column is the combined score under your weights. But if token cost carries any weight, a technique can win by being cheap while being worse at the job. Check the Quality column too.</p>
-    <p>The latency and token columns in a comparison are relative — computed against the best technique in that same run, so they do not transfer to other runs.</p>
+    <h3>Comparing methods</h3>
+    <p>The <b>Weighted</b> column is the combined score under your weights. But if token cost carries any weight, a method can win by being cheap while being worse at the job. Check the quality column too.</p>
+    <p>The latency and token columns in a comparison are relative — computed against the best method in that same run, so they do not transfer to other runs.</p>
 
     <h3>Pareto front in optimization</h3>
     <p>The variants that nothing beat on every measure at once. One of them is sometimes both more accurate and cheaper than the declared winner.</p>
 
     <h3>Prompt stages</h3>
-    <p>Some techniques split the prompt into several stages, which means several model calls in a row. Labels like <code>{previous}</code> mark where the previous stage's output gets inserted at run time.</p>
+    <p>Some methods split the prompt into several stages, which means several model calls in a row. Labels like <code>{previous}</code> mark where the previous stage's output gets inserted at run time.</p>
 
-    <h3>Empty examples in a dataset</h3>
-    <p>Keep cases where the correct answer is empty. Without them, a prompt that guesses looks good, because there is nothing for its mistakes to show up on.</p>
-
-    <p style="color:var(--muted);margin-top:24px">More depth in <code>README.md</code> and the <code>docs/</code> folder.</p>
+    <h3>Where the runs are recorded</h3>
+    <p><b>Check → Results</b> keeps every run this server has made, newest first, with a version-to-version diff and a CSV export. Aggregate numbers only: prompts and raw model answers are not stored there. <b>Reference → Jobs &amp; logs</b> shows what is running right now and what every finished run did.</p>
   </details>
+
+  <div class="doc-foot">
+    Where the numbers come from, and when not to believe them: the <a href="/evaluation">Evaluation guide</a>. More depth in <code>README.md</code> and the <code>docs/</code> folder.
+  </div>
 </main>
 </body>
 </html>

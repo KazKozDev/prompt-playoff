@@ -21,9 +21,11 @@ from pydantic import BaseModel, Field
 
 from prompt_playoff.compiler import PromptCompiler
 from prompt_playoff.domain import (
+    CompiledProgram,
     ExecutionTrace,
     Exemplar,
     MeasuredEvidence,
+    Message,
     TaskProfile,
     TechniqueSpec,
 )
@@ -160,6 +162,48 @@ class ComparisonReport(BaseModel):
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
+def authored_for(program: CompiledProgram, example: BenchmarkExample) -> CompiledProgram:
+    """The prompt as it was written, with this row's input where the task's stood.
+
+    A measurement is only about the prompt a person is actually holding, so what
+    the authoring screen produced is what runs — not a fresh compile of the same
+    technique, which drops whatever the engine wrote into it. Only the input
+    moves: a reusable prompt keeps its ``{input}`` slot, a prompt written for one
+    task carries that task's own words, and either way the row's input takes
+    their place.
+    """
+    written = "\n".join(
+        message.content for stage in program.stages for message in stage.messages
+    )
+    source = program.source_input.strip()
+    slot = "{input}" if "{input}" in written else source
+    if not slot or slot not in written:
+        raise ValueError(
+            "This prompt has no place for an example's input, so it cannot be measured "
+            "row by row. Write it as a reusable template and try again."
+        )
+    stages = [
+        stage.model_copy(
+            update={
+                "messages": [
+                    Message(role=message.role, content=message.content.replace(slot, example.input))
+                    for message in stage.messages
+                ],
+                # The row's own contract wins where it has one: its graders are
+                # written against that shape, not against the task's.
+                "response_schema": example.response_schema or stage.response_schema,
+            }
+        )
+        for stage in program.stages
+    ]
+    return program.model_copy(
+        update={
+            "stages": stages,
+            "response_schema": example.response_schema or program.response_schema,
+        }
+    )
+
+
 class BenchmarkRunner:
     def __init__(self, provider: ModelProvider, compiler: PromptCompiler | None = None) -> None:
         self.provider = provider
@@ -174,6 +218,7 @@ class BenchmarkRunner:
         timeout_seconds: float = 120,
         dataset_name: str = "inline",
         progress: ProgressCallback | None = None,
+        authored: CompiledProgram | None = None,
     ) -> BenchmarkReport:
         if not dataset:
             raise ValueError("Benchmark dataset is empty")
@@ -185,13 +230,19 @@ class BenchmarkRunner:
         done = 0
 
         for example in dataset:
-            program = self.compiler.compile(
-                task=task,
-                technique=technique,
-                user_input=example.input,
-                response_schema=example.response_schema,
-                variables=example.variables,
-                exemplars=example.exemplars,
+            # The prompt someone wrote and is looking at, when there is one;
+            # otherwise the technique compiled for this row, as before.
+            program = (
+                authored_for(authored, example)
+                if authored is not None
+                else self.compiler.compile(
+                    task=task,
+                    technique=technique,
+                    user_input=example.input,
+                    response_schema=example.response_schema,
+                    variables=example.variables,
+                    exemplars=example.exemplars,
+                )
             )
             if not preview:
                 preview = {
@@ -415,8 +466,15 @@ async def compare_techniques(
     timeout_seconds: float = 120,
     dataset_name: str = "inline",
     progress: ProgressCallback | None = None,
+    authored: CompiledProgram | None = None,
 ) -> tuple[ComparisonReport, list[BenchmarkReport]]:
-    """Run several techniques on the same data and rank them on measured numbers."""
+    """Run several techniques on the same data and rank them on measured numbers.
+
+    ``authored`` is the prompt someone actually holds. It belongs to one of these
+    techniques and is used for that one; the others have no written text to run,
+    so they are compiled — which is the honest form of the question anyway: is
+    the prompt I have better than what these other methods would give me?
+    """
     runner = BenchmarkRunner(provider)
     reports: list[BenchmarkReport] = []
     for technique in techniques:
@@ -429,6 +487,7 @@ async def compare_techniques(
                 timeout_seconds=timeout_seconds,
                 dataset_name=dataset_name,
                 progress=progress,
+                authored=authored if authored and authored.technique_id == technique.id else None,
             )
         )
 

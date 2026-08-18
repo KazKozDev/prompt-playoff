@@ -9,7 +9,7 @@ async function createPrompt() {
   }
   const btn = $('select-btn'); btn.disabled = true;
   $('task-error').textContent = '';
-  btn.textContent = 'Creating your prompt…';
+  btn.textContent = 'Creating your prompt';
   btn.setAttribute('aria-busy', 'true');
   $('results').innerHTML = '<div class="empty">Choosing a method that fits your task…</div>';
   showDetailMessage('prompt', `<div class="empty">${state.inputSource === 'task' ? 'Creating a ready prompt for your task…' : 'Creating a reusable template…'}</div>`);
