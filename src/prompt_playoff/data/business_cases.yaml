@@ -35,8 +35,8 @@ version: 1
 groups:
   - id: email
     name: Email
-    headline: Sort, classify & draft emails
-    summary: Route messages, detect spam, summarize threads and generate replies.
+    headline: Sort and draft email
+    summary: Route messages, detect spam, summarize threads, draft replies.
     art: cat-email
     cases:
       - number: 1
@@ -96,7 +96,7 @@ groups:
         sets: [business:email-subject, business:meeting-summary]
   - id: support
     name: Customer Support
-    headline: Automate support conversations
+    headline: Answer support tickets
     summary: Classify intent, route tickets and suggest answers.
     art: cat-support
     cases:
@@ -228,8 +228,8 @@ groups:
         references: [ami-meeting-corpus]
   - id: routing
     name: Document Routing
-    headline: Send documents to the right workflow
-    summary: Automatically classify incoming business documents.
+    headline: Route documents
+    summary: Classify incoming business documents.
     art: cat-routing
     cases:
       - number: 24
@@ -246,7 +246,7 @@ groups:
         references: [rvl-cdip]
   - id: invoices
     name: Invoices / Receipts
-    headline: Extract structured financial data
+    headline: Read invoices and receipts
     summary: Vendors, totals, dates, line items and invoice fields.
     art: cat-invoices
     cases:
@@ -272,7 +272,7 @@ groups:
         references: [rvl-cdip, sroie, cord]
   - id: legal
     name: Legal / Contracts
-    headline: Review contracts automatically
+    headline: Review contracts
     summary: Find clauses, obligations, risks and inconsistencies.
     art: cat-legal
     cases:
@@ -334,7 +334,7 @@ groups:
         sets: [business:legal-reasoning]
   - id: finance
     name: Finance
-    headline: Answer questions from financial data
+    headline: Answer from the filings
     summary: Reason over reports, tables and financial documents.
     art: cat-finance
     cases:
@@ -360,8 +360,8 @@ groups:
         match: none
   - id: privacy
     name: Privacy / Compliance
-    headline: Detect privacy & compliance risks
-    summary: Identify sensitive data and evaluate policy compliance.
+    headline: Find privacy risks
+    summary: Spot sensitive data and check policy compliance.
     art: cat-privacy
     cases:
       - number: 40
@@ -400,8 +400,8 @@ groups:
         sets: [business:resume-fit]
   - id: market
     name: Marketing / E-commerce
-    headline: Generate and enrich product content
-    summary: Marketing copy, product descriptions and campaign content.
+    headline: Write product copy
+    summary: Product descriptions, marketing and campaign copy.
     art: cat-market
     cases:
       - number: 44

@@ -1,6 +1,6 @@
 from prompt_playoff.compiler import PromptCompiler
 from prompt_playoff.domain import Capability, ModelProfile, TaskShape, TaskType
-from prompt_playoff.normalizer import normalize_description
+from prompt_playoff.normalizer import classify_task, normalize_description
 
 
 def test_normalizer_infers_extraction_and_json() -> None:
@@ -104,3 +104,35 @@ def test_two_requests_of_one_type_get_different_shapes() -> None:
 
     assert quick.task_type is designed.task_type
     assert quick.shape != designed.shape
+
+
+def test_the_task_type_is_the_best_match_not_the_first_one() -> None:
+    """`извлеч` used to win by standing earlier in a list, not by fitting better."""
+    model = ModelProfile(capabilities={Capability.system_messages})
+
+    task = normalize_description("summarize this python script", model)
+
+    assert task.task_type == TaskType.summarization
+
+
+def test_a_word_naming_the_work_outranks_words_naming_the_material() -> None:
+    _, scores = classify_task("summarize this python script")
+
+    assert scores[TaskType.summarization].work > 0
+    assert scores[TaskType.coding].work == 0
+    assert scores[TaskType.coding].material > scores[TaskType.summarization].work
+
+
+def test_the_russian_imperative_of_extract_is_recognized() -> None:
+    """`извлеч` never matched `извлеки`, which is the form every request uses."""
+    _, scores = classify_task("извлеки сущности")
+
+    assert scores[TaskType.structured_extraction].work > 0
+
+
+def test_a_request_that_matches_nothing_is_read_as_summarization() -> None:
+    model = ModelProfile(capabilities={Capability.system_messages})
+
+    task = normalize_description("Кратко опиши правила игры в шахматы", model)
+
+    assert task.task_type == TaskType.summarization

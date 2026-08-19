@@ -18,6 +18,11 @@ class DeploymentBundle(BaseModel):
     config_filename: str
     config: str
     notes: list[str]
+    #: The technique itself, when it is one this server holds rather than one
+    #: the package ships. Without it the export is unusable anywhere else: the
+    #: client names a technique by id, and no other server would resolve it.
+    technique_filename: str | None = None
+    technique: str | None = None
 
 
 def export_runtime(
@@ -28,6 +33,7 @@ def export_runtime(
     response_schema: dict[str, Any] | None = None,
     variables: dict[str, str] | None = None,
     exemplars: list[Exemplar] | None = None,
+    technique_yaml: str | None = None,
 ) -> DeploymentBundle:
     """Export a client of `/v1/run`, which preserves every execution strategy.
 
@@ -51,6 +57,16 @@ def export_runtime(
     else:
         filename = f"run-{slug}.ts"
         content = _typescript_client(config_json)
+    portability = (
+        [
+            f"{slug}.technique.yaml travels with this export. The target server does not "
+            "have this technique: POST its contents to /v1/techniques/import there, or drop "
+            "the file in that server's PROMPT_PLAYOFF_TECHNIQUES directory, before running "
+            "the client."
+        ]
+        if technique_yaml
+        else []
+    )
     return DeploymentBundle(
         name=f"{technique_id} deployment client",
         language=language,
@@ -58,7 +74,10 @@ def export_runtime(
         content=content,
         config_filename=f"{slug}.prompt-playoff.json",
         config=config_json + "\n",
+        technique_filename=f"{slug}.technique.yaml" if technique_yaml else None,
+        technique=technique_yaml,
         notes=[
+            *portability,
             "Set PROMPT_PLAYOFF_URL when the service is not on http://127.0.0.1:8000.",
             "Provider secrets stay on the Prompt Playoff service and are not "
             "embedded in this export.",

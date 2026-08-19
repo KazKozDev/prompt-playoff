@@ -55,7 +55,7 @@ const state = {
   showing:null,
   comparison:null, optimization:null, inputSource:'task',
   techniqueCatalog:new Map(), catalogStatus:'loading', catalogError:'', copyPayloads:new Map(),
-  datasetSizes:new Map(), hub:null,
+  datasetSizes:new Map(), datasetFacts:new Map(), hub:null,
   // The business catalogue: fifty jobs a model is paid to do and the public set
   // that measures each. Fetched once per visit to the library, and null until
   // then. `catalogGroup` is which of the ten categories is open — one at a time,
@@ -72,11 +72,29 @@ const state = {
   // controls had to exist on whatever screen you were on; held here, each
   // screen can render the ones it needs and none of the others.
   run:{dataset:'', repeats:1, rounds:2, backend:''}, backendOptions:'',
+  // What the last paste of your own inputs did, said on the screen after the
+  // block that asked for them has stepped aside.
+  ownRowsNote:'',
   techniqueExamples:new Map(), graderHelp:{},
+  // The two orderings the scorecard applies to the grades, as the server
+  // reports them: which grader becomes the headline quality, and which ones
+  // are contract checks and therefore feed reliability.
+  qualityPreference:[], contractGraders:new Set(),
   installed:{ engine:{status:'idle', models:[], error:'', url:null}, judge:{status:'idle', models:[], error:'', url:null}, similarity:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
+  // The recorded run that justifies the prompt currently held: what a release
+  // registered from it points back to. Null means the prompt as it stands has
+  // no number of its own, and a release of it would say only "somebody typed
+  // this". Cleared whenever the prompt is rewritten from scratch.
+  provenance:null,
+  // Why the last attempt to take an optimization winner failed, shown beside the
+  // button rather than in place of the screen it is on.
+  adoptError:'',
+  // What the last technique export did, kept so the message survives the
+  // re-render the export itself triggers.
+  techniqueNote:'',
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
   openLogs:new Set(), logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
-  quality:{projects:[], reviews:[], releases:[], results:{}, error:'', loading:false, loaded:new Set(),
+  quality:{projects:[], reviews:[], releases:[], gates:{}, results:{}, error:'', loading:false, loaded:new Set(),
     // The builder form lives here rather than in the DOM: the cost of the
     // settings is quoted before the button is pressed, so a keystroke has to
     // re-render the quote, and a re-render would otherwise wipe the fields.

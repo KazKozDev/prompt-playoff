@@ -129,6 +129,11 @@ class ModelProfile(BaseModel):
     # so an absent value means "unknown" rather than a guessed zero.
     input_cost_per_million_usd: float | None = Field(default=None, ge=0)
     output_cost_per_million_usd: float | None = Field(default=None, ge=0)
+    # What an hour of the machine costs, for a model nobody bills per token. A
+    # local run is not free; it occupies a GPU that was either rented or bought,
+    # and until that hour has a price a self-hosted model has no figure to set
+    # against a hosted one. Absent means unknown, exactly as the token rates do.
+    hardware_cost_per_hour_usd: float | None = Field(default=None, ge=0)
     notes: list[str] = Field(default_factory=list)
 
 
@@ -309,6 +314,30 @@ class TechniqueSpec(BaseModel):
         return self
 
 
+class MeasuredRequest(BaseModel):
+    """The request a benchmark actually ran, kept so the contest can be replayed.
+
+    A score without this is not quite evidence about a technique: it is evidence
+    about a technique on a request nobody wrote down. Two runs on the same task
+    type and the same rows can still be different questions — one allowed tools
+    and one did not, one was stepped and one was a line — and comparing them reads
+    the difference between the questions as a difference between the techniques.
+
+    Priorities are deliberately absent. They weight the answer rather than
+    describe the request, and the grading harness pins its own.
+    """
+
+    shape: set[TaskShape] = Field(default_factory=set)
+    complexity: str = "medium"
+    constraints: Constraints = Field(default_factory=Constraints)
+
+    def fingerprint(self) -> str:
+        """Identity of the question, so contests only pair runs that asked it."""
+        traits = ",".join(sorted(item.value for item in self.shape))
+        limits = self.constraints.model_dump_json()
+        return f"{self.complexity}|{traits}|{limits}"
+
+
 class MeasuredEvidence(BaseModel):
     """A real benchmark result recorded for a (technique, task, model) triple."""
 
@@ -324,6 +353,9 @@ class MeasuredEvidence(BaseModel):
     repeats: int = Field(ge=1)
     dataset: str
     recorded_at: str
+    #: The request behind the numbers. None on anything recorded before runs began
+    #: carrying it, which the calibration harness reports rather than guesses past.
+    request: MeasuredRequest | None = None
 
 
 class ScoreBreakdown(BaseModel):
@@ -338,6 +370,10 @@ class ScoreBreakdown(BaseModel):
     penalties: float
     #: Only non-zero when the task must gather its own material and the technique can.
     retrieval_fit: float = 0.0
+    #: How far this score could be wrong. Wide when every number behind it was
+    #: declared by hand, narrow once benchmarks have spoken. Confidence is read
+    #: off this and the gap to the next candidate, and nothing else.
+    uncertainty: float = 0.0
 
 
 class Recommendation(BaseModel):
@@ -370,6 +406,14 @@ class SelectionResult(BaseModel):
 class Message(BaseModel):
     role: str
     content: str
+    #: A worked example shown before the real request, rather than part of the
+    #: instruction. Marked so the prompt screen can label it and take it back
+    #: out; never sent to a provider, which is told only role and content.
+    demo: bool = False
+
+    def wire(self) -> dict[str, str]:
+        """What actually goes on the request. Anything else here is ours."""
+        return {"role": self.role, "content": self.content}
 
 
 class CompiledPrompt(BaseModel):
@@ -407,7 +451,12 @@ class CompiledProgram(BaseModel):
     #: The deterministic compiler always builds the executable scaffold.  The
     #: interactive authoring endpoint can then ask an engine model to rewrite
     #: its messages without changing the execution contract.
-    artifact_source: Literal["deterministic_compiler", "engine"] = "deterministic_compiler"
+    #: "optimizer" means the text is a search winner adopted wholesale: the
+    #: compiler built the scaffold, but the instruction blocks are the ones the
+    #: optimizer measured, not the ones the registry ships.
+    artifact_source: Literal["deterministic_compiler", "engine", "optimizer"] = (
+        "deterministic_compiler"
+    )
     authored_by_model: str | None = None
     authored_by_provider: str | None = None
 
@@ -486,6 +535,36 @@ class AuthorRequest(BaseModel):
     exemplars: list[Exemplar] = Field(default_factory=list)
     engine_model: ModelProfile
     timeout_seconds: float = Field(default=120, gt=0, le=1800)
+
+
+class AdoptOptimizedRequest(BaseModel):
+    """Put an optimization winner into the prompt a person is holding.
+
+    The optimizer never sees the authored prompt: it searches the technique's
+    own instruction blocks, and its preview is compiled against a dataset row.
+    Adopting therefore recompiles — the winning blocks against *this* task —
+    rather than copying a preview that carries a benchmark example inside it.
+    """
+
+    task: TaskProfile
+    #: The registry technique the search started from. Its identity is kept, so
+    #: the adopted prompt can still be measured and exported like any other.
+    technique_id: str
+    #: `OptimizationResult.exported_technique`: the winner as a technique spec.
+    #: Empty when the search rewrote the prompt itself — pass `program` instead.
+    technique: dict[str, Any] = Field(default_factory=dict)
+    #: `OptimizationResult.winner_program`: the winner as a prompt. Adopting one
+    #: is a copy rather than a recompile, because the text that was measured is
+    #: already the text for this task.
+    program: dict[str, Any] | None = None
+    description: str = ""
+    reusable: bool = False
+    response_schema: dict[str, Any] | None = None
+    variables: dict[str, str] = Field(default_factory=dict)
+    exemplars: list[Exemplar] = Field(default_factory=list)
+    #: Which model wrote the winning wording, recorded on the program so the
+    #: prompt screen can say where its text came from.
+    engine_model_id: str | None = None
 
 
 class RunRequest(CompileRequest):

@@ -120,3 +120,8 @@ def isolated_measurements(tmp_path, monkeypatch):
     monkeypatch.setenv("PROMPT_PLAYOFF_PROFILES_PATH", str(tmp_path / "model-profiles.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_EXPERIMENTS_PATH", str(tmp_path / "experiments.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_QUALITY", str(tmp_path / "quality.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_TECHNIQUES", str(tmp_path / "techniques"))
+    # The release gate reads the project's committed thresholds. Left at the
+    # default it would read this repository's own prompt-playoff.yaml, and every
+    # test that approves a release would depend on what that file happens to say.
+    monkeypatch.setenv("PROMPT_PLAYOFF_CHECKS", str(tmp_path / "prompt-playoff.yaml"))

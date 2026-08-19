@@ -3,9 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from prompt_playoff.compiler import PromptCompiler
 from prompt_playoff.dataset_store import DatasetStore
 from prompt_playoff.domain import (
+    AdoptOptimizedRequest,
     AuthorRequest,
     CompiledProgram,
     CompileRequest,
@@ -24,6 +27,7 @@ from prompt_playoff.evals import (
     BenchmarkRunner,
     ComparisonReport,
     ProgressCallback,
+    authored_for,
     compare_techniques,
     load_jsonl,
 )
@@ -41,6 +45,11 @@ from prompt_playoff.providers import ModelProvider, provider_for
 from prompt_playoff.registry import Registry
 from prompt_playoff.selector import Selector
 from prompt_playoff.strategies import get_strategy
+from prompt_playoff.technique_store import TechniqueStore
+
+
+class TechniqueNameConflict(ValueError):
+    """A saved technique would take a name that already means something else."""
 
 
 class PromptSelectorService:
@@ -52,6 +61,7 @@ class PromptSelectorService:
         datasets: DatasetStore | None = None,
         experiments: ExperimentStore | None = None,
         profiles: ModelProfileStore | None = None,
+        techniques: TechniqueStore | None = None,
     ) -> None:
         self.registry = registry
         self.measurements = measurements if measurements is not None else MeasurementStore()
@@ -64,6 +74,10 @@ class PromptSelectorService:
         #: Datasets the user brought in, whether saved to disk on a previous run
         #: or added during this one. Shadow the packaged datasets by name.
         self.user_datasets: dict[str, list[BenchmarkExample]] = self.dataset_store.load()
+        self.technique_store = techniques if techniques is not None else TechniqueStore()
+        #: Optimization winners saved for later. Resolvable by id, and left out
+        #: of ranking on purpose — see `technique_store`.
+        self.user_techniques: dict[str, TechniqueSpec] = self.technique_store.load()
 
     def provider(self, task: TaskProfile, **metadata) -> ModelProvider:
         """Every provider goes through here, so tracing is never bypassed."""
@@ -129,7 +143,48 @@ class PromptSelectorService:
             if not selection.recommendations:
                 raise ValueError("No compatible technique found")
             technique_id = selection.recommendations[0].technique_id
+        # A saved optimization winner is never recommended, but it has to be
+        # resolvable, or every path that takes a technique id — run, benchmark,
+        # runtime export — would refuse the thing the search produced.
+        if saved := self.user_techniques.get(technique_id):
+            return saved
         return self.registry.technique(technique_id)
+
+    @property
+    def all_techniques(self) -> dict[str, TechniqueSpec]:
+        """Everything resolvable by id: the registry, then what was saved here."""
+        return {**self.registry.techniques, **self.user_techniques}
+
+    def save_technique(self, payload: dict[str, Any], technique_id: str | None = None) -> Path:
+        """Persist an optimization winner so the rest of the tool can resolve it.
+
+        A saved id may not shadow a registry recipe: everyone else's runs resolve
+        that id too, and silently changing what it means would rewrite the
+        meaning of numbers already recorded under it.
+        """
+        try:
+            spec = TechniqueSpec.model_validate(payload)
+        except ValidationError as exc:
+            raise ValueError(f"This is not a technique the optimizer produced: {exc}") from exc
+        if technique_id:
+            spec = spec.model_copy(update={"id": technique_id})
+        if spec.id in self.registry.techniques:
+            raise TechniqueNameConflict(
+                f"{spec.id} is a registry recipe. Save the winner under a name of its own "
+                "so the recipe it came from keeps meaning what it meant."
+            )
+        path = self.technique_store.save(spec)
+        self.user_techniques[spec.id] = spec
+        return path
+
+    def remove_technique(self, technique_id: str) -> Path | None:
+        """Only what was saved here can go; the packaged recipes are not ours to delete."""
+        if technique_id not in self.user_techniques:
+            raise KeyError(technique_id)
+        path = self.technique_store.path_for(technique_id)
+        removed = path if self.technique_store.remove(technique_id) else None
+        del self.user_techniques[technique_id]
+        return removed
 
     # -- compilation and execution ------------------------------------------ #
 
@@ -163,6 +218,62 @@ class PromptSelectorService:
             scaffold=scaffold,
             reusable=request.reusable,
             timeout_seconds=request.timeout_seconds,
+        )
+
+    def adopt_optimized(self, request: AdoptOptimizedRequest) -> CompiledProgram:
+        """Recompile this task through the instruction blocks the search won with.
+
+        The optimizer's own preview cannot be adopted directly: it was compiled
+        against a dataset row, so copying it would bake a benchmark example into
+        the prompt. What travels is the winning technique, and the identity of
+        the registry technique it came from stays on the program — a prompt with
+        an id nothing can resolve cannot be measured, run, or exported.
+        """
+        if request.program is not None:
+            # Nothing to recompile: the search measured this exact text for this
+            # task. Recompiling it would throw away the thing that was measured.
+            try:
+                program = CompiledProgram.model_validate(request.program)
+            except ValidationError as exc:
+                raise ValueError(f"This is not a prompt the optimizer produced: {exc}") from exc
+            self.resolve_technique(request.task, program.technique_id)
+            return program.model_copy(
+                update={
+                    "artifact_source": "optimizer",
+                    "authored_by_model": request.engine_model_id,
+                }
+            )
+        if not request.technique:
+            raise ValueError("Give either the winning technique or the winning prompt")
+        base = self.resolve_technique(request.task, request.technique_id)
+        try:
+            technique = TechniqueSpec.model_validate(
+                {
+                    **request.technique,
+                    "id": base.id,
+                    "title": base.title,
+                    "version": base.version,
+                }
+            )
+        except ValidationError as exc:
+            raise ValueError(f"This is not a technique the optimizer produced: {exc}") from exc
+        task = _with_runtime_material(request.task) if request.reusable else request.task
+        user_input = "{input}" if request.reusable else request.description
+        if not user_input.strip():
+            raise ValueError("Give the task's own material, or adopt the prompt as a template")
+        program = self.compiler.compile(
+            task=task,
+            technique=technique,
+            user_input=user_input,
+            response_schema=request.response_schema,
+            variables=request.variables,
+            exemplars=request.exemplars,
+        )
+        return program.model_copy(
+            update={
+                "artifact_source": "optimizer",
+                "authored_by_model": request.engine_model_id,
+            }
         )
 
     async def run(self, request: RunRequest) -> ExecutionTrace:
@@ -237,14 +348,8 @@ class PromptSelectorService:
     ) -> BenchmarkReport:
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
-        # A supplied prompt is the thing being measured, so the numbers have to
-        # be filed under the method it was written from — not under whichever
-        # one the caller named alongside it.
-        if prompt is not None and prompt.technique_id != technique.id:
-            raise ValueError(
-                f"This prompt was written from {prompt.technique_id}, "
-                f"but the run was asked for {technique.id}."
-            )
+        if prompt is not None:
+            self._check_measurable(prompt, technique, examples)
         runner = BenchmarkRunner(
             self.provider(task, technique_id=technique.id, phase="benchmark"), self.compiler
         )
@@ -260,8 +365,31 @@ class PromptSelectorService:
         )
         if record:
             self.measurements.record(report.to_evidence())
-            self.experiments.add_benchmark(report, task)
+            # The report carries its own record id: a release registered from
+            # this prompt has to be able to name the run that justified it.
+            report.experiment_id = self.experiments.add_benchmark(report, task).id
         return report
+
+    @staticmethod
+    def _check_measurable(
+        prompt: CompiledProgram,
+        technique: TechniqueSpec,
+        examples: list[BenchmarkExample],
+    ) -> None:
+        """Refuse a supplied prompt now, rather than partway through the run.
+
+        Two ways it cannot be used: filed under a method it was not written from,
+        which puts the numbers under the wrong name; and written with nowhere for
+        an example's input to go, which `authored_for` can only discover row by
+        row — in the middle of a job that has already spent model calls.
+        """
+        if prompt.technique_id != technique.id:
+            raise ValueError(
+                f"This prompt was written from {prompt.technique_id}, "
+                f"but the run was asked for {technique.id}."
+            )
+        if examples:
+            authored_for(prompt, examples[0])
 
     async def compare(
         self,
@@ -275,7 +403,7 @@ class PromptSelectorService:
         progress: ProgressCallback | None = None,
         prompt: CompiledProgram | None = None,
     ) -> tuple[ComparisonReport, list[BenchmarkReport]]:
-        techniques = [self.registry.technique(item) for item in technique_ids]
+        techniques = [self.resolve_technique(task, item) for item in technique_ids]
         examples, name = self.resolve_dataset(dataset_name, inline)
         comparison, reports = await compare_techniques(
             dataset=examples,
@@ -312,11 +440,19 @@ class PromptSelectorService:
         auto: str = "light",
         record: bool = True,
         progress: ProgressCallback | None = None,
+        prompt: CompiledProgram | None = None,
     ) -> OptimizationResult:
         """Search for a better prompt. `backend` picks the search algorithm only —
-        compilation, execution and grading are the same either way."""
+        compilation, execution and grading are the same either way.
+
+        `prompt` is the text the caller is holding, and it becomes the baseline —
+        the same contract `benchmark` has. Sending it is what makes "improvement"
+        a statement about your prompt rather than about a compile of the recipe.
+        """
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
+        if prompt is not None:
+            self._check_measurable(prompt, technique, examples)
         provider = self.provider(task, technique_id=technique.id, phase="optimize")
         #: A full profile of its own: the proposer may be a remote model while the
         #: target is local, so nothing here may be inherited from the target.
@@ -349,9 +485,10 @@ class PromptSelectorService:
                 timeout_seconds=timeout_seconds,
                 dataset_name=name,
                 progress=progress,
+                authored=prompt,
             )
             if record:
-                self.experiments.add_optimization(result, task)
+                result.experiment_id = self.experiments.add_optimization(result, task).id
             return result
 
         if not backend.startswith("dspy:"):
@@ -374,9 +511,10 @@ class PromptSelectorService:
             proposer_model=engine_profile,
             compiler=self.compiler,
             progress=progress,
+            authored=prompt,
         )
         if record:
-            self.experiments.add_optimization(result, task)
+            result.experiment_id = self.experiments.add_optimization(result, task).id
         return result
 
     def export_promptfoo(
@@ -391,7 +529,7 @@ class PromptSelectorService:
         from prompt_playoff.integrations import promptfoo
 
         examples, name = self.resolve_dataset(dataset_name, inline)
-        techniques = [self.registry.technique(item) for item in technique_ids]
+        techniques = [self.resolve_technique(task, item) for item in technique_ids]
         return promptfoo.export(
             directory=directory,
             task=task,

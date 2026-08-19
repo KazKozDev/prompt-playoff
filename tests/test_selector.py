@@ -6,12 +6,14 @@ from prompt_playoff.domain import (
     ModelClass,
     ModelProfile,
     Priorities,
+    Recommendation,
+    ScoreBreakdown,
     TaskProfile,
     TaskShape,
     TaskType,
 )
 from prompt_playoff.registry import Registry
-from prompt_playoff.selector import Selector
+from prompt_playoff.selector import Selector, _beats, _uncertainty
 
 
 def extraction_profile() -> TaskProfile:
@@ -245,3 +247,70 @@ def test_a_task_that_needs_material_says_so_when_none_is_given() -> None:
     result = Selector(Registry.load()).select(topic_profile(TaskType.translation))
 
     assert any("names a topic without supplying it" in item for item in result.warnings)
+
+
+def test_confidence_falls_when_the_runner_up_is_a_hair_behind() -> None:
+    """A stated probability has to move with the gap it is a probability about."""
+    result = Selector(Registry.load()).select(extraction_profile())
+    top, second = result.recommendations[0], result.recommendations[1]
+
+    assert top.score - second.score < 0.05
+    assert top.confidence < 0.7
+
+
+def test_a_wider_gap_buys_more_confidence() -> None:
+    close = Recommendation(
+        technique_id="a",
+        title="A",
+        family="f",
+        score=0.70,
+        confidence=0.0,
+        reasons=[],
+        breakdown=_breakdown(0.05),
+    )
+    clear = close.model_copy(update={"score": 0.90})
+    rival = close.model_copy(update={"technique_id": "b", "score": 0.69})
+
+    assert _beats(clear, rival) > _beats(close, rival)
+
+
+def test_evidence_narrows_the_spread() -> None:
+    assert _uncertainty(0) > _uncertainty(10) > _uncertainty(200)
+    assert _uncertainty(10_000) > 0
+
+
+def test_the_same_gap_reads_as_more_certain_once_it_is_measured() -> None:
+    vague = Recommendation(
+        technique_id="a",
+        title="A",
+        family="f",
+        score=0.80,
+        confidence=0.0,
+        reasons=[],
+        breakdown=_breakdown(_uncertainty(0)),
+    )
+    vague_rival = vague.model_copy(update={"technique_id": "b", "score": 0.74})
+    measured = vague.model_copy(update={"breakdown": _breakdown(_uncertainty(200))})
+    measured_rival = vague_rival.model_copy(update={"breakdown": _breakdown(_uncertainty(200))})
+
+    assert _beats(measured, measured_rival) > _beats(vague, vague_rival)
+
+
+def test_a_near_tie_names_the_techniques_it_cannot_separate() -> None:
+    result = Selector(Registry.load()).select(extraction_profile())
+    ties = [item for item in result.warnings if "cannot separate" in item]
+
+    if result.recommendations[0].confidence < 0.55:
+        assert ties and result.recommendations[1].technique_id in ties[0]
+
+
+def _breakdown(uncertainty: float) -> ScoreBreakdown:
+    return ScoreBreakdown(
+        task_fit=1.0,
+        model_fit=1.0,
+        priority_fit=0.8,
+        benchmark_prior=0.8,
+        evidence_quality=0.6,
+        penalties=0.0,
+        uncertainty=uncertainty,
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from prompt_playoff.domain import (
     TechniqueSpec,
 )
 from prompt_playoff.measurements import MeasurementStore
+from prompt_playoff.priors import PriorEstimator
 from prompt_playoff.registry import Registry
 
 EVIDENCE_SCORES = {
@@ -30,6 +32,19 @@ EVIDENCE_SCORES = {
 #: Task types that transform something the prompt has to carry. Asked without it,
 #: the request is a topic, and the best any recipe can do is say so.
 _NEEDS_MATERIAL = {TaskType.summarization, TaskType.translation, TaskType.structured_extraction}
+
+#: How far a score built purely from declared numbers can be wrong, in score
+#: units. Read off the calibration harness: ranking on declared priors alone
+#: loses about this much outcome per contest, which is the honest width of a
+#: number nobody has checked.
+UNMEASURED_SIGMA = 0.11
+
+#: The same, once the benchmarks have had their say. Never zero: a measurement is
+#: a sample, and the request being ranked is not the one that was benchmarked.
+MEASURED_SIGMA = 0.03
+
+#: Runs of evidence at which the spread has closed most of the way.
+SIGMA_RUNS = 24.0
 
 #: What one extra model call costs a technique, by how much work the task is.
 CALL_COST = {"low": 0.09, "medium": 0.065, "high": 0.03}
@@ -70,9 +85,11 @@ def _shape_fit(
 
 
 @dataclass(frozen=True)
-class _Scored:
-    technique: TechniqueSpec
-    recommendation: Recommendation
+class RankedSelection:
+    """The scoring alone: every eligible technique in order, and why the rest went."""
+
+    ranked: list[Recommendation]
+    rejected: list[Rejection]
 
 
 @dataclass(frozen=True)
@@ -87,8 +104,17 @@ class Selector:
     def __init__(self, registry: Registry, measurements: MeasurementStore | None = None) -> None:
         self.registry = registry
         self.measurements = measurements
+        self.priors = PriorEstimator(measurements)
 
-    def select(self, task: TaskProfile, limit: int = 3) -> SelectionResult:
+    def rank(self, task: TaskProfile) -> RankedSelection:
+        """Every eligible technique, best first, with nothing dropped for variety.
+
+        :meth:`select` is what a caller wants — three techniques from three
+        different families, which is a better answer than three spellings of one
+        idea. It is the wrong thing to grade against, because the reshuffle hides
+        whether the scoring itself put the right technique on top. Calibration
+        reads this; everything else reads :meth:`select`.
+        """
         eligible: list[TechniqueSpec] = []
         rejected: list[Rejection] = []
 
@@ -110,28 +136,39 @@ class Selector:
         weights = _shape_weights(self.registry.techniques.values())
 
         candidates = [
-            _Scored(
+            self._score(
+                task,
                 technique,
-                self._score(
-                    task,
-                    technique,
-                    measured.get(technique.id),
-                    reference,
-                    _shape_fit(task.shape, technique.suits, weights),
-                ),
+                measured.get(technique.id),
+                reference,
+                _shape_fit(task.shape, technique.suits, weights),
             )
             for technique in eligible
         ]
-        candidates.sort(key=lambda item: item.recommendation.score, reverse=True)
+        candidates.sort(key=lambda item: item.score, reverse=True)
+        return RankedSelection(
+            ranked=candidates,
+            rejected=sorted(rejected, key=lambda item: item.technique_id),
+        )
+
+    def select(self, task: TaskProfile, limit: int = 3) -> SelectionResult:
+        ranking = self.rank(task)
+        candidates, rejected = ranking.ranked, ranking.rejected
         selected = self._diverse_top(candidates, limit)
         selected = self._apply_confidence(selected, candidates)
 
         warnings: list[str] = []
         if not selected:
             warnings.append("No technique satisfies all hard constraints.")
-        elif selected[0].recommendation.confidence < 0.55:
-            warnings.append("Recommendation confidence is low; run a task-specific benchmark.")
-        if not any(item.recommendation.evidence_source == "measured" for item in selected):
+        elif selected[0].confidence < 0.55:
+            tied = [item.technique_id for item in candidates if _beats(candidates[0], item) < 0.6]
+            warnings.append(
+                "The ranking cannot separate "
+                f"{', '.join(tied[:4])}{' and others' if len(tied) > 4 else ''}: on the evidence "
+                "it has, any of them could be the best here. Benchmark them against each other "
+                "to settle it."
+            )
+        if not any(item.evidence_source == "measured" for item in selected):
             warnings.append(
                 "No measured benchmark exists for this model yet; ranking uses declared priors. "
                 "Run a benchmark on the compiled prompt to replace them with real numbers."
@@ -151,7 +188,7 @@ class Selector:
                 "reusable template so the material arrives through {input}."
             )
         if task.constraints.retrieval_required and not any(
-            item.technique.tools_required for item in selected
+            self.registry.techniques[item.technique_id].tools_required for item in selected
         ):
             warnings.append(
                 "This task needs material the prompt does not contain, but no recommended "
@@ -160,8 +197,8 @@ class Selector:
             )
 
         return SelectionResult(
-            recommendations=[item.recommendation for item in selected],
-            rejected=sorted(rejected, key=lambda item: item.technique_id),
+            recommendations=selected,
+            rejected=rejected,
             warnings=warnings,
             task=task,
         )
@@ -257,23 +294,50 @@ class Selector:
                 )
                 measured_axes.append("token_efficiency")
 
-        priority_fit = (
-            priorities.quality * axes["quality"]
-            + priorities.reliability * axes["reliability"]
-            + priorities.latency * axes["latency_efficiency"]
-            + priorities.token_cost * axes["token_efficiency"]
-        )
-
         if measured is not None:
             benchmark_prior, benchmark_reason = _measured_signal(task, measured)
             evidence_quality = max(
                 EVIDENCE_SCORES[technique.evidence_level], _measured_evidence(measured)
             )
             evidence_source = "measured"
+            evidence_runs = float(measured.examples * measured.repeats)
         else:
-            benchmark_prior, benchmark_reason = self._benchmark_prior(task, technique)
+            declared = _declared_prior(task, technique)
+            estimate = self.priors.estimate(technique, task, declared)
+            benchmark_prior = estimate.value
+            benchmark_reason = estimate.reason(declared)
             evidence_quality = EVIDENCE_SCORES[technique.evidence_level]
             evidence_source = "prior"
+            evidence_runs = estimate.runs
+            if estimate.measured:
+                # The declared quality and reliability are the same author's guess
+                # the declared prior was, and the benchmarks disagree with them by
+                # the same amount. Correcting only the prior leaves the guesses
+                # outvoting the evidence in the term that weighs most.
+                axes["quality"] = _clamped(c.quality + estimate.advantage)
+                axes["reliability"] = _clamped(c.reliability + estimate.advantage)
+                measured_axes += ["quality", "reliability"]
+            # Latency and tokens were recorded by every benchmark this project has
+            # ever run, and were being ignored unless the exact cell was measured.
+            # A declared efficiency the runs contradict is the largest unexamined
+            # term left in the score.
+            if estimate.latency_efficiency is not None:
+                axes["latency_efficiency"] = self.priors.shrink_toward(
+                    c.latency_efficiency, estimate.latency_efficiency, estimate.runs
+                )
+                measured_axes.append("latency_efficiency")
+            if estimate.token_efficiency is not None:
+                axes["token_efficiency"] = self.priors.shrink_toward(
+                    c.token_efficiency, estimate.token_efficiency, estimate.runs
+                )
+                measured_axes.append("token_efficiency")
+
+        priority_fit = (
+            priorities.quality * axes["quality"]
+            + priorities.reliability * axes["reliability"]
+            + priorities.latency * axes["latency_efficiency"]
+            + priorities.token_cost * axes["token_efficiency"]
+        )
 
         penalty = (1 - c.simplicity) * 0.045
         # An extra model call is cheap on work that genuinely has steps and dear on
@@ -345,6 +409,7 @@ class Selector:
             confidence=0.0,
             reasons=reasons,
             breakdown=ScoreBreakdown(
+                uncertainty=round(_uncertainty(evidence_runs), 4),
                 task_fit=round(task_fit, 4),
                 shape_fit=round(shape_fit, 4),
                 model_fit=round(model_fit, 4),
@@ -367,33 +432,13 @@ class Selector:
         return f"General-purpose fallback for {task.task_type.value}."
 
     @staticmethod
-    def _benchmark_prior(task: TaskProfile, technique: TechniqueSpec) -> tuple[float, str]:
-        keys = [
-            f"task:{task.task_type.value}",
-            f"provider:{task.model.provider}",
-            f"class:{task.model.model_class.value}",
-            "default",
-        ]
-        weighted: list[tuple[float, float, str]] = []
-        weights = [0.45, 0.25, 0.20, 0.10]
-        for key, weight in zip(keys, weights, strict=True):
-            if key in technique.benchmark_priors:
-                weighted.append((technique.benchmark_priors[key], weight, key))
-        if not weighted:
-            return 0.5, "No matching benchmark prior; using a neutral prior."
-        total_weight = sum(item[1] for item in weighted)
-        score = sum(value * weight for value, weight, _ in weighted) / total_weight
-        matched = ", ".join(key for _, _, key in weighted)
-        return score, f"Unmeasured prior {score:.2f} from: {matched}."
-
-    @staticmethod
-    def _diverse_top(candidates: list[_Scored], limit: int) -> list[_Scored]:
-        selected: list[_Scored] = []
+    def _diverse_top(candidates: list[Recommendation], limit: int) -> list[Recommendation]:
+        selected: list[Recommendation] = []
         used_families: set[str] = set()
         for candidate in candidates:
-            if candidate.technique.family not in used_families:
+            if candidate.family not in used_families:
                 selected.append(candidate)
-                used_families.add(candidate.technique.family)
+                used_families.add(candidate.family)
             if len(selected) == limit:
                 return selected
         for candidate in candidates:
@@ -404,25 +449,80 @@ class Selector:
         return selected
 
     @staticmethod
-    def _apply_confidence(selected: list[_Scored], all_candidates: list[_Scored]) -> list[_Scored]:
+    def _apply_confidence(
+        selected: list[Recommendation], all_candidates: list[Recommendation]
+    ) -> list[Recommendation]:
+        """The chance this technique really beats the best of the others.
+
+        What stood here was a blend of three numbers that between them estimated
+        nothing: a technique with a confident-looking 0.71 beside it was no more
+        likely to be right than one with 0.58, and the figure could not be checked
+        against anything. This one can. Each score carries a spread, the spread
+        narrows as benchmarks accumulate, and the answer is the probability that
+        the gap between two scores survives both spreads.
+
+        Read it as a two-horse race, deliberately. The probability of being best of
+        sixty near-tied candidates is a number too small to print and too small to
+        act on; the probability of beating the runner-up is the question a person
+        actually has — take this one, or take the next?
+        """
         if not selected:
             return selected
-        top_score = all_candidates[0].recommendation.score
-        second_score = all_candidates[1].recommendation.score if len(all_candidates) > 1 else 0.0
-        margin = max(0.0, top_score - second_score)
-        updated: list[_Scored] = []
-        for index, item in enumerate(selected):
-            evidence = item.recommendation.breakdown.evidence_quality
-            benchmark = item.recommendation.breakdown.benchmark_prior
-            rank_factor = max(0.65, 1 - index * 0.12)
-            confidence = min(
-                0.98, (0.48 * evidence + 0.37 * benchmark + 0.15 * min(1, margin * 8)) * rank_factor
-            )
-            recommendation = item.recommendation.model_copy(
-                update={"confidence": round(confidence, 4)}
-            )
-            updated.append(_Scored(item.technique, recommendation))
+        updated: list[Recommendation] = []
+        for item in selected:
+            rival = next((other for other in all_candidates if other is not item), None)
+            if rival is None:
+                #: Nothing to lose to. Certainty about a field of one is honest.
+                updated.append(item.model_copy(update={"confidence": 0.98}))
+                continue
+            updated.append(item.model_copy(update={"confidence": round(_beats(item, rival), 4)}))
         return updated
+
+
+def _uncertainty(runs: float) -> float:
+    """How wide a score's spread is, given the runs of evidence behind it."""
+    closeness = math.sqrt(SIGMA_RUNS / (SIGMA_RUNS + max(runs, 0.0)))
+    return MEASURED_SIGMA + (UNMEASURED_SIGMA - MEASURED_SIGMA) * closeness
+
+
+def _beats(item: Recommendation, rival: Recommendation) -> float:
+    """P(item scores above rival), both scores being uncertain by their own spread."""
+    spread = math.hypot(item.breakdown.uncertainty, rival.breakdown.uncertainty)
+    if spread <= 0:
+        return 0.98 if item.score > rival.score else 0.02
+    #: The normal CDF, which the standard library spells as an error function.
+    probability = 0.5 * (1 + math.erf((item.score - rival.score) / (spread * math.sqrt(2))))
+    return min(0.98, max(0.02, probability))
+
+
+def _clamped(value: float) -> float:
+    return min(1.0, max(0.0, value))
+
+
+def _declared_prior(task: TaskProfile, technique: TechniqueSpec) -> float:
+    """The number the technique file claims, before any measurement moves it.
+
+    This is now a starting point rather than a verdict: :mod:`prompt_playoff.priors`
+    shifts it by what the benchmarks actually found. It stays because a technique
+    nobody has measured still has to be placed somewhere, and its author's reading
+    of the paper is a better guess than 0.5.
+    """
+    keys = [
+        f"task:{task.task_type.value}",
+        f"provider:{task.model.provider}",
+        f"class:{task.model.model_class.value}",
+        "default",
+    ]
+    weights = [0.45, 0.25, 0.20, 0.10]
+    weighted = [
+        (technique.benchmark_priors[key], weight)
+        for key, weight in zip(keys, weights, strict=True)
+        if key in technique.benchmark_priors
+    ]
+    if not weighted:
+        return 0.5
+    total_weight = sum(weight for _, weight in weighted)
+    return sum(value * weight for value, weight in weighted) / total_weight
 
 
 def _measured_signal(task: TaskProfile, measured: MeasuredEvidence) -> tuple[float, str]:

@@ -14,6 +14,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from prompt_playoff import __version__
+from prompt_playoff.calibration import MIN_RUNS, calibration_payload, evaluate
 from prompt_playoff.checks import CheckConfigError, CheckRun, run_checks
 from prompt_playoff.deployment import export_runtime
 from prompt_playoff.domain import (
@@ -30,6 +31,7 @@ from prompt_playoff.domain import (
 from prompt_playoff.evals import BenchmarkReport, load_jsonl
 from prompt_playoff.graders import describe, grader_names
 from prompt_playoff.lint import format_issues, has_errors, lint_registry, registry_summary
+from prompt_playoff.measurements import MeasurementStore
 from prompt_playoff.model_profiles import ModelProfileStore
 from prompt_playoff.normalizer import parse_capabilities
 from prompt_playoff.optimizer import BACKENDS
@@ -1095,6 +1097,84 @@ def list_datasets() -> None:
             str(sum(1 for item in examples if item.response_schema is not None)),
         )
     console.print(table)
+
+
+@app.command("selector-eval")
+def selector_eval(
+    min_runs: Annotated[
+        int, typer.Option(min=1, help="Runs behind a number before it may decide a contest.")
+    ] = MIN_RUNS,
+    json_output: Annotated[bool, typer.Option("--json", help="Print the raw report.")] = False,
+) -> None:
+    """Grade the ranking against measurements it was not allowed to see.
+
+    Spends no model calls: every contest is one already in the measurement store,
+    replayed with that cell hidden. The number to read is the lift — how much of
+    a coin flip's regret the ranking actually avoids.
+    """
+    report = evaluate(Registry.load(), MeasurementStore(), min_runs=min_runs)
+    if json_output:
+        console.print_json(json.dumps(calibration_payload(report), indent=2))
+        return
+
+    if not report.trials:
+        console.print(
+            "[yellow]No settled contest in the measurement store.[/yellow] "
+            f"A cell needs two techniques benchmarked on the same task, model and "
+            f"dataset, each on at least {min_runs} runs."
+        )
+        return
+
+    table = Table(title="Blind ranking vs measured outcome")
+    table.add_column("Regret", justify="right")
+    table.add_column("Task")
+    table.add_column("Model")
+    table.add_column("Dataset")
+    table.add_column("Ranking chose")
+    table.add_column("Actually won")
+    table.add_column("Rank of winner", justify="right")
+    for trial in report.trials:
+        colour = "red" if trial.regret > 0.1 else "yellow" if trial.regret > 0 else "green"
+        table.add_row(
+            f"[{colour}]{trial.regret:+.3f}[/{colour}]",
+            trial.task_type.value,
+            trial.model_id,
+            trial.dataset,
+            trial.predicted,
+            trial.best,
+            f"{trial.rank_of_best}/{len(trial.entrants)}",
+        )
+    console.print(table)
+
+    summary = report.summary()
+    reconstructed = summary["cells_graded"] - summary["with_recorded_request"]
+    console.print(
+        f"[bold]{summary['cells_graded']}[/bold] contests graded, "
+        f"{summary['cells_skipped']} skipped for want of a rival"
+        + (
+            f"; [yellow]{reconstructed}[/yellow] ran before the store kept the request, "
+            "so their shape and constraints are reconstructed rather than replayed."
+            if reconstructed
+            else "."
+        )
+    )
+    console.print(
+        f"top-1 accuracy [bold]{summary['top1_accuracy']:.0%}[/bold], "
+        f"mean regret [bold]{summary['mean_regret']:.3f}[/bold] "
+        f"against a coin flip's [bold]{summary['coin_flip_regret']:.3f}[/bold]."
+    )
+    console.print(
+        f"stated confidence [bold]{summary['mean_confidence']:.0%}[/bold] against "
+        f"[bold]{summary['pairwise_accuracy']:.0%}[/bold] of those pairs actually going "
+        f"that way ({summary['calibration_error']:+.1%})."
+    )
+    lift = report.lift
+    verdict = (
+        "the ranking is a coin flip with extra steps"
+        if abs(lift) < 0.05
+        else ("following it is worse than not" if lift < 0 else "the ranking earns its place")
+    )
+    console.print(f"lift [bold]{lift:+.2f}[/bold] — {verdict}.")
 
 
 @app.command("capabilities")

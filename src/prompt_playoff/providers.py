@@ -187,7 +187,7 @@ class OllamaProvider:
     ) -> ModelResult:
         payload: dict = {
             "model": model.model_id,
-            "messages": [message.model_dump() for message in prompt.messages],
+            "messages": [message.wire() for message in prompt.messages],
             "stream": False,
             "options": prompt.generation_options,
         }
@@ -249,7 +249,7 @@ class OpenAICompatibleProvider:
     ) -> ModelResult:
         payload: dict = {
             "model": model.model_id,
-            "messages": [message.model_dump() for message in prompt.messages],
+            "messages": [message.wire() for message in prompt.messages],
             "temperature": prompt.generation_options.get("temperature", 0.1),
         }
         if prompt.response_schema:

@@ -25,7 +25,9 @@ from prompt_playoff.domain import (
     ExecutionTrace,
     Exemplar,
     MeasuredEvidence,
+    MeasuredRequest,
     Message,
+    ModelProfile,
     TaskProfile,
     TechniqueSpec,
 )
@@ -114,6 +116,16 @@ class BenchmarkReport(BaseModel):
     dataset_revision: str | None = None
     grader_version: str = "deterministic-graders-v1"
     seed_policy: str = "repeat-index"
+    #: The recorded run this report became, when `record` was on. It is what a
+    #: release registered from this prompt points back to.
+    experiment_id: str | None = None
+    #: Fingerprint of the authored prompt this run measured, when one was
+    #: supplied. Absent means the technique was compiled per example, so the run
+    #: is evidence about the recipe rather than about anybody's prompt.
+    authored_hash: str | None = None
+    #: The request this run measured, beyond its task type. Without it a score is
+    #: a number about an unrecorded question, and two of them cannot be compared.
+    request: MeasuredRequest | None = None
 
     def to_evidence(self) -> MeasuredEvidence:
         return MeasuredEvidence(
@@ -129,6 +141,7 @@ class BenchmarkReport(BaseModel):
             repeats=self.repeats,
             dataset=self.dataset,
             recorded_at=self.finished_at,
+            request=self.request,
         )
 
 
@@ -162,6 +175,38 @@ class ComparisonReport(BaseModel):
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
+def dataset_revision(dataset: list[BenchmarkExample]) -> str:
+    """Which rows a number was measured on, as one string.
+
+    Recorded with every run and recomputed when a release is judged: a bar
+    cleared on rows that have since been edited was cleared on data that no
+    longer exists.
+    """
+    return hashlib.sha256(
+        json.dumps(
+            [item.model_dump(mode="json") for item in dataset],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+
+
+def prompt_fingerprint(program: CompiledProgram | dict[str, Any]) -> str:
+    """One hash of a prompt, computed the same way wherever it is asked for.
+
+    A release cites a run, and until both sides hashed the same thing the
+    citation was a claim rather than a fact: the release hashed a compiled
+    program, the run hashed a preview with a benchmark row already substituted
+    into it, and no comparison between them was possible. This hashes the
+    program as supplied — before any row goes in — so the two are the same
+    string exactly when they are the same prompt.
+    """
+    payload = program if isinstance(program, dict) else program.model_dump(mode="json")
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+
 def authored_for(program: CompiledProgram, example: BenchmarkExample) -> CompiledProgram:
     """The prompt as it was written, with this row's input where the task's stood.
 
@@ -172,9 +217,7 @@ def authored_for(program: CompiledProgram, example: BenchmarkExample) -> Compile
     task carries that task's own words, and either way the row's input takes
     their place.
     """
-    written = "\n".join(
-        message.content for stage in program.stages for message in stage.messages
-    )
+    written = "\n".join(message.content for stage in program.stages for message in stage.messages)
     source = program.source_input.strip()
     slot = "{input}" if "{input}" in written else source
     if not slot or slot not in written:
@@ -300,7 +343,16 @@ class BenchmarkRunner:
                     )
 
         finished = _now()
-        scorecard = build_scorecard(runs, repeats)
+        # A technique brings its own validators, and json_validity is one of the
+        # commonest. On a task that never asked for JSON, letting that stand as
+        # the headline turns "the model answered in prose, as asked" into
+        # "quality 0.22" — an accusation nobody made. The contract graders still
+        # run and still feed reliability; they are simply not allowed to speak
+        # for correctness unless a shape was actually required.
+        shape_required = task.constraints.strict_json or any(
+            example.response_schema is not None for example in dataset
+        )
+        scorecard = build_scorecard(runs, repeats, quality_from_contract=shape_required)
         declared = {
             "quality": technique.characteristics.quality,
             "reliability": technique.characteristics.reliability,
@@ -317,6 +369,11 @@ class BenchmarkRunner:
             repeats=repeats,
             started_at=started,
             finished_at=finished,
+            request=MeasuredRequest(
+                shape=set(task.shape),
+                complexity=task.complexity,
+                constraints=task.constraints,
+            ),
             scorecard=scorecard,
             declared=declared,
             prior=technique.benchmark_priors.get(f"task:{task.task_type.value}")
@@ -327,14 +384,9 @@ class BenchmarkRunner:
             },
             runs=runs,
             prompt_preview=preview,
-            dataset_revision=hashlib.sha256(
-                json.dumps(
-                    [item.model_dump(mode="json") for item in dataset],
-                    sort_keys=True,
-                    ensure_ascii=False,
-                ).encode()
-            ).hexdigest(),
+            dataset_revision=dataset_revision(dataset),
             seed_policy=f"repeat-index:0..{repeats - 1}",
+            authored_hash=prompt_fingerprint(authored) if authored is not None else None,
         )
 
     def _grade(
@@ -368,15 +420,27 @@ class BenchmarkRunner:
             cost_usd=_cost_usd(
                 trace.prompt_tokens,
                 trace.completion_tokens,
-                task.model.input_cost_per_million_usd,
-                task.model.output_cost_per_million_usd,
+                trace.latency_seconds,
+                task.model,
             ),
             aggregation=trace.aggregation,
             schema_errors=schema_errors,
         )
 
 
-def build_scorecard(runs: list[ExampleRun], repeats: int) -> Scorecard:
+def build_scorecard(
+    runs: list[ExampleRun], repeats: int, *, quality_from_contract: bool = True
+) -> Scorecard:
+    """Fold the grades into one card.
+
+    ``quality_from_contract`` is whether a contract grader — one that checks the
+    shape of an answer rather than what it says — may stand as the headline
+    quality number. It may when the task actually required a shape; when it did
+    not, a low json_validity means the model wrote prose to a task that asked
+    for prose, and reporting that as quality would be a wrong answer to a
+    question nobody asked. Then the card carries no quality grader at all, which
+    every surface already knows how to say.
+    """
     if not runs:
         raise ValueError("No runs to score")
 
@@ -386,7 +450,12 @@ def build_scorecard(runs: list[ExampleRun], repeats: int) -> Scorecard:
         for name in grade_names
     }
 
-    quality_grader = next((name for name in QUALITY_PREFERENCE if name in grades), None)
+    eligible = [
+        name
+        for name in QUALITY_PREFERENCE
+        if name in grades and (quality_from_contract or name not in RELIABILITY_GRADERS)
+    ]
+    quality_grader = eligible[0] if eligible else None
     quality = grades.get(quality_grader, 0.0) if quality_grader else 0.0
 
     contract_names = [name for name in grade_names if name in RELIABILITY_GRADERS]
@@ -433,12 +502,33 @@ def build_scorecard(runs: list[ExampleRun], repeats: int) -> Scorecard:
 def _cost_usd(
     prompt_tokens: int,
     completion_tokens: int,
-    input_rate: float | None,
-    output_rate: float | None,
+    latency_seconds: float,
+    model: ModelProfile,
 ) -> float | None:
-    if input_rate is None or output_rate is None:
-        return None
-    return round((prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000, 8)
+    """What this one answer cost, by whichever meter the model is actually on.
+
+    A hosted model is billed per token and a self-hosted one is billed per hour
+    of the machine it occupies, so the two are priced from different numbers and
+    only meet again as dollars. Token rates win where both are set, because a
+    metered bill is the real one; the hourly rate then describes a box that is
+    not being paid for by the second. Neither set means the cost is unknown,
+    which is a different statement from free and is reported as such.
+    """
+    if (
+        model.input_cost_per_million_usd is not None
+        and model.output_cost_per_million_usd is not None
+    ):
+        return round(
+            (
+                prompt_tokens * model.input_cost_per_million_usd
+                + completion_tokens * model.output_cost_per_million_usd
+            )
+            / 1_000_000,
+            8,
+        )
+    if model.hardware_cost_per_hour_usd is not None:
+        return round(latency_seconds * model.hardware_cost_per_hour_usd / 3600, 8)
+    return None
 
 
 def _stability(runs: list[ExampleRun], repeats: int) -> float:

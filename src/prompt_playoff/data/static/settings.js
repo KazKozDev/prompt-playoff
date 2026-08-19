@@ -206,6 +206,7 @@ function updateSetting(event) {
   else if (role === 'engine') {
     ++state.compileVersion;
     state.program = null;
+    state.provenance = null;
   }
   refreshSettingsIndicators(role);
   updateWorkspaceContext();

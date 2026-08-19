@@ -107,7 +107,6 @@
     .lifecycle-nav a { display:flex; align-items:center; gap:9px; margin:1px 0; padding:6px 8px 6px 18px; border-left:2px solid transparent; border-radius:0 var(--r-sm) var(--r-sm) 0; color:var(--text-2); font-size:var(--fs-sm); text-decoration:none; }
     .lifecycle-nav a:hover { background:var(--wash); color:var(--text); }
     .lifecycle-nav a[aria-current="page"] { border-left-color:var(--accent); background:var(--accent-soft); color:var(--text); }
-    .lifecycle-nav a:focus-visible, .context-utilities a:focus-visible, .bottom-nav a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     /* Appearance sits with the environment, at the foot of the rail, not in a
        menu: three words, and Auto means the system decides. */
     .sidebar-foot { margin-top:auto; padding-top:13px; border-top:1px solid var(--border); }
@@ -138,8 +137,6 @@
     .tile.wide:hover { transform:none; }
     .tile.wide p { margin:4px 0 0; max-width:64ch; color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
     .tile.wide strong { font-size:var(--fs-lead); font-weight:600; }
-    .smart-mark { display:grid; flex:0 0 40px; width:40px; height:40px; place-items:center; border-radius:50%; background:var(--accent); color:var(--on-accent); }
-    .smart-mark .i { width:20px; height:20px; }
     button.smart-start { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:10px 22px; }
     /* A long chain has to say which link it is on, or it reads as a hang. */
     .smart-status { grid-column:1/-1; margin:0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
@@ -399,6 +396,9 @@
     .ring-fill { fill:none; stroke:var(--accent); stroke-width:9; stroke-linecap:round; }
     .verdict.up .ring-fill { stroke:var(--good); }
     .verdict.down .ring-fill { stroke:var(--bad); }
+    /* An empty ring, for a run nothing could grade: a filled arc at zero would
+       read as "every answer wrong", which is a heavier claim than the truth. */
+    .ring.unscored b { color:var(--muted); }
     .ring b { font-size:23px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
     .ring span { position:absolute; bottom:16px; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
     .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:18px 0 0; }
@@ -483,9 +483,6 @@
     /* The one button that walks the whole lifecycle, where a first-time user
        looks first: the top of the rail, above the map of parts. */
     .rail-smart { margin:0 0 14px; padding:13px; border:1px solid var(--accent-line); border-radius:var(--r-lg); background:var(--accent-soft); }
-    .rail-smart-top { display:flex; align-items:center; gap:10px; }
-    .rail-smart-mark { display:grid; flex:0 0 32px; width:32px; height:32px; place-items:center; border-radius:50%; background:var(--accent); color:var(--on-accent); }
-    .rail-smart-mark .i { width:17px; height:17px; }
     .rail-smart strong { display:block; color:var(--text); font-size:var(--fs-sm); font-weight:600; }
     .rail-smart small { display:block; color:var(--text-2); font-size:var(--fs-micro); line-height:1.4; }
     button.rail-smart-start { margin-top:11px; padding:9px; font-size:var(--fs-sm); }
@@ -513,7 +510,10 @@
        put while a long report is read: it is the answer to "what am I looking
        at" on every screenful. */
     .run-side { min-width:0; }
-    @media (min-width:900px) { .run-side { position:sticky; top:74px; } }
+    /* Sticky, and now taller than it was: with how the measurement is taken
+       written under the prompt, the column can outrun a short window, so it
+       scrolls inside itself rather than holding its foot off the bottom. */
+    @media (min-width:900px) { .run-side { position:sticky; top:74px; max-height:calc(100vh - 92px); overflow-y:auto; overscroll-behavior:contain; } }
     /* Inside its own plate the block brings no second surface. */
     .run-subject { margin:0; padding:0; border:0; background:none; }
     .subject-top { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
@@ -536,6 +536,48 @@
     .subject-note { margin:11px 0 0; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
     .subject-empty { color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
     .subject-empty a { color:var(--accent-ink); }
+    /* How the number is made, under the thing it will be made from. Three
+       numbered steps, then the two facts the steps depend on and the screen
+       cannot assume: whose rows these are, and what will score the answers. It
+       is reading rather than a control, so it carries no surface of its own —
+       a rule across the column separates it from the prompt above. */
+    .how-measured { margin:20px 0 0; padding-top:18px; border-top:1px solid var(--border); }
+    .how-measured .stage-title { margin:0 0 10px; }
+    .how-steps { margin:0; padding:0; list-style:none; counter-reset:how-step; }
+    .how-steps li { position:relative; margin:0 0 11px; padding-left:26px; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; counter-increment:how-step; }
+    .how-steps li:last-child { margin-bottom:0; }
+    .how-steps li::before { content:counter(how-step); position:absolute; top:1px; left:0; display:grid; place-items:center; width:17px; height:17px; border:1px solid var(--border-strong); border-radius:50%; color:var(--muted); font-size:var(--fs-micro); }
+    .how-steps b, .how-steps strong { color:var(--text); font-weight:600; }
+    .how-steps a, .how-note a { color:var(--accent-ink); text-underline-offset:3px; }
+    .how-block { margin:17px 0 0; }
+    .how-label { color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+    .how-note { margin:7px 0 0; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .how-note strong { color:var(--text-2); font-weight:600; }
+    .how-note code, .grader-line code { color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
+    /* One grader per line: its name, what it does to the headline numbers when
+       it is one of the two that do, and the sentence the server uses for it
+       everywhere else. */
+    .grader-list { margin:8px 0 0; padding:0; list-style:none; }
+    .grader-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px; padding:7px 0; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
+    .grader-line > span:last-child { flex:1 1 100%; }
+    .grader-role { padding:1px 8px; border:1px solid var(--border); border-radius:999px; font-size:var(--fs-micro); }
+    .grader-line.headline code { color:var(--accent-ink); }
+    .grader-line.headline .grader-role { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-ink); }
+    /* The way in for someone with no rows of their own, standing where the
+       meaningless click used to be. Folded, because it is an offer and not a
+       step: open it and it is the whole first half of the screen. */
+    .own-rows { margin:14px 0 0; border:1px solid var(--accent-line); border-radius:var(--r-md); background:var(--accent-soft); }
+    .own-rows > summary { cursor:pointer; padding:12px 14px; color:var(--text); font-size:var(--fs-sm); }
+    .own-rows > summary strong { font-weight:600; }
+    .own-rows > summary small { display:block; margin-top:3px; color:var(--text-2); font-size:var(--fs-sm); line-height:1.5; }
+    .own-rows > summary:hover { background:var(--wash); }
+    .own-rows-body { padding:0 14px 14px; }
+    .own-rows-body .field-hint { margin:0 0 10px; }
+    .own-rows-body textarea { width:100%; min-height:120px; }
+    .own-rows-body .field-hint:last-child { margin:10px 0 0; }
+    .own-rows-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px; }
+    .own-rows-actions button { width:auto; margin:0; }
+    .own-rows-status { color:var(--muted); font-size:var(--fs-sm); }
     .run-setup .task-title { margin-bottom:0; }
     .run-setup .quality-form { margin-top:16px; }
     .run-setup .estimate { margin-top:14px; }
@@ -568,16 +610,21 @@
     .context-artifact:hover code { color:var(--text); }
     .context-artifact:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .context-artifacts code { max-width:150px; overflow:hidden; color:var(--text-2); font:var(--fs-micro)/1.5 var(--mono); text-overflow:ellipsis; }
-    .context-utilities { display:flex; gap:6px; }
-    .context-utilities a { padding:5px 8px; border:1px solid var(--border); border-radius:var(--r-sm); color:var(--muted); font-size:var(--fs-sm); text-decoration:none; }
-    .context-utilities a:hover, .context-utilities a[aria-current="page"] { border-color:var(--border-strong); color:var(--text); }
     .menu-button { display:none; width:38px; height:38px; margin:0; padding:0; place-items:center; }
         .workspace-main { width:100%; max-width:1480px; margin:0 auto; padding:26px 30px 72px; }
-    .layout { display:grid; grid-template-columns:minmax(300px,380px) 1fr; gap:18px; align-items:start; }
-    .layout.global-view { display:block; }
+    /* Two columns on the four screens the prompt is written and run on, one on
+       the other sixteen. Switching that with `display:block` moved the reading
+       column four hundred pixels sideways between one click and the next, which
+       read as the page reloading. The grid stays a grid and the left track is
+       closed instead, so the same change happens as a movement you can follow. */
+    .layout { display:grid; grid-template-columns:minmax(300px,380px) minmax(0,1fr); gap:18px; align-items:start; transition:grid-template-columns .2s ease, gap .2s ease; }
+    .layout.global-view { grid-template-columns:0 minmax(0,1fr); gap:0; }
     .layout.global-view #composer-column, .layout.global-view #results { display:none; }
-    .layout.global-view #content-column { width:100%; }
+    /* The hidden column stops being a grid item, so auto-placement would drop
+       the reading column into the closed track. It is placed across both. */
+    .layout.global-view #content-column { grid-column:1 / -1; }
     .layout.global-view #detail { min-height:calc(100vh - 140px); border-radius:var(--r-md); }
+    @media (prefers-reduced-motion:reduce) { .layout { transition:none; } }
     .drawer-backdrop, .bottom-nav { display:none; }
     .panel { border:1px solid var(--border); background:var(--panel); border-radius:var(--r-lg); padding:24px; box-shadow:var(--shadow); }
     .panel + .panel { margin-top:18px; }
@@ -585,6 +632,11 @@
     h3 { margin:0 0 12px; font-size:var(--fs-micro); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
     label { display:block; font-size:var(--fs-sm); color:var(--muted); margin:12px 0 6px; }
     textarea, input, select { width:100%; border:1px solid var(--border); border-radius:var(--r-md); padding:11px 14px; background:var(--panel2); color:var(--text); font-family:inherit; font-size:var(--fs-base); line-height:1.5; }
+    /* The rule above is written for the fields you type into. A tick box is not
+       one of them: left in it, the box stretches to the full width of its row
+       and pushes the sentence beside it off the panel. Every tick and every
+       radio in the app is the browser's own control, in the accent. */
+    input[type="checkbox"], input[type="radio"] { width:auto; padding:0; border:0; background:none; accent-color:var(--accent); }
     textarea:focus-visible, input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, .helplink:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     textarea { min-height:112px; resize:vertical; }
     /* Three weights of button, one box. Filled accent is the action the page
@@ -599,6 +651,12 @@
     button.ghost { background:transparent; border-color:var(--border); color:var(--text); font-weight:500; }
     button.ghost:hover:not(:disabled) { border-color:var(--border-strong); background:var(--wash); }
     button:disabled { opacity:.45; cursor:wait; }
+    /* The one choice the upload screen asks for, in the shape every other
+       either/or on this app uses: the box, then what ticking it promises. */
+    .keep-rows { display:flex; gap:10px; align-items:flex-start; margin-top:12px; cursor:pointer; }
+    .keep-rows input { flex:0 0 auto; margin-top:2px; }
+    .keep-rows strong { display:block; color:var(--text); font-size:var(--fs-sm); font-weight:600; }
+    .keep-rows small { display:block; margin-top:2px; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     .upload-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch; margin-top:8px; }
     .upload-row input[type="file"] { min-width:0; padding:4px; font-size:var(--fs-sm); color:var(--muted); }
     .upload-row input[type="file"]::file-selector-button { border:0; border-right:1px solid var(--border); margin:-4px 10px -4px -4px; padding:9px 12px; background:var(--sunken); color:var(--text); font:inherit; font-size:var(--fs-sm); font-weight:500; cursor:pointer; }
@@ -618,19 +676,51 @@
     @media (min-width:1100px) {
       .screen-split { grid-template-columns:minmax(320px,380px) minmax(0,1fr); }
     }
-    /* The builder is the same three zones, with the halves the other way round:
-       its work is a table of generated rows and a deck of counts, which does not
-       fit the narrow column the upload control is happy in. The notes beside it
-       do, and they are read once rather than scanned across. */
+    /* The same three zones with the halves the other way round, for the screens
+       whose work is a wide table or a long catalogue and will not fit the column
+       an upload control is happy in. The notes beside it do fit, and they are
+       read once rather than scanned across. */
     @media (min-width:1100px) {
-      .screen-split.builder-split { grid-template-columns:minmax(0,1fr) minmax(300px,340px); }
+      .screen-split.work-wide { grid-template-columns:minmax(0,1fr) minmax(300px,340px); }
       /* The rows are a long scroll and the notes are about those rows, so the
          notes travel with them rather than sitting at the top of a table you
          have already scrolled past. Its own scrollbar appears only when the
          column is taller than the window. */
-      .builder-split .screen-guide { position:sticky; top:74px; max-height:calc(100vh - 96px); overflow:auto; }
+      .work-wide .screen-guide { position:sticky; top:74px; max-height:calc(100vh - 96px); overflow:auto; }
     }
     .build-work { min-width:0; }
+    /* A list of model ids is short lines, not prose. The field stands in the
+       wide half, so it is held to the width of the longest id anyone would type
+       and set in the type ids are written in — a 900px box for `qwen3:8b` reads
+       as an invitation to write a paragraph into it. */
+    .matrix-models { max-width:46ch; min-height:132px; font:var(--fs-base)/1.7 var(--mono); }
+    /* The row a comparison settled on, marked in the table as well as named in
+       the card above it: two rows and one word of prose is a reading, three
+       rows and the same word is a search. */
+    tr.row-win td { background:var(--accent-soft); }
+    tr.row-win td:first-child { box-shadow:inset 2px 0 0 var(--accent-line); font-weight:600; }
+    /* And the row that failed something, in the colour failure has everywhere
+       else on the page. */
+    tr.row-bad td:first-child { box-shadow:inset 2px 0 0 var(--bad-line); font-weight:600; }
+    tr.row-bad td { color:var(--text-2); }
+    /* The shelf of bundled benchmarks is two blocks of the same kind stacked in
+       the work column — one surface each, with the page showing between them,
+       the way every other unplated screen sets its parts down. */
+    .build-work > .shelf { margin-top:18px; }
+    .shelf-count { margin:0; max-width:88ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .shelf .guide-lead { max-width:88ch; }
+    .shelf .table-scroll { margin-top:14px; }
+    /* The width every wide table is held to would only put a scrollbar under a
+       name and a count that already fit. */
+    .shelf .table-scroll table { min-width:0; }
+    /* The shelf that carries a repository and a licence is prose in a table,
+       like the business list: it aligns as text, and only the count is a number
+       compared down its column. */
+    .shelf-list th, .shelf-list td { text-align:left; vertical-align:top; font-variant-numeric:normal; }
+    .shelf-list th:nth-child(2), .shelf-list td:nth-child(2) { text-align:right; font-variant-numeric:tabular-nums; }
+    .shelf-list td:nth-child(3) { min-width:20ch; color:var(--text-2); }
+    .shelf .meta { display:block; margin-top:2px; line-height:1.45; }
+    .licence-name { color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); white-space:nowrap; }
     /* Each note is a claim about the project on screen, so it carries the same
        three colours the deck does rather than a decorative mark of its own. */
     .advice-list { margin:14px 0 0; padding:0; list-style:none; }
@@ -682,7 +772,7 @@
     .mode-option { display:flex; gap:10px; align-items:flex-start; min-width:0; margin:0; padding:13px 15px; border:1.5px solid var(--border); border-radius:var(--r-md); background:var(--panel2); color:var(--muted); cursor:pointer; line-height:1.4; }
     .mode-option:has(input:checked) { border-color:var(--accent-line); color:var(--text); background:var(--accent-soft); }
     .mode-option:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
-    .mode-option input { width:auto; margin:2px 0 0; accent-color:var(--accent); }
+    .mode-option input { margin:2px 0 0; }
     .mode-option strong { display:block; color:inherit; font-size:var(--fs-base); font-weight:600; }
     .mode-option small { display:block; margin-top:3px; color:var(--muted); font-size:var(--fs-sm); }
     .task-error { min-height:18px; margin-top:8px; color:var(--bad-text); font-size:var(--fs-sm); line-height:1.5; }
@@ -692,10 +782,12 @@
     /* One drawn chevron for every disclosure in the app, masked so it takes
        the colour of its summary and turns instead of swapping glyphs. */
     .disclosure-mark, .advanced-disclosure > summary::before, .other-methods > summary::before,
-    .rejected > summary::before, .method > summary::before, .technique-blueprint > summary::before {
+    .rejected > summary::before, .method > summary::before, .technique-blueprint > summary::before,
+    .evidence > summary::before {
       content:''; display:inline-block; flex:0 0 auto; width:13px; height:13px; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 5 7 7-7 7'/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 5 7 7-7 7'/%3E%3C/svg%3E") center/contain no-repeat; transition:transform .18s ease; }
     .advanced-disclosure[open] > summary::before, .other-methods[open] > summary::before,
-    .rejected[open] > summary::before, .method[open] > summary::before, .technique-blueprint[open] > summary::before { transform:rotate(90deg); }
+    .rejected[open] > summary::before, .method[open] > summary::before, .technique-blueprint[open] > summary::before,
+    .evidence[open] > summary::before { transform:rotate(90deg); }
     .advanced-disclosure > summary:hover, .other-methods > summary:hover { color:var(--text); }
     .advanced-content { padding-top:8px; }
     .advanced-inline { margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
@@ -740,25 +832,47 @@
     .hub-note { margin:10px 0 0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.5; }
     .hub-link { color:var(--muted); font-size:var(--fs-sm); text-underline-offset:3px; }
     .hub-link:hover { color:var(--text); }
-    /* Rows sit flush against one another, so the selection ring has no room
-       outside the row box: it landed on the neighbour, and above the first
-       alternative it struck through the disclosure summary. The box is bled
-       sideways into the panel's padding and the ring drawn inside it. */
-    .result { border-top:1px solid var(--border); padding:16px 12px; margin:0 -12px; }
-    .result:first-child { border-top:0; margin-top:-16px; }
-    .topline { display:flex; gap:12px; justify-content:space-between; align-items:flex-start; }
     .rank { color:var(--muted); font-weight:600; font-size:var(--fs-sm); }
     .meta { color:var(--muted); font-size:var(--fs-sm); margin-top:4px; }
     .score { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    .recommended-label { margin-bottom:8px; color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
-    .method-explanation { margin:8px 0 0; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
+    /* ---- the method list ----------------------------------------------------
+       Hairline-separated rows gave every element on the row the same weight, so
+       the heaviest thing in each one was the bordered blueprint box sitting
+       against the bordered button: two identical slabs, neither of them the
+       action. Each method is now a card, with one solid control at its foot and
+       everything optional above it drawn as plain text. */
+    .results-head { margin-bottom:18px; }
+    .results-lead { margin:6px 0 0; color:var(--muted); font-size:var(--fs-base); line-height:1.6; }
+    .result { padding:18px 20px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
+    .result + .result { margin-top:12px; }
+    .recommended-result { border-color:var(--border-strong); }
+    /* Chosen is stated, not implied: the outline the shared rule draws sat eight
+       pixels inside the box and read as a stray line. */
+    .result.selected { outline:0; border-color:var(--accent-line); background:var(--accent-soft); }
+    .result-head { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+    .result-badge { display:inline-flex; align-items:center; padding:3px 10px; border:1px solid var(--border); border-radius:var(--r-pill); background:var(--wash); color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+    .result-badge.accent { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-ink); }
+    .result h2 { font-size:var(--fs-base); font-weight:600; }
+    .recommended-result h2 { font-size:var(--fs-lead); }
+    .method-explanation { margin:10px 0 0; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
     .readiness-notice { margin:0 0 16px; }
-    .evidence { margin-top:12px; }
-    .evidence > summary { cursor:pointer; color:var(--muted); font-size:var(--fs-sm); font-weight:500; }
-    .evidence[open] > summary { color:var(--text); }
-    .other-methods { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
-    .other-methods .result { padding-left:12px; }
-    .use-btn[aria-current="true"] { display:none; }
+    /* Everything a reader may open, in one stack of quiet lines. Nothing here
+       carries a border, so nothing here competes with the button below it. */
+    .result-more { display:grid; gap:9px; margin-top:14px; }
+    .result-more > details { margin:0; }
+    .evidence > summary { display:flex; align-items:center; gap:7px; cursor:pointer; list-style:none; color:var(--muted); font-size:var(--fs-sm); font-weight:500; }
+    .evidence > summary::-webkit-details-marker { display:none; }
+    .evidence > summary:hover, .evidence[open] > summary { color:var(--text); }
+    .result .method { margin:0; border:0; border-radius:0; background:none; overflow:visible; }
+    .result .method > summary { padding:0; color:var(--muted); font-size:var(--fs-sm); font-weight:500; text-transform:none; letter-spacing:0; }
+    .result .method > summary:hover { background:none; color:var(--text); }
+    .result .method-body { padding:12px 0 0; border-top:0; }
+    .result-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:15px; border-top:1px solid var(--border); }
+    button.use-btn { margin:0; padding:8px 17px; font-size:var(--fs-sm); }
+    button.use-btn[aria-current="true"] { display:inline-flex; align-items:center; gap:8px; border-color:var(--good-line); background:var(--good-soft); color:var(--good-ink); opacity:1; cursor:default; }
+    button.use-btn[aria-current="true"]::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--good); }
+    .other-methods { margin-top:22px; padding-top:18px; border-top:1px solid var(--border); }
+    .other-methods-body { margin-top:14px; }
     ul { color:var(--text-2); line-height:1.6; padding-left:20px; font-size:var(--fs-body); margin:12px 0 0; }
     /* Notices are a tinted band, not a coloured block of text: the border
        carries the meaning and the words stay the same grey as prose. */
@@ -812,6 +926,15 @@
     .pill.prior { color:var(--muted); }
     pre { background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:14px; overflow-x:auto; font:var(--fs-sm)/1.6 var(--mono); white-space:pre-wrap; word-break:break-word; margin:0 0 10px; }
     .stage-title { font-size:var(--fs-micro); color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin:16px 0 8px; font-weight:600; }
+    /* A zone of the library is a block, not another line of text. Four micro
+       labels stacked in one column read as one list with captions in it — which
+       is exactly what the library was, and why "the sets you brought" and "the
+       benchmarks that ship inside the tool" looked like one population. So a
+       zone gets a heading of its own rank and a rule to stand on. */
+    .zone-title { margin:0 0 6px; color:var(--text); font-size:var(--fs-lead); font-weight:600; text-transform:none; letter-spacing:-.01em; }
+    .library-zone { margin-top:26px; padding-top:22px; border-top:1px solid var(--border); }
+    .library-zone .meta { display:block; max-width:88ch; margin:0 0 14px; line-height:1.6; }
+    .library-zone .table-scroll { margin-top:0; }
     .ready-heading { font-size:var(--fs-lead); font-weight:600; }
     /* The payoff action of the result panel: the one place the accent is
        spent outside the left column. */
@@ -842,9 +965,31 @@
     .prompt-msg.picked pre { background:var(--accent-soft); }
     .prompt-foot { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:12px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
     .prompt-foot strong { color:var(--text-2); font-weight:600; }
+    /* The one step that has not been taken yet, at the foot of the thing it is
+       about. It is a claim about the prompt, not a part of it, so it sits on the
+       sunken ground below the panel's own footer rather than inside the prompt. */
+    .next-step { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:18px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--r-md); background:var(--sunken); }
+    .next-step strong { display:block; color:var(--text); font-size:var(--fs-base); font-weight:600; }
+    .next-step small { display:block; margin-top:3px; max-width:52ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
+    /* A filled grey chip, not the accent: this leads to the screen that runs
+       something rather than running it, and the screen keeps one primary. */
+    .next-go { flex:none; border:1px solid var(--border-strong); border-radius:var(--r-pill); padding:11px 20px; background:var(--wash); color:var(--text); font-size:var(--fs-base); font-weight:600; line-height:1.5; text-decoration:none; white-space:nowrap; }
+    .next-go:hover { background:var(--wash-2); }
     .prompt-spec > summary, .prompt-notes > summary { cursor:pointer; color:var(--muted); font-size:var(--fs-sm); }
     .prompt-spec > summary:hover, .prompt-notes > summary:hover { color:var(--text); }
     .prompt-spec > div { margin-top:6px; color:var(--muted); font:var(--fs-sm)/1.6 var(--mono); overflow-wrap:anywhere; }
+    /* The one thing on the Optimization screen that changes something rather than
+       reporting it: set off by a rule, so it does not read as a fifth paragraph
+       of the result it sits under. */
+    .adopt-winner { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+    .adopt-winner h3 { margin:0 0 6px; }
+    .adopt-winner .prompt-lead { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .adopt-winner .form-actions { margin-top:12px; align-items:center; gap:12px; }
+    /* A worked example is shown, not hidden, but it is not the instruction —
+       so it steps back rather than reading as another paragraph of it. */
+    .prompt-msg.demo { border-left:2px solid var(--border-strong); background:var(--wash); }
+    .prompt-msg.demo pre { color:var(--muted); }
+    .demo-tag { margin-left:8px; color:var(--muted); font-size:var(--fs-micro); text-transform:uppercase; letter-spacing:.06em; }
     .prompt-notes { margin-top:16px; }
     .prompt-notes h3 { margin:0; }
     .prompt-notes ul { margin:6px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
@@ -920,9 +1065,13 @@
      * accent appears nowhere on this page — 29 identical cards need
      * structure, not highlights.
      * ------------------------------------------------------------------ */
-    .techniques-shell { width:min(100%,780px); margin:0 auto; }
-    .techniques-intro { margin-bottom:12px; }
-    .techniques-intro p { max-width:72ch; margin:8px 0 0; color:var(--text-2); font-size:var(--fs-body); line-height:1.6; }
+    /* The catalogue used to be a centred column of its own width, from before
+       the workspace had a shape. It now sits in the wide half of the same three
+       zones every other reading screen uses, so the width is the column's — and
+       on a surface of its own, the way the index above it and every other block
+       stacked in a work column sits on one, with the page showing between. */
+    .build-work > .technique-catalog { margin-top:18px; }
+    .technique-catalog > .zone-title { margin-top:0; }
     .technique-index-family,
     .technique-family,
     .technique-facts dt,
@@ -937,22 +1086,30 @@
     .compiled-example-schema,
     .technique-source-id,
     .technique-source.none code { font-family:var(--mono); font-size:var(--fs-sm); }
-    .technique-index { padding:24px 0 32px; border-bottom:1px solid var(--border); }
-    /* Inherits the global h3: every section header in the app is the same tier. */
-    .technique-index h3 { margin:0 0 16px; }
-    .technique-index-group { display:grid; grid-template-columns:132px minmax(0,1fr); gap:10px 20px; padding:8px 0; border-top:1px solid var(--border); }
+    .technique-index { padding:0; border-bottom:0; }
+    .technique-index .meta { display:block; margin:0 0 14px; }
+    /* The family column is sized to the longest name in the registry
+       ("self-generated-exemplars"), so a family reads as one line instead of
+       breaking mid-word; the entries keep the room they had. */
+    .technique-index-group { display:grid; grid-template-columns:200px minmax(0,1fr); gap:10px 20px; padding:8px 0; border-top:1px solid var(--border); }
     .technique-index-group:first-of-type { border-top:0; }
-    .technique-index-family { padding-top:3px; overflow-wrap:anywhere; }
-    .technique-index-links { display:flex; flex-wrap:wrap; gap:6px 16px; }
-    .technique-index a { color:var(--text-2); font-size:var(--fs-base); line-height:1.5; text-decoration-color:var(--border); text-underline-offset:3px; }
+    .technique-index-family { padding-top:3px; white-space:nowrap; }
+    /* Name then year, one method per line: the year only reads as a column if
+       every entry has its own row, and the fixed track keeps the digits in
+       line across families. */
+    .technique-index-links { display:grid; grid-template-columns:minmax(0,1fr) 44px; align-items:baseline; gap:6px 16px; }
+    .technique-index-year { color:var(--muted); font-family:var(--mono); font-size:var(--fs-sm); font-variant-numeric:tabular-nums; }
+    .technique-index-year.none { cursor:help; }
+    .technique-index a { color:var(--text-2); font-size:var(--fs-base); line-height:1.5; white-space:nowrap; text-decoration-color:var(--border); text-underline-offset:3px; }
     .technique-index a:hover { color:var(--text); text-decoration-color:var(--border-strong); }
     .technique-index a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--text); }
     .technique-catalog { display:block; }
     /* 29 cards in one scroll: the eye needs to find where a technique starts.
        The family kicker and the larger title do that; everything below them
        stays quiet so the description and the example carry the card. */
-    .technique-card { min-width:0; padding:40px 0 32px; border-bottom:1px solid var(--border); scroll-margin-top:20px; }
-    .technique-card:last-child { border-bottom:0; padding-bottom:12px; }
+    .technique-card { min-width:0; padding:28px 0 32px; border-bottom:1px solid var(--border); scroll-margin-top:20px; }
+    .technique-catalog > .technique-card:first-of-type { padding-top:8px; }
+    .technique-card:last-child { border-bottom:0; padding-bottom:0; }
     /* A repeated card inside a panel, one tier above .settings-card h3. */
     .technique-card h3 { margin:8px 0 0; color:var(--text); font-size:var(--fs-lead); font-weight:600; text-transform:none; letter-spacing:-.01em; }
     .technique-id { display:inline-block; margin-top:6px; color:var(--muted); line-height:1.5; overflow-wrap:anywhere; }
@@ -1015,7 +1172,10 @@
     .technique-index-return:hover { color:var(--text); text-decoration-color:var(--border-strong); }
     .technique-index-return:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; color:var(--text); }
     .selected { outline:1px solid var(--accent-line); outline-offset:-8px; border-radius:var(--r-lg); }
-    .doc-frame { display:block; width:100%; min-height:420px; border:0; background:transparent; color-scheme:dark; }
+    /* The document inside declares its own scheme from the theme, so the frame
+       must not force one: with color-scheme:dark pinned here, a light app got
+       dark scrollbars and controls inside the frame. */
+    .doc-frame { display:block; width:100%; min-height:420px; border:0; background:transparent; }
     .history-chart { width:100%; height:150px; margin:16px 0; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
     .history-chart polyline { fill:none; stroke:var(--accent); stroke-width:2; vector-effect:non-scaling-stroke; }
     .history-chart circle { fill:var(--accent); }
@@ -1046,6 +1206,13 @@
     .quality-stat.failed { border-color:var(--bad-line); }
     .quality-stat.warning { border-color:var(--warn-line); }
     .quality-result { margin:18px 0; padding:16px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--wash); }
+    /* The cards a check decided on, then the sentence it decided, then the rule
+       the sentence came from — in that order, each in its own type. */
+    .quality-stats { display:flex; flex-wrap:wrap; margin-bottom:4px; }
+    .quality-result > p { margin:8px 0 0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
+    .quality-result > p.meta { color:var(--muted); }
+    .case-list { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .case-list code { color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
     .review-card { margin:14px 0; padding:16px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
     .review-card h3 { margin:8px 0; }
     .review-card pre { max-height:260px; }
@@ -1053,6 +1220,10 @@
     .status-chip.approved,.status-chip.production { border-color:var(--good-line); color:var(--good-ink); }
     .status-chip.pending,.status-chip.unreviewed,.status-chip.tested { border-color:var(--warn-line); color:var(--warn-ink); }
     .status-chip.rejected,.status-chip.deprecated { border-color:var(--bad-line); color:var(--bad-text); }
+    /* The release gate's verdict, in the same three colours the statuses use. */
+    .status-chip.ok { border-color:var(--good-line); color:var(--good-ink); }
+    .status-chip.wait { border-color:var(--warn-line); color:var(--warn-ink); }
+    .status-chip.bad { border-color:var(--bad-line); color:var(--bad-text); }
     .table-scroll { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
     .table-scroll table { min-width:640px; }
     .table-scroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
@@ -1313,18 +1484,16 @@
       .context-bar { grid-template-columns:38px minmax(0,1fr) auto; gap:12px; min-height:62px; padding:8px 16px; }
       .menu-button { display:grid; }
       .context-artifacts { display:none; }
-      .context-utilities a:first-child { display:none; }
       .workspace-main { padding:18px 16px 88px; }
       .layout { grid-template-columns:minmax(0,1fr); }
       .layout > * { min-width:0; }
-      .bottom-nav { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(4,1fr); padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); border-top:1px solid var(--border); background:var(--sunken); z-index:22; }
+      .bottom-nav { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(5,1fr); padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); border-top:1px solid var(--border); background:var(--sunken); z-index:22; }
       .bottom-nav a { display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 4px; border-top:2px solid transparent; color:var(--muted); font-size:var(--fs-micro); text-align:center; text-decoration:none; }
       .bottom-nav a[aria-current="page"] { border-top-color:var(--accent); color:var(--text); }
     }
-    @media (max-width:720px) { .settings-grid,.quality-form,.build-toggles { grid-template-columns:1fr; } .quality-form .wide { grid-column:auto; } .settings-description { min-height:0; } }
+    @media (max-width:720px) { .settings-grid,.quality-form,.build-toggles { grid-template-columns:1fr; } .quality-form .wide { grid-column:auto; } .settings-description { min-height:0; } .technique-index-group { grid-template-columns:1fr; gap:6px; padding:12px 0; } }
     @media (max-width:480px) {
       .context-bar { padding-inline:12px; }
-      .context-utilities { display:none; }
       .workspace-main { padding:14px 12px 84px; }
       .panel { padding:18px; }
       .layout.global-view #detail { min-height:calc(100vh - 140px); }
@@ -1333,8 +1502,8 @@
       .block-index-item { grid-template-columns:1fr; gap:4px; }
       .template-toolbar, .message-toolbar { align-items:flex-start; }
       .mode-options { grid-template-columns:1fr; }
-      .technique-index-group { grid-template-columns:1fr; gap:6px; padding:12px 0; }
-      .technique-index-links { display:grid; gap:6px; }
+      .technique-index-links { grid-template-columns:minmax(0,1fr) 44px; gap:6px 12px; }
+      .technique-index a { white-space:normal; }
       .technique-card { padding:32px 0 32px; }
       .technique-facts { grid-template-columns:1fr; gap:2px 0; }
       .technique-facts dd + dt { margin-top:10px; }
@@ -1343,4 +1512,40 @@
     }
     @media (prefers-reduced-motion:reduce) {
       .sidebar, .drawer-backdrop { transition:none; }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * The opening screen. It is the first thing a new browser sees and the
+     * last thing it sees of it: once dismissed the choice is remembered, so
+     * the page below is what returning work starts on. It borrows nothing
+     * from the app shell except the tokens, because it is a poster, not a
+     * screen — one mark, one promise, one way in.
+     * ------------------------------------------------------------------ */
+    .splash { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:32px 24px calc(32px + env(safe-area-inset-bottom)); background:var(--bg); overflow-y:auto; }
+    :root[data-splash="done"] .splash { display:none; }
+    :root:not([data-splash="done"]) body { overflow:hidden; }
+    /* A single wash of accent behind the mark, so the gold in the artwork has
+       somewhere to land instead of sitting on flat grey. */
+    .splash::before { content:""; position:absolute; left:50%; top:34%; width:min(760px,120vw); aspect-ratio:1; transform:translate(-50%,-50%); background:radial-gradient(circle, var(--accent-soft) 0%, transparent 68%); pointer-events:none; }
+    .splash-inner { position:relative; display:flex; flex-direction:column; align-items:center; gap:22px; width:100%; max-width:600px; text-align:center; animation:splash-rise .5s cubic-bezier(.2,.7,.3,1) both; }
+    .splash-mark { width:132px; height:132px; border-radius:26px; border:1px solid var(--border); box-shadow:var(--shadow); object-fit:cover; }
+    .splash-word { margin:0; font-size:38px; font-weight:600; letter-spacing:-.025em; line-height:1.1; color:var(--text); }
+    .splash-slogan { margin:0; max-width:44ch; font-size:var(--fs-lead); line-height:1.35; color:var(--text); letter-spacing:-.01em; text-wrap:balance; }
+    .splash-sub { margin:0; max-width:54ch; font-size:var(--fs-body); line-height:1.55; color:var(--text-2); text-wrap:pretty; }
+    .splash-inner .splash-enter { min-width:220px; padding:12px 26px; font-size:var(--fs-body); }
+    .splash-hint { margin:0; color:var(--muted); font-size:var(--fs-micro); }
+    .splash-hint kbd { padding:1px 5px; border:1px solid var(--border-strong); border-radius:6px; background:var(--panel2); font-family:var(--mono); font-size:10px; color:var(--text-2); }
+    @keyframes splash-rise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+    @media (max-width:480px) {
+      .splash-mark { width:104px; height:104px; border-radius:22px; }
+      .splash-word { font-size:30px; }
+      .splash-slogan { font-size:var(--fs-body); }
+      .splash-inner .splash-enter { width:100%; }
+    }
+    /* The keyboard shortcut is only a shortcut where there is a keyboard. */
+    @media (pointer:coarse) {
+      .splash-hint { display:none; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      .splash-inner { animation:none; }
     }

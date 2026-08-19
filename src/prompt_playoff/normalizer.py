@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 from prompt_playoff.domain import (
     Capability,
@@ -13,7 +13,12 @@ from prompt_playoff.domain import (
 )
 
 TASK_KEYWORDS: list[tuple[TaskType, tuple[str, ...]]] = [
-    (TaskType.structured_extraction, ("extract", "извлеч", "json", "schema", "entity", "сущност")),
+    (
+        TaskType.structured_extraction,
+        #: `извлек` and `извлеч` are both needed: the imperative every request
+        #: actually uses is `извлеки`, which the second stem does not match.
+        ("extract", "извлек", "извлеч", "json", "schema", "entity", "сущност"),
+    ),
     (TaskType.translation, ("translate", "translation", "перевод", "перевед")),
     (
         TaskType.coding,
@@ -46,6 +51,15 @@ TASK_KEYWORDS: list[tuple[TaskType, tuple[str, ...]]] = [
     (TaskType.summarization, ("summar", "резюм", "сводк")),
     (TaskType.creative_writing, ("creative", "story", "novel", "write a book", "рассказ", "роман")),
 ]
+
+#: Words that name the material or the output shape rather than the work to do.
+#: They turn up in requests of every type — a summary can be wanted as JSON, a
+#: classification can be about code — so they never outvote a word that names the
+#: work, however many of them a request happens to contain. Kept deliberately
+#: short: only words seen taking a verb's place.
+TOPIC_WORDS: frozenset[str] = frozenset(
+    {"json", "schema", "код", "code", "python", "пайтон", "на питон", "в питон", "скрипт", "script"}
+)
 
 #: Words that say the material has to be fetched, not that it is attached.
 RETRIEVAL_KEYWORDS: tuple[str, ...] = (
@@ -218,17 +232,63 @@ def read_shape(description: str, task_type: TaskType, strict_json: bool) -> set[
     return shape
 
 
+class TaskScore(NamedTuple):
+    """Evidence for one task type, in the order it is allowed to count.
+
+    Comparing these compares `work` first and only then `material`, which is the
+    whole rule: a word naming the work beats any amount of words naming what the
+    work is about. "Summarize this python script" has one of the former and two of
+    the latter, and it is a summarization request.
+    """
+
+    work: float
+    material: float
+
+
+def classify_task(description: str) -> tuple[TaskType, dict[TaskType, TaskScore]]:
+    """The likeliest task type, and what every type scored, so ties stay visible.
+
+    This used to be the first entry in :data:`TASK_KEYWORDS` that matched anything,
+    which turned the order of a literal list into a decision: "извлеки код на питоне
+    в JSON" stopped at the first type that matched and never looked at the two later
+    ones that also did. Now every type is scored and the best wins.
+
+    A match is worth the length of the word that produced it. Long keywords are
+    specific and rare — `спроектируй сервис` is unambiguous, `код` also lives inside
+    `кодировка` — and length is the cheapest honest proxy for that in a fallback
+    whose whole job is to be defensible without a model.
+    """
+    text = description.lower()
+    scores = {candidate: _score(text, keywords) for candidate, keywords in TASK_KEYWORDS}
+    order = [task for task, _ in TASK_KEYWORDS]
+    ranked = sorted(
+        scores.items(),
+        #: List order breaks a genuine tie, so a tie behaves as it always did.
+        key=lambda item: (-item[1].work, -item[1].material, order.index(item[0])),
+    )
+    best, best_score = ranked[0]
+    #: Nothing matched at all: the request is prose about something, and reading it
+    #: as a summary is the one reading that asks nothing of the material.
+    if best_score == TaskScore(0.0, 0.0):
+        return TaskType.summarization, scores
+    return best, scores
+
+
+def _score(text: str, keywords: tuple[str, ...]) -> TaskScore:
+    matched = [word for word in keywords if word in text]
+    return TaskScore(
+        work=float(sum(len(word) for word in matched if word not in TOPIC_WORDS)),
+        material=float(sum(len(word) for word in matched if word in TOPIC_WORDS)),
+    )
+
+
 def normalize_description(
     description: str,
     model: ModelProfile,
     overrides: dict[str, Any] | None = None,
 ) -> TaskProfile:
     text = description.lower()
-    task_type = TaskType.summarization
-    for candidate, keywords in TASK_KEYWORDS:
-        if any(keyword in text for keyword in keywords):
-            task_type = candidate
-            break
+    task_type, _ = classify_task(description)
 
     strict_json = any(token in text for token in ("json", "schema", "structured", "строг"))
     #: Acquisition verbs and places, not the word "source": "answer from these sources"

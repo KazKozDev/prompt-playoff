@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -53,11 +54,29 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "ok", "version": __version__}
 
 
-@pytest.mark.parametrize("path", ["/", "/help", "/help/ru", "/benchmarks", "/benchmarks/ru"])
+@pytest.mark.parametrize("path", ["/", "/help", "/help/ru", "/evaluation", "/evaluation/ru"])
 def test_static_pages_are_served(client, path):
     response = client.get(path)
     assert response.status_code == 200
     assert response.text.lstrip().startswith("<!doctype html>")
+
+
+def test_home_opens_on_the_welcome_screen(client):
+    # The opening screen is the first thing a new browser sees, and the only
+    # thing that can put the app back behind it once it has been dismissed is
+    # the "#welcome" hash the head script reads.
+    html = client.get("/").text
+
+    assert 'data-testid="splash"' in html
+    assert "Finds the free AI model your business needs" in html
+    assert 'data-testid="splash-enter"' in html
+    assert "'#welcome'" in html
+    assert "pp-splash-seen" in html
+
+    mark = client.get("/assets/logo-mark.webp")
+    assert mark.status_code == 200
+    assert mark.headers["content-type"].startswith("image/webp")
+    assert mark.content[:4] == b"RIFF"
 
 
 def test_documentation_pages_are_reachable(client):
@@ -66,13 +85,40 @@ def test_documentation_pages_are_reachable(client):
     navigation = client.get("/assets/navigation.js")
     assert navigation.status_code == 200
     assert "/help" in navigation.text
-    assert "/benchmarks" in navigation.text
+    assert "/evaluation" in navigation.text
     assert 'lang="en"' in client.get("/help").text
     assert 'lang="ru"' in client.get("/help/ru").text
     assert "/help/ru" in client.get("/help").text
     assert "/help" in client.get("/help/ru").text
-    assert "/benchmarks/ru" in client.get("/benchmarks").text
-    assert "/benchmarks" in client.get("/benchmarks/ru").text
+    assert 'lang="en"' in client.get("/evaluation").text
+    assert 'lang="ru"' in client.get("/evaluation/ru").text
+    assert "/evaluation/ru" in client.get("/evaluation").text
+    assert "/evaluation" in client.get("/evaluation/ru").text
+
+
+def test_the_old_benchmarks_paths_point_at_the_guide(client):
+    # The guide was called Benchmarks before it was called the Evaluation guide.
+    # Anyone holding an old link lands on the document rather than on a 404.
+    for old, new in (("/benchmarks", "/evaluation"), ("/benchmarks/ru", "/evaluation/ru")):
+        response = client.get(old, follow_redirects=False)
+        assert response.status_code == 301
+        assert response.headers["location"] == new
+
+
+def test_documents_reference_reachable_packaged_assets(client):
+    # Both documents load the same stylesheet and the same script; a page that
+    # points at a file the package does not ship renders as a wall of text, and
+    # nothing else in the suite would notice.
+    for path in ("/help", "/help/ru", "/evaluation", "/evaluation/ru"):
+        assets = re.findall(r'(?:href|src)="(/assets/[^"]+)"', client.get(path).text)
+        assert assets == ["/assets/docs.js", "/assets/docs.css"] or assets == [
+            "/assets/docs.css",
+            "/assets/docs.js",
+        ], f"{path} loads {assets}"
+        for asset in assets:
+            response = client.get(asset)
+            assert response.status_code == 200
+            assert response.content
 
 
 def test_home_references_reachable_packaged_assets(client):
@@ -81,6 +127,7 @@ def test_home_references_reachable_packaged_assets(client):
 
     assert asset_paths == [
         "/assets/styles.css",
+        "/assets/logo-mark.webp",
         "/assets/core.js",
         "/assets/datasets.js",
         "/assets/catalog.js",
@@ -96,7 +143,9 @@ def test_home_references_reachable_packaged_assets(client):
         response = client.get(path)
         assert response.status_code == 200
         assert response.content
-        expected_type = "text/css" if path.endswith(".css") else "text/javascript"
+        expected_type = {".css": "text/css", ".webp": "image/webp"}.get(
+            Path(path).suffix, "text/javascript"
+        )
         assert response.headers["content-type"].startswith(expected_type)
         # The filenames never change, so without this a browser keeps showing an
         # old interface against a new server and gives no sign that it is.
@@ -124,6 +173,10 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         # examples come from", so it is a destination, not a button in a panel.
         ("dataset-hub", "dataset-hub"),
         ("dataset-builder", "dataset-builder"),
+        # The benchmarks inside the package answer a different question from the
+        # library — what this tool measures itself against, not what you measure
+        # your prompt against — so they are a destination of their own.
+        ("dataset-bundled", "dataset-bundled"),
         ("history", "history"),
         ("judge", "judge"),
         ("model-matrix", "model-matrix"),
@@ -134,18 +187,26 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         ("releases", "releases"),
         ("production", "production"),
         ("techniques", "techniques"),
+        # Models & keys is the setup every screen depends on, so it stays in the
+        # corner of the rail and behind the model chip, both visible from
+        # everywhere. It is a row under Reference as well: the section screen
+        # lists what is under it, and a rail that named three of those four
+        # screens sent anyone who opened Reference looking for the fourth.
+        ("settings", "settings"),
         ("logs", "logs"),
         ("evaluation", "evaluation"),
         ("help", "help"),
     }
-    # Models & keys is not one of the workspace's screens: it is the setup every
-    # screen depends on, so it lives in the corner of the rail and behind the
-    # model chip, both visible from everywhere, rather than in the list.
     assert 'data-testid="rail-model"' in html
     assert 'data-testid="model-chip"' in html
     assert 'data-testid="lifecycle-nav"' in html
     assert 'data-testid="drawer-toggle"' in html
-    assert html.count('data-testid="bottom-') == 4
+    # One entry per section of the rail, Reference included. With four, every
+    # screen under Reference — Jobs & logs, the guide, Help and Models & keys —
+    # lit nothing at all on a phone, and the bar stopped answering "where am I"
+    # on the screens a reader is most likely to be lost on.
+    assert html.count('data-testid="bottom-') == 5
+    assert 'data-testid="bottom-reference"' in html
     assert ">Evaluation guide<" in html
     # The sidebar used to repeat the prompt/dataset/model line that the context
     # bar already carries; one of the two had to go, and the header kept it.
@@ -373,6 +434,51 @@ def test_uploaded_dataset_is_session_selectable_and_benchmarkable(client):
     assert job["result"]["examples"] == 1
 
 
+def test_an_upload_is_kept_only_when_the_uploader_asks(client, tmp_path, monkeypatch):
+    # Rows arriving off someone's own machine are not written to disk by
+    # default; ticking the box on the upload screen is what makes the promise.
+    from prompt_playoff import api as api_module
+
+    service = api_module.app.state.service
+    monkeypatch.setattr(service.dataset_store, "directory", tmp_path)
+
+    session = client.post(
+        "/v1/datasets/upload",
+        files={"file": ("session.jsonl", b'{"id":"1","input":"hello"}\n', "application/x-ndjson")},
+    ).json()
+    assert session["kept"] is False
+    assert not list(tmp_path.glob("*.jsonl"))
+
+    kept = client.post(
+        "/v1/datasets/upload",
+        files={"file": ("kept.jsonl", b'{"id":"1","input":"hello"}\n', "application/x-ndjson")},
+        data={"keep": "true"},
+    ).json()
+    assert kept["kept"] is True
+    assert [path.name for path in tmp_path.glob("*.jsonl")] == ["uploaded%3Akept.jsonl"]
+
+    listed = {item["name"]: item["kept"] for item in client.get("/v1/datasets").json()}
+    assert listed["uploaded:kept"] is True
+    assert listed["uploaded:session"] is False
+
+
+def test_datasets_say_whose_rows_they_hold_and_under_what_licence(client):
+    # The shelf of bundled benchmarks names a source and a licence per set. Both
+    # come from the import presets that fetched the rows, so the page cannot
+    # claim a licence the fetching code does not.
+    by_name = {item["name"]: item for item in client.get("/v1/datasets").json()}
+
+    corpus = by_name["few-nerd"]["provenance"]
+    assert corpus["source"] == "DFKI-SLT/few-nerd"
+    assert corpus["url"] == "https://huggingface.co/datasets/DFKI-SLT/few-nerd"
+    assert corpus["licence"].startswith("CC-BY-SA-4.0")
+    assert "Few-NERD" in corpus["citation"]
+
+    # Built here, so it carries this package's own licence and no repository.
+    built = by_name["agents"]["provenance"]
+    assert built == {"source": "built here", "licence": "MIT"}
+
+
 def test_capabilities_documents_the_extension_contract(client):
     body = client.get("/v1/capabilities").json()
     assert "single" in body["strategies"]
@@ -386,6 +492,20 @@ def test_capabilities_carries_the_wording_every_report_labels_its_numbers_with(c
     body = client.get("/v1/capabilities").json()
     assert body["grader_help"]["token_f1"] == "word overlap with the reference answer"
     assert set(body["grader_help"]) == set(body["graders"])
+
+
+def test_capabilities_says_how_the_grades_become_the_headline_numbers(client):
+    # The Measurement screen names, before a run, which grader its quality will
+    # come from and which ones feed reliability. Both orderings are served so
+    # the page states what the scorecard will do rather than a second guess at it.
+    body = client.get("/v1/capabilities").json()
+    assert body["quality_preference"][0] == "unit_tests"
+    assert body["quality_preference"].index("exact_match") < body["quality_preference"].index(
+        "label_accuracy"
+    )
+    assert "json_validity" in body["reliability_graders"]
+    assert set(body["quality_preference"]) <= set(body["graders"])
+    assert set(body["reliability_graders"]) <= set(body["graders"])
 
 
 def test_ollama_models_endpoint_offers_what_the_daemon_has(client, monkeypatch):
@@ -632,3 +752,411 @@ def test_deleting_a_saved_dataset_removes_its_file(client: TestClient, tmp_path)
 
     assert response.json()["removed_file"] == str(path)
     assert not path.exists()
+
+
+def _optimizer_winner(technique_id: str = "structured.schema-first"):
+    """An exported technique shaped exactly as an optimization run emits one."""
+    from prompt_playoff.optimizer import Candidate, TechniqueOverlay, export_technique
+    from prompt_playoff.registry import Registry
+
+    spec = Registry.load().technique(technique_id)
+    overlay = TechniqueOverlay(
+        block_appends={spec.recipe.blocks[0].name: "HOUSE RULE: never invent a place."}
+    )
+    candidate = Candidate(id="r1c1", technique_id=spec.id, origin="reflective", overlay=overlay)
+    return export_technique(overlay.apply(spec), candidate)
+
+
+def test_adopting_a_winner_keeps_the_identity_the_rest_of_the_tool_resolves(client):
+    """An adopted prompt has to stay measurable, runnable and exportable.
+
+    `export_technique` renames the winner to `<id>.optimized` because that file is
+    written into a registry. Nothing resolves that id here, so a program carrying
+    it could not be benchmarked, run or exported — the adopted prompt keeps the
+    id it was searched from, and the optimized text is what changed.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    response = client.post(
+        "/v1/optimize/adopt",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "technique": _optimizer_winner(),
+            "reusable": True,
+            "engine_model_id": "proposer-model",
+        },
+    )
+
+    assert response.status_code == 200
+    program = response.json()
+    assert program["technique_id"] == "structured.schema-first"
+    assert program["artifact_source"] == "optimizer"
+    assert program["authored_by_model"] == "proposer-model"
+    written = "\n".join(
+        message["content"] for stage in program["stages"] for message in stage["messages"]
+    )
+    assert "HOUSE RULE: never invent a place." in written
+
+    # The point of keeping the id: this program is accepted by the runner that
+    # refuses a prompt written from another technique.
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    started = client.post(
+        "/v1/benchmark",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "dataset": "entity-extraction",
+            "record": False,
+            "prompt": program,
+        },
+    )
+    assert started.status_code == 200
+    job = wait_for_job(client, started.json()["id"])
+    assert job["status"] == "done"
+    assert (
+        "HOUSE RULE: never invent a place." in job["result"]["prompt_preview"]["stages"][0]["user"]
+    )
+
+
+def test_adopting_recompiles_rather_than_copying_the_optimizer_preview(client):
+    """The preview on the Optimization screen has a benchmark row inside it.
+
+    It is compiled against `dataset[0].input`, so copying it onto the prompt
+    screen would ship somebody else's example as the task. Adoption compiles the
+    winning instructions against this task instead.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    reusable = client.post(
+        "/v1/optimize/adopt",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "technique": _optimizer_winner(),
+            "reusable": True,
+        },
+    ).json()
+    assert reusable["source_input"] == "{input}"
+
+    own_words = client.post(
+        "/v1/optimize/adopt",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "technique": _optimizer_winner(),
+            "reusable": False,
+            "description": "Pull every person and place out of this contract.",
+        },
+    ).json()
+    assert own_words["source_input"] == "Pull every person and place out of this contract."
+
+
+def test_adopting_refuses_a_technique_it_did_not_produce(client):
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    response = client.post(
+        "/v1/optimize/adopt",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "technique": {"id": "nonsense", "title": "Nonsense"},
+            "reusable": True,
+        },
+    )
+    assert response.status_code == 422
+    assert "not a technique" in response.json()["detail"]
+
+
+def test_adopting_a_template_needs_either_material_or_the_input_slot(client):
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    response = client.post(
+        "/v1/optimize/adopt",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "technique": _optimizer_winner(),
+            "reusable": False,
+            "description": "   ",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_a_recorded_benchmark_hands_back_the_run_it_was_filed_as(client):
+    """A release has to be able to name the run that justified it."""
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    started = client.post(
+        "/v1/benchmark",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "dataset": "entity-extraction",
+        },
+    )
+    job = wait_for_job(client, started.json()["id"])
+    assert job["status"] == "done"
+
+    experiment_id = job["result"]["experiment_id"]
+    assert experiment_id
+    assert client.get(f"/v1/experiments/{experiment_id}").status_code == 200
+
+
+def test_optimize_refuses_a_prompt_written_from_another_technique(client):
+    """`/v1/optimize` inherited the prompt field and ignored it.
+
+    Silently: the request was accepted, the search ran from the registry
+    technique, and the deltas described a prompt the caller had never seen. Now
+    it is the baseline, which means it is subject to the same guard a benchmark
+    applies — numbers filed under the wrong method are worse than no numbers.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    compiled = client.post(
+        "/v1/compile",
+        json={"task": task, "user_input": "{input}", "technique_id": "structured.schema-first"},
+    ).json()
+
+    started = client.post(
+        "/v1/optimize",
+        json={
+            "task": task,
+            "technique_id": "direct.explicit-constraints",
+            "dataset": "entity-extraction",
+            "record": False,
+            "prompt": compiled,
+        },
+    )
+    job = wait_for_job(client, started.json()["id"])
+    assert job["status"] == "error"
+    assert "structured.schema-first" in job["error"]
+
+
+def test_optimize_refuses_a_prompt_with_nowhere_to_put_an_example(client):
+    """The check is up front, not row by row inside a job that is already running."""
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    task["model"]["base_url"] = "http://127.0.0.1:9"
+    compiled = client.post(
+        "/v1/compile",
+        json={"task": task, "user_input": "{input}", "technique_id": "structured.schema-first"},
+    ).json()
+    # A prompt with no slot and no material of its own: nothing in it can be
+    # replaced by a row's input.
+    for stage in compiled["stages"]:
+        for message in stage["messages"]:
+            message["content"] = "Answer in JSON."
+    compiled["source_input"] = ""
+
+    started = client.post(
+        "/v1/optimize",
+        json={
+            "task": task,
+            "technique_id": "structured.schema-first",
+            "dataset": "entity-extraction",
+            "record": False,
+            "prompt": compiled,
+        },
+    )
+    job = wait_for_job(client, started.json()["id"])
+    assert job["status"] == "error"
+    assert "no place for an example's input" in job["error"]
+    # Nothing was spent finding that out.
+    assert not job["progress"]
+
+
+def test_exporting_a_technique_is_optimize_export_over_http(client, tmp_path):
+    """`optimize --export` had no equivalent in the interface.
+
+    A winner could be searched for in the browser and then only looked at: the
+    file that makes it runnable was reachable from the CLI alone.
+    """
+    exported = _optimizer_winner()
+    response = client.post("/v1/export/technique", json={"technique": exported})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "structured.schema-first.optimized"
+    assert body["saved_to"] is None and body["resolvable"] is False
+    assert "HOUSE RULE: never invent a place." in body["yaml"]
+    # It is a technique file, not a rendering of one: it parses back.
+    import yaml as yaml_module
+
+    from prompt_playoff.domain import TechniqueSpec
+
+    assert TechniqueSpec.model_validate(yaml_module.safe_load(body["yaml"])).id == body["id"]
+
+
+def test_a_saved_technique_becomes_something_the_rest_of_the_tool_can_run(client):
+    """Saving is the half that matters: `/v1/run` and the runtime export take an id."""
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    saved = client.post(
+        "/v1/export/technique",
+        json={"technique": _optimizer_winner(), "technique_id": "support.tuned", "save": True},
+    ).json()
+    assert saved["resolvable"] is True
+    assert saved["saved_to"].endswith("support.tuned.yaml")
+
+    assert "support.tuned" in {item["id"] for item in client.get("/v1/techniques").json()}
+    compiled = client.post(
+        "/v1/compile",
+        json={"task": task, "user_input": "{input}", "technique_id": "support.tuned"},
+    )
+    assert compiled.status_code == 200
+    written = "\n".join(
+        message["content"] for stage in compiled.json()["stages"] for message in stage["messages"]
+    )
+    assert "HOUSE RULE: never invent a place." in written
+
+    bundle = client.post(
+        "/v1/export/runtime",
+        json={"task": task, "technique_id": "support.tuned", "language": "python"},
+    )
+    assert bundle.status_code == 200
+    assert "support.tuned" in bundle.json()["config"]
+
+    removed = client.delete("/v1/techniques/support.tuned")
+    assert removed.status_code == 200
+    assert client.delete("/v1/techniques/support.tuned").status_code == 404
+    assert (
+        client.post(
+            "/v1/compile",
+            json={"task": task, "user_input": "{input}", "technique_id": "support.tuned"},
+        ).status_code
+        == 422
+    )
+
+
+def test_a_saved_technique_may_not_take_a_registry_recipe_s_name(client):
+    """Otherwise every recorded number filed under that id quietly changes meaning."""
+    response = client.post(
+        "/v1/export/technique",
+        json={
+            "technique": _optimizer_winner(),
+            "technique_id": "structured.schema-first",
+            "save": True,
+        },
+    )
+    assert response.status_code == 409
+    assert "registry recipe" in response.json()["detail"]
+
+
+def test_a_saved_technique_is_resolvable_but_never_recommended(client):
+    """A recipe tuned on one dataset is not evidence about anybody else's task."""
+    client.post(
+        "/v1/export/technique",
+        json={"technique": _optimizer_winner(), "technique_id": "support.tuned", "save": True},
+    )
+    ranked = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()
+    assert "support.tuned" not in {item["technique_id"] for item in ranked["recommendations"]}
+
+
+def test_deleting_a_packaged_recipe_is_refused(client):
+    response = client.delete("/v1/techniques/structured.schema-first")
+    assert response.status_code == 404
+    assert "was not saved here" in response.json()["detail"]
+
+
+def test_adopting_a_rewritten_prompt_copies_it_rather_than_recompiling(client):
+    """A prompt search measured the text itself, so recompiling would discard it.
+
+    The recipe path has to rebuild the winner against the real task, because
+    what it measured was a compile against a benchmark row. The prompt path has
+    no such gap: the measured text is already the text for this task.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    compiled = client.post(
+        "/v1/compile",
+        json={"task": task, "user_input": "{input}", "technique_id": "structured.schema-first"},
+    ).json()
+    for stage in compiled["stages"]:
+        stage["messages"][-1]["content"] = "WHAT THE SEARCH WROTE: never invent a place.\n{input}"
+
+    response = client.post(
+        "/v1/optimize/adopt",
+        json={"task": task, "technique_id": "structured.schema-first", "program": compiled},
+    )
+
+    assert response.status_code == 200
+    program = response.json()
+    assert program["artifact_source"] == "optimizer"
+    assert program["stages"][0]["messages"][-1]["content"].startswith("WHAT THE SEARCH WROTE")
+    assert program["technique_id"] == "structured.schema-first"
+
+
+def test_adopting_needs_one_of_the_two_winners(client):
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    response = client.post(
+        "/v1/optimize/adopt",
+        json={"task": task, "technique_id": "structured.schema-first", "reusable": True},
+    )
+    assert response.status_code == 422
+    assert "winning technique or the winning prompt" in response.json()["detail"]
+
+
+def test_a_saved_technique_travels_with_the_client_that_needs_it(client):
+    """The export used to run only on the machine it was made on.
+
+    The generated client names a technique by id and no other server resolves a
+    winner saved here, so the bundle carries the technique and the other end can
+    take it in.
+    """
+    task = client.post(
+        "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
+    ).json()["task"]
+    client.post(
+        "/v1/export/technique",
+        json={"technique": _optimizer_winner(), "technique_id": "support.tuned", "save": True},
+    )
+
+    bundle = client.post(
+        "/v1/export/runtime",
+        json={"task": task, "technique_id": "support.tuned", "language": "python"},
+    ).json()
+    assert bundle["technique_filename"] == "support-tuned.technique.yaml"
+    assert "HOUSE RULE: never invent a place." in bundle["technique"]
+    assert any("/v1/techniques/import" in note for note in bundle["notes"])
+
+    # A packaged recipe is on every server, so nothing needs to travel with it.
+    packaged = client.post(
+        "/v1/export/runtime",
+        json={"task": task, "technique_id": "structured.schema-first", "language": "python"},
+    ).json()
+    assert packaged["technique"] is None
+
+    # The other end of the journey.
+    client.delete("/v1/techniques/support.tuned")
+    imported = client.post("/v1/techniques/import", json={"yaml": bundle["technique"]})
+    assert imported.status_code == 200
+    assert imported.json()["id"] == "support.tuned"
+    assert (
+        client.post(
+            "/v1/compile",
+            json={"task": task, "user_input": "{input}", "technique_id": "support.tuned"},
+        ).status_code
+        == 200
+    )
+
+
+def test_importing_something_that_is_not_a_technique_is_refused(client):
+    assert client.post("/v1/techniques/import", json={"yaml": ": : ["}).status_code == 422
+    assert client.post("/v1/techniques/import", json={"yaml": "id: x\n"}).status_code == 422

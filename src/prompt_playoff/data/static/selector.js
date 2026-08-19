@@ -53,44 +53,60 @@ function renderRejected(rejected, open) {
   </details>`;
 }
 
+// One heading over the list, so the panel says what it is before it starts
+// naming methods. Without it the first thing on the screen was a warning about
+// a ranking nobody had been told existed yet.
+function resultsHead() {
+  return `<div class="results-head">
+    <h2>Method</h2>
+    <p class="results-lead">The method decides how your prompt is written. One is in use; you can switch to another at any time.</p>
+  </div>`;
+}
+
 function renderRecommendations(data) {
   if (!data.recommendations.length) {
-    $('results').innerHTML =
-      '<div class="empty">No technique satisfies the hard constraints.</div>'
+    $('results').innerHTML = resultsHead()
+      + '<div class="empty">No method satisfies the constraints you set.</div>'
       + renderRejected(data.rejected, true);
     showDetailMessage('prompt', '<div class="empty">No prompt could be created with the current constraints.</div>');
     return;
   }
+  // One card, one action. The two disclosures under it are drawn as plain text
+  // links: when they carried a border they looked like two more buttons stacked
+  // against the real one, and the row read as a pile of controls.
   const techniqueCard = (item, i, recommended) => {
     const technique = state.techniqueCatalog.get(item.technique_id);
     const explanation = technique?.description || item.reasons[0] || 'This method matches the task and constraints you described.';
+    const badge = recommended
+      ? '<span class="result-badge accent" id="top-method-label">Recommended</span>'
+      : `<span class="result-badge">Rank #${i + 1}</span>`;
     return `<article class="result${recommended ? ' recommended-result' : ''}" data-technique="${esc(item.technique_id)}">
-      ${recommended ? '<div class="recommended-label" id="top-method-label">Recommended method · rank #1</div>' : ''}
-      <div class="topline">
-        <div>
-          ${recommended ? '' : `<div class="rank">#${i + 1}</div>`}
-          <h2>${esc(item.title)}</h2>
-          <div class="meta">${esc(item.technique_id)} · ${esc(item.family)}</div>
-        </div>
-      </div>
+      <div class="result-head">${badge}</div>
+      <h2>${esc(item.title)}</h2>
+      <div class="meta">${esc(item.technique_id)} · ${esc(item.family)}</div>
       <p class="method-explanation">${esc(explanation)}</p>
-      <details class="evidence">
-        <summary>Technical evidence · score ${Math.round(item.score * 100)}/100 · confidence ${Math.round(item.confidence * 100)}%</summary>
-        <div class="meta">Evidence source: <span class="pill ${item.evidence_source === 'measured' ? 'measured' : 'prior'}">${item.evidence_source === 'measured' ? 'measured' : 'prior only'}</span></div>
-        <ul>${item.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-      </details>
-      ${methodDisclosure(item.technique_id)}
-      <button class="ghost use-btn" type="button" data-technique="${esc(item.technique_id)}">${recommended ? 'Create with recommended technique' : 'Create with this technique'}</button>
+      <div class="result-more">
+        <details class="evidence">
+          <summary>Why it scored ${Math.round(item.score * 100)}/100 · confidence ${Math.round(item.confidence * 100)}%</summary>
+          <div class="meta">Evidence source: <span class="pill ${item.evidence_source === 'measured' ? 'measured' : 'prior'}">${item.evidence_source === 'measured' ? 'measured' : 'prior only'}</span></div>
+          <ul>${item.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+        </details>
+        ${methodDisclosure(item.technique_id)}
+      </div>
+      <div class="result-actions">
+        <button class="ghost use-btn" type="button" data-technique="${esc(item.technique_id)}">Use this method</button>
+      </div>
     </article>`;
   };
   const [recommended, ...alternatives] = data.recommendations;
   const primary = techniqueCard(recommended, 0, true);
   const otherMethods = alternatives.length ? `<details class="other-methods" open>
-    <summary>Alternative techniques — choose one (${alternatives.length})</summary>
-    ${alternatives.map((item, i) => techniqueCard(item, i + 1, false)).join('')}
+    <summary>Other methods that fit your task (${alternatives.length})</summary>
+    <div class="other-methods-body">${alternatives.map((item, i) => techniqueCard(item, i + 1, false)).join('')}</div>
   </details>` : '';
   const warnings = data.warnings.map(w => `<div class="warning">${esc(w)}</div>`).join('');
-  $('results').innerHTML = '<div id="readiness-notice"></div>' + primary + otherMethods + warnings + renderRejected(data.rejected, false);
+  $('results').innerHTML = resultsHead() + '<div id="readiness-notice"></div>'
+    + primary + otherMethods + warnings + renderRejected(data.rejected, false);
   document.querySelectorAll('.use-btn').forEach(b => b.addEventListener('click', () => {
     state.readinessNotice = null;
     renderReadinessNotice();
@@ -161,21 +177,28 @@ function renderReadinessNotice() {
   if (!node) return;
   if (!state.readinessNotice) {
     node.innerHTML = '';
-    if (label) label.textContent = 'Recommended method · rank #1';
+    if (label) { label.textContent = 'Recommended'; label.classList.add('accent'); }
     return;
   }
-  if (label) label.textContent = 'Top-ranked method · kept as rank #1';
-  node.innerHTML = `<div class="warning readiness-notice"><strong>Ready prompt:</strong> ${esc(state.readinessNotice.chosenTitle)} was used automatically. ${esc(state.readinessNotice.topTitle)} remains #1 by ranking evidence, but its prompt requires demonstrations or exemplars that were not supplied.</div>`;
+  // The badge stops claiming to be the one in use, because it is not. The
+  // sentence below says which method was used instead, and why, in that order —
+  // the reader needs the answer before the reasoning.
+  if (label) { label.textContent = 'Rank #1'; label.classList.remove('accent'); }
+  node.innerHTML = `<div class="warning readiness-notice"><strong>Using ${esc(state.readinessNotice.chosenTitle)}.</strong> ${esc(state.readinessNotice.topTitle)} ranks higher, but its prompt needs worked examples that you have not supplied.</div>`;
 }
 
 async function chooseTechnique(id, focusReady = false) {
   const compileVersion = ++state.compileVersion;
   state.chosen = id;
   document.querySelectorAll('.result').forEach(el => el.classList.toggle('selected', el.dataset.technique === id));
+  // The chosen card used to hide its button, which left it as the one card with
+  // nothing at the bottom — the reader could not tell whether that meant chosen
+  // or unavailable. It now says so in the same place the others offer the swap.
   document.querySelectorAll('.use-btn').forEach(button => {
     const current = button.dataset.technique === id;
     button.disabled = current;
     button.setAttribute('aria-current', current ? 'true' : 'false');
+    button.textContent = current ? 'In use' : 'Use this method';
   });
   refreshActions();
   showDetailMessage('prompt', '<div class="empty">The engine is writing your prompt from the selected method…</div>');
@@ -183,6 +206,10 @@ async function chooseTechnique(id, focusReady = false) {
     const compiled = await compileTechnique(id);
     if (compileVersion !== state.compileVersion) return;
     state.program = compiled.program;
+    // A freshly written prompt has no number behind it yet, whatever the last
+    // one had. Carrying the old run over would let a release cite a measurement
+    // of text that no longer exists.
+    state.provenance = null;
     state.tab = 'prompt';
     updateEstimates();
     updateWorkspaceContext();

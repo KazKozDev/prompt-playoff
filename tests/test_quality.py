@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 
 import pytest
@@ -5,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from prompt_playoff.api import app
 from prompt_playoff.domain import ModelResult
-from prompt_playoff.evals import BenchmarkExample, ExampleRun
+from prompt_playoff.evals import BenchmarkExample, ExampleRun, prompt_fingerprint
 from prompt_playoff.quality import (
     MUTATION_INTENT,
     DatasetBuildRequest,
@@ -52,9 +54,7 @@ def test_dataset_builder_is_seeded_and_keeps_truth_unreviewed():
 def test_dataset_project_requires_explicit_approval(tmp_path: Path):
     store = QualityStore(tmp_path / "quality.json")
     project = store.add_dataset(
-        build_dataset(
-            DatasetBuildRequest(name="suite", description="Extract entities", count=3)
-        )
+        build_dataset(DatasetBuildRequest(name="suite", description="Extract entities", count=3))
     )
     assert not project.approved_examples
 
@@ -81,12 +81,24 @@ def test_slice_analysis_exposes_weak_tags():
     ]
     runs = [
         ExampleRun(
-            example_id="a", repeat=0, output="", grades={"g": 1.0},
-            latency_seconds=0, prompt_tokens=0, completion_tokens=0, calls=1,
+            example_id="a",
+            repeat=0,
+            output="",
+            grades={"g": 1.0},
+            latency_seconds=0,
+            prompt_tokens=0,
+            completion_tokens=0,
+            calls=1,
         ),
         ExampleRun(
-            example_id="b", repeat=0, output="", grades={"g": 0.2},
-            latency_seconds=0, prompt_tokens=0, completion_tokens=0, calls=1,
+            example_id="b",
+            repeat=0,
+            output="",
+            grades={"g": 0.2},
+            latency_seconds=0,
+            prompt_tokens=0,
+            completion_tokens=0,
+            calls=1,
         ),
     ]
     result = slice_analysis(examples, runs)
@@ -181,21 +193,16 @@ def test_release_api_requires_human_review_before_approval(client: TestClient):
         "/v1/releases",
         json={"name": "support", "technique_id": "direct", "prompt": {"text": "v1"}},
     ).json()
-    assert client.post(
-        f"/v1/releases/{release['id']}/action", json={"action": "test"}
-    ).status_code == 200
-    blocked = client.post(
-        f"/v1/releases/{release['id']}/action", json={"action": "approve"}
+    assert (
+        client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"}).status_code
+        == 200
     )
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert blocked.status_code == 409
 
-    review = next(
-        item for item in client.get("/v1/reviews").json() if item["kind"] == "release"
-    )
+    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
     client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
-    approved = client.post(
-        f"/v1/releases/{release['id']}/action", json={"action": "approve"}
-    )
+    approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
 
@@ -292,8 +299,12 @@ def test_an_exact_duplicate_is_not_also_reported_as_a_near_one():
 def test_failure_mode_needs_the_rows_it_builds_around(client: TestClient):
     refused = client.post(
         "/v1/dataset-projects",
-        json={"name": "from-failures", "description": "Classify support requests",
-              "mode": "failures", "count": 4},
+        json={
+            "name": "from-failures",
+            "description": "Classify support requests",
+            "mode": "failures",
+            "count": 4,
+        },
     )
     assert refused.status_code == 422
 
@@ -346,3 +357,338 @@ def test_data_mix_names_a_fully_generated_set():
     assert generated.synthetic_ratio == 1.0
     assert "written by a model" in generated.note
     assert observed.synthetic == 0
+
+
+def test_a_release_records_the_run_that_justified_it(client: TestClient):
+    """Without this, "which numbers was this shipped on" is answered from memory.
+
+    The field existed on the record and nothing ever filled it, so every release
+    in the register looked equally unmeasured — including the ones that were not.
+    """
+    measured = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": {"text": "v1"},
+            "experiment_id": "abc123def456",
+        },
+    ).json()
+    assert measured["experiment_id"] == "abc123def456"
+
+    # A prompt nobody measured still registers — and says so, rather than being
+    # indistinguishable from one that was.
+    unmeasured = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": {"text": "v2"}},
+    ).json()
+    assert unmeasured["experiment_id"] is None
+    assert unmeasured["version"] == measured["version"] + 1
+
+
+def _commit_thresholds(technique: str = "direct", quality_min: float = 0.85) -> None:
+    """Write the project's committed bar where the release gate will read it."""
+    Path(os.environ["PROMPT_PLAYOFF_CHECKS"]).write_text(
+        f"""
+version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+checks:
+  - name: shipping-bar
+    technique: {technique}
+    task: structured_extraction
+    dataset: entity-extraction
+    require:
+      quality_min: {quality_min}
+""",
+        encoding="utf-8",
+    )
+
+
+RELEASED_PROMPT = {"text": "v1"}
+
+
+def _record_a_run(
+    quality: float, technique: str = "direct", measured: dict | None = RELEASED_PROMPT
+) -> str:
+    """A recorded run with a known quality, written where the store reads it.
+
+    `measured` is the prompt the run is claimed to have measured; None stands for
+    a run that measured no supplied prompt at all, which is what an older record
+    looks like.
+    """
+    path = Path(os.environ["PROMPT_PLAYOFF_EXPERIMENTS_PATH"])
+    record = {
+        "id": "run00000001",
+        "version": 1,
+        "kind": "benchmark",
+        "created_at": "2026-08-19T10:00:00+00:00",
+        "provider": "ollama",
+        "model_id": "test-model",
+        "dataset": "entity-extraction",
+        "technique_ids": [technique],
+        "winner": technique,
+        "metrics": {
+            technique: {
+                "quality": quality,
+                "reliability": 1.0,
+                "mean_latency_seconds": 0.5,
+                "p95_latency_seconds": 0.9,
+                "mean_total_tokens": 120.0,
+                "runs": 10,
+            }
+        },
+        "config_hash": "deadbeef",
+        "authored_hash": prompt_fingerprint(measured) if measured is not None else None,
+    }
+    path.write_text(json.dumps({"experiments": [record]}), encoding="utf-8")
+    return record["id"]
+
+
+def test_a_release_below_the_committed_bar_cannot_be_approved(client: TestClient):
+    """The thresholds guarded the repository and not the thing being shipped.
+
+    `prompt-playoff.yaml` was enforced by CI alone, so a release could be waved
+    through by hand at numbers the project had already declared unacceptable.
+    """
+    _commit_thresholds(quality_min=0.85)
+    experiment = _record_a_run(quality=0.62)
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": {"text": "v1"},
+            "experiment_id": experiment,
+        },
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    gate = client.get(f"/v1/releases/{release['id']}/gate").json()
+    assert gate["status"] == "failed"
+    assert "quality 0.62 vs min 0.85" in gate["reason"]
+
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert blocked.status_code == 409
+    assert "0.85" in blocked.json()["detail"]
+
+
+def test_a_release_over_the_bar_still_needs_a_person(client: TestClient):
+    """The gate is added to the human one, not substituted for it."""
+    _commit_thresholds(quality_min=0.85)
+    experiment = _record_a_run(quality=0.91)
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": {"text": "v1"},
+            "experiment_id": experiment,
+        },
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+    assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "passed"
+
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert blocked.status_code == 409
+    assert "Human Review" in blocked.json()["detail"]
+
+    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
+    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
+    approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert approved.status_code == 200
+
+
+def test_a_release_with_a_bar_but_no_run_cannot_be_approved(client: TestClient):
+    """A bar that cannot be applied is not a bar that was cleared."""
+    _commit_thresholds(quality_min=0.85)
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": {"text": "v1"}},
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert blocked.status_code == 409
+    assert "cites no recorded run" in blocked.json()["detail"]
+
+
+def test_a_technique_with_no_committed_bar_is_gated_by_the_person_alone(client: TestClient):
+    """Adding the gate must not stop projects that never configured one."""
+    _commit_thresholds(technique="structured.schema-first")
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": {"text": "v1"}},
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+    assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "not_configured"
+
+    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
+    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
+    approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert approved.status_code == 200
+
+
+def test_a_release_may_not_ship_on_numbers_from_a_different_prompt(client: TestClient):
+    """The citation was believed, not checked.
+
+    Any experiment id was accepted beside any prompt, so a release could measure
+    one text, freeze another, and read exactly like an honest one. The run now
+    records the fingerprint of what it measured, and the two are compared.
+    """
+    _commit_thresholds(quality_min=0.85)
+    # A run that scores well — on something else.
+    experiment = _record_a_run(quality=0.99, measured={"text": "a different prompt"})
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+    # Registering is still allowed: the register records what you decided, and
+    # what the decision rests on.
+    assert release["evidence"] == "indirect"
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    gate = client.get(f"/v1/releases/{release['id']}/gate").json()
+    assert gate["status"] == "unverified"
+    assert "measured a different prompt" in gate["reason"]
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert blocked.status_code == 409
+
+
+def test_a_release_citing_a_run_of_this_prompt_is_marked_measured(client: TestClient):
+    experiment = _record_a_run(quality=0.91)
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+    assert release["evidence"] == "measured"
+
+    # An older record, from before runs carried a fingerprint, cannot be
+    # confirmed either way — and unconfirmed is not confirmed.
+    stale = _record_a_run(quality=0.91, measured=None)
+    older = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": stale,
+        },
+    ).json()
+    assert older["evidence"] == "indirect"
+
+    no_citation = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": RELEASED_PROMPT},
+    ).json()
+    assert no_citation["evidence"] == "unverified"
+
+
+def test_a_release_registered_before_runs_were_recorded_can_be_given_its_evidence(
+    client: TestClient,
+):
+    """Otherwise every version from before this existed is stranded for good.
+
+    It cites nothing, so a project with a committed bar can never approve it,
+    and measuring afterwards does not help — there was nowhere to put the run.
+    """
+    _commit_thresholds(quality_min=0.85)
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": RELEASED_PROMPT},
+    ).json()
+    assert release["evidence"] == "unverified"
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    experiment = _record_a_run(quality=0.91)
+    cited = client.post(
+        f"/v1/releases/{release['id']}/cite", json={"experiment_id": experiment}
+    ).json()
+    assert cited["evidence"] == "measured"
+    assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "passed"
+
+
+def test_citing_late_is_not_a_way_past_the_bar(client: TestClient):
+    """The run is checked the same way, whenever it arrives."""
+    _commit_thresholds(quality_min=0.85)
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": RELEASED_PROMPT},
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    elsewhere = _record_a_run(quality=0.99, measured={"text": "a different prompt"})
+    cited = client.post(
+        f"/v1/releases/{release['id']}/cite", json={"experiment_id": elsewhere}
+    ).json()
+    assert cited["evidence"] == "indirect"
+    assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "unverified"
+
+    assert (
+        client.post(
+            f"/v1/releases/{release['id']}/cite", json={"experiment_id": "nope"}
+        ).status_code
+        == 404
+    )
+
+
+def test_an_approved_release_keeps_the_run_it_was_approved_on(client: TestClient):
+    """Swapping the evidence under a shipped version rewrites history."""
+    experiment = _record_a_run(quality=0.91)
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
+    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+
+    refused = client.post(f"/v1/releases/{release['id']}/cite", json={"experiment_id": experiment})
+    assert refused.status_code == 409
+    assert "keeps the evidence it was approved on" in refused.json()["detail"]
+
+
+def test_a_bar_cleared_on_rows_that_have_since_changed_is_not_cleared(client: TestClient):
+    """The numbers describe data that no longer exists."""
+    _commit_thresholds(quality_min=0.85)
+    experiment = _record_a_run(quality=0.91)
+    # The run claims a revision of entity-extraction that does not match the set
+    # this server can read, which is what an edited dataset looks like.
+    path = Path(os.environ["PROMPT_PLAYOFF_EXPERIMENTS_PATH"])
+    payload = json.loads(path.read_text())
+    payload["experiments"][0]["dataset_revision"] = "a" * 64
+    path.write_text(json.dumps(payload))
+
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+    client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
+
+    gate = client.get(f"/v1/releases/{release['id']}/gate").json()
+    assert gate["status"] == "stale"
+    assert "no longer exist" in gate["reason"]
+    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
+    assert blocked.status_code == 409

@@ -41,6 +41,8 @@ verified by hand rather than by CI.
 | `PROMPT_PLAYOFF_EXPERIMENTS_PATH` | `benchmark-results/experiments.json` | Versioned aggregate experiment history |
 | `PROMPT_PLAYOFF_PROFILES_PATH` | `benchmark-results/model-profiles.json` | Saved model metadata; API keys are excluded |
 | `PROMPT_PLAYOFF_REGISTRY` | Packaged `data/` | Alternative technique, model and dataset root |
+| `PROMPT_PLAYOFF_TECHNIQUES` | `benchmark-results/techniques` | Saved optimization winners: resolvable by id, never ranked |
+| `PROMPT_PLAYOFF_CHECKS` | `prompt-playoff.yaml` | Committed thresholds; also the bar a release must clear to be approved |
 | `PROMPT_PLAYOFF_API_KEY` | Unset | Fallback API key for providers without their own variable |
 | `PROMPT_PLAYOFF_WEBHOOK_URL` | Unset | Receives failed/error regression-check payloads |
 

@@ -1,13 +1,15 @@
 // The prompt and the three measurements taken on it: they share the composer
 // column, which every other screen hides.
 const resultTabs = ['prompt', 'report', 'comparison', 'optimization'];
-const platformTabs = ['dataset-builder', 'context-lab', 'judge', 'model-matrix', 'analysis', 'reviews', 'regressions', 'releases', 'production', 'dataset-library'];
+const platformTabs = ['dataset-builder', 'context-lab', 'judge', 'model-matrix', 'analysis', 'reviews', 'regressions', 'releases', 'production', 'dataset-library', 'dataset-bundled'];
 const sectionTabs = ['s-prompt', 's-examples', 's-check', 's-ship', 's-reference'];
 // Screens whose body is already several surfaces beside one another: the panel
 // they sit in carries no plate of its own, or the parts would read as one.
-const unplatedScreens = new Set(['dataset-upload', 'dataset-hub', 'dataset-builder']);
+const unplatedScreens = new Set(['dataset-upload', 'dataset-hub', 'dataset-builder', 'techniques', 'dataset-bundled',
+  'judge', 'model-matrix', 'context-lab', 'analysis',
+  'regressions', 'reviews', 'releases', 'production']);
 const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', 'dataset-upload', ...platformTabs];
-const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluation Guide'] };
+const docPages = { help: ['/help', 'Help'], evaluation: ['/evaluation', 'Evaluation Guide'] };
 // One name per screen, written down once. The sidebar link, the heading in the
 // context bar and the browser tab all read from here, so a screen can never be
 // called three different things on the way to itself. Names in the navigation
@@ -16,29 +18,33 @@ const docPages = { help: ['/help', 'Help'], evaluation: ['/benchmarks', 'Evaluat
 // longer carry a heading of their own — the context bar is already showing it.
 const screenMeta = {
   prompt:['Prompt', 'Prompt text'], report:['Prompt', 'Measurement'], comparison:['Prompt', 'Method comparison'], optimization:['Prompt', 'Optimization'],
-  'dataset-library':['Datasets', 'Dataset library', 'Every set of examples this server can measure a prompt against: ready-made data sorted by the kind of work it stands for, and below it everything else here — the task benchmarks and the sets you brought yourself.'],
-  'dataset-upload':['Datasets', 'Upload your own', 'Your own examples, one per line, as JSONL. These are the rows a score actually means something against.'],
-  'dataset-hub':['Datasets', 'Import from Hugging Face', 'No examples of your own? Find a public dataset whose material resembles your task and import the rows you pick. This is the only thing here that needs an internet connection.'],
-  'dataset-builder':['Datasets', 'Build datasets', 'Generate rows along every axis of the taxonomy, or around the ones your last run got wrong. Deterministic rules object first; nothing becomes benchmark truth before you approve it.'],
-  history:['Check', 'Results', 'Every run this server has recorded. Aggregate numbers only — prompts and raw model answers are not stored here.'],
-  judge:['Check', 'Pairwise judging', 'Two answers, one rubric, and the order hidden from the judge. Every decision goes to Reviews.'],
-  'model-matrix':['Check', 'Model matrix', 'Run one prompt and one set of examples across models, to find wording that only works on the model you wrote it for.'],
-  'context-lab':['Check', 'Context lab', 'The same prompt against different context: full documents, memory, retrieval results, or a compressed version.'],
-  analysis:['Check', 'Significance', 'Is the difference real? Confidence intervals and per-slice scores, so a small noisy sample does not turn into a release decision.'],
-  regressions:['Production', 'Regressions', 'Better or worse? Compare two recorded runs against the quality and the speed you are willing to lose.'],
-  reviews:['Production', 'Reviews', 'Generated examples, judge decisions, regressions and releases waiting for an explicit yes or no.'],
-  releases:['Production', 'Releases', 'Draft → tested → approved → production, with a rollback that puts the previous prompt back.'],
-  production:['Production', 'Monitoring', 'Watch real inputs drift away from what you tested on, inspect agent runs, and try the prompt against injection attempts.'],
-  techniques:['Reference', 'Techniques', 'Every method with its own task and a real prompt compiled from the live registry. Open the blueprint only when you need its source blocks.'],
-  logs:['Reference', 'Jobs & logs', 'What is running right now, and what every finished run did.'],
-  settings:['Reference', 'Models & keys', 'Three models, and they do different jobs. The prompt engine writes the prompt and the generated rows; the evaluation model runs it and produces every number you see; the judge marks answers against each other, and must not be the model being marked.'],
+  'dataset-library':['Datasets', 'Dataset library', 'All the example sets on this server: ready-made ones grouped by the kind of work, then the sets you brought yourself. This is where you pick what a score will be computed against.'],
+  'dataset-upload':['Datasets', 'Upload your own', 'Upload your own examples as a JSONL file, one row per line. Scores on your own rows are the only ones that say anything about your task.'],
+  'dataset-hub':['Datasets', 'Import from Hugging Face', 'Search Hugging Face for a public dataset that looks like your task and import the rows you pick. Use it when you have no examples of your own. This screen needs the internet.'],
+  'dataset-builder':['Datasets', 'Build datasets', 'Generate example rows from your task description, or around the ones the last run got wrong. Use it when you have nothing of your own and nothing to import. You approve every row before it counts.'],
+  'dataset-bundled':['Datasets', 'Shipped with the tool', 'The benchmark sets that ship inside the package. They are what the tool tests itself with, so use them to try the workflow out — a good score here describes the tool, not your prompt.'],
+  history:['Check', 'Results', 'Every run this server has finished, newest first, with the numbers it produced. Come here to compare two versions or export the history. Prompts and raw answers are not stored.'],
+  judge:['Check', 'Pairwise judging', 'Have a model compare two answers against a rubric without knowing which is which. Use it for work no grader can score, like tone or clarity. Every verdict goes to Reviews for a person to confirm.'],
+  'model-matrix':['Check', 'Model matrix', 'Run the same prompt and the same examples on several models. It tells you whether the prompt works anywhere else, or only on the model you wrote it for.'],
+  'context-lab':['Check', 'Context lab', 'Run the same prompt with different context in front of it — a document, a summary, retrieval results. It tells you whether the extra text is worth the tokens it costs.'],
+  analysis:['Check', 'Significance', 'Check whether a difference between two runs is real or just noise. Paste the per-example scores and you get a confidence interval, plus the score broken down by tag.'],
+  regressions:['Production', 'Regressions', 'Compare two recorded runs and fail the newer one if quality dropped, or latency rose, by more than you allow. Run it before shipping a change.'],
+  reviews:['Production', 'Reviews', 'The queue of things waiting for your yes or no: generated rows, judge verdicts, failed gates and registered releases. Nothing in it proceeds until you answer.'],
+  releases:['Production', 'Releases', 'A register of prompt versions, moved by hand from draft to tested, approved and production. Use it to freeze the exact text you shipped, and to roll back to the previous one.'],
+  // Named for what it does rather than for what the word "monitoring" promises:
+  // nothing here is connected to live traffic. Each of the three checks works on
+  // material you paste in, and the screen says so before it offers a box.
+  production:['Production', 'Spot checks', 'Three checks you run by hand on text you paste in: whether real inputs still look like your examples, whether an agent called the tools it should, and whether the prompt holds when the input attacks it. It does not watch live traffic.'],
+  techniques:['Prompt', 'Techniques', 'The catalogue of every method in the registry, each with a real prompt compiled for a task that suits it. Read it to see what the selector chose from, or to pick a method yourself.'],
+  logs:['Reference', 'Jobs & logs', 'What is running right now and what each finished job did, step by step. Come here when a run is slow or failed. The numbers those runs produced are in Check → Results.'],
+  settings:['Reference', 'Models & keys', 'Where you set the three models and their keys. The prompt engine writes prompts and generated rows, the evaluation model runs them and produces every number you see, and the judge compares two answers — it must never be the model being judged.'],
   evaluation:['Reference', 'Evaluation guide'], help:['Reference', 'Help'],
-  home:['Workspace', 'Prompt Playoff', 'Five places, and one button that walks you through all of them. Everything here runs on your machine.'],
-  's-prompt':['Prompt', 'Prompt', 'The prompt itself, and what is measured on it as it stands right now: one run, the methods that were in the running, and the search for a better wording.'],
-  's-examples':['Datasets', 'Datasets', 'The rows every score is computed against — bring your own, import public ones, or generate them. A number only means something when these look like your real inputs.'],
-  's-check':['Check', 'Check', 'Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves. If one measurement of the prompt as it stands is what you want, that lives in Prompt.'],
-  's-ship':['Production', 'Production', 'The gate between a prompt that scores well here and a prompt running in front of real users.'],
-  's-reference':['Reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.']
+  home:['Workspace', 'Prompt Playoff', 'Five sections, in the order a prompt goes through them, and one button that runs the whole path for you. Everything here runs on your machine.'],
+  's-prompt':['Prompt', 'Prompt', 'The prompt itself and everything measured on it: one run over your examples, the methods scored side by side, and the search for better wording. Start here.'],
+  's-examples':['Datasets', 'Datasets', 'The example rows every score is computed against. Bring your own, import public ones, or generate them — a score describes your task only if these look like your real inputs.'],
+  's-check':['Check', 'Check', 'Ways to test whether a number holds up: on other models, with other context, against another answer, or against statistics. Use this before you trust a result. One plain measurement lives in Prompt.'],
+  's-ship':['Production', 'Production', 'What stands between a good score here and a prompt in front of real users: a version register, a regression gate, a review queue, and checks you run by hand.'],
+  's-reference':['Reference', 'Reference', 'The models everything runs on, the job log and the documentation. Nothing here changes your prompt.']
 };
 
 // The one action a screen offers about itself lives in the same corner on every
@@ -126,6 +132,14 @@ document.querySelectorAll('.bottom-nav a[data-screen]').forEach(link => {
  * -------------------------------------------------------------------------- */
 const sectionArt = (section, size) =>
   `<img class="section-art" src="/assets/section-${section}.webp" alt="" width="${size}" height="${size}" decoding="async">`;
+/* Which section a screen belongs to. It is read off the rail, so the rail and
+ * the path can never disagree — except for the screens the rail does not list.
+ * Models & keys is one: its door is the model in the corner, not a row in a
+ * section, and read off the rail alone it came back sectionless. The path then
+ * lost its middle step and, worse, arriving there collapsed every section in
+ * the rail, because "no section is the current one" and "close them all" are
+ * the same instruction. Every screen has a row now, so the rail is the only
+ * place this is written down. */
 const sectionOf = screen => screen.startsWith('s-') ? screen.slice(2)
   : [...document.querySelectorAll('.sidebar-group[data-section]')]
       .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section || '';
@@ -151,9 +165,10 @@ document.querySelectorAll('[data-section-toggle]').forEach(button => button.addE
 // A count that needs a person is the only thing in the rail allowed a colour.
 function renderSectionCounts() {
   const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
+  // The catalogue is counted where it is now read: beside the prompt it writes.
   const counts = {
-    prompt:'', examples:state.datasetSizes.size || '', check:state.experiments.length || '',
-    ship:pending || '', reference:state.techniqueCatalog.size || ''
+    prompt:state.techniqueCatalog.size || '', examples:state.datasetSizes.size || '',
+    check:state.experiments.length || '', ship:pending || '', reference:''
   };
   document.querySelectorAll('[data-section-count]').forEach(node => {
     const key = node.dataset.sectionCount;
@@ -269,10 +284,31 @@ document.addEventListener('click', event => {
   if (crumb && crumb.dataset.crumb) selectTab(crumb.dataset.crumb, {focus:true});
 });
 
-// One chain, two doors: the rail card and the home tile run the same thing.
+/* One chain, two doors: the rail card and the home tile run the same thing.
+ *
+ * Both doors can be pressed from anywhere, and the chain reads two things that
+ * live on particular screens — the task, out of the composer, and the set of
+ * examples, out of the run setup. So a refusal here has to be a refusal you can
+ * act on: the button goes to the screen carrying the missing field before it
+ * says what is missing, rather than naming a field that is not on screen.
+ */
 function wireSmartStart(button, status) {
   button?.addEventListener('click', async () => {
-    const say = (kind, text) => { if (status) { status.textContent = text; status.className = `${status.classList[0]} ${kind}`; } };
+    // The home tile's own line goes off screen the moment the run navigates
+    // away from home. The rail card is on screen throughout, so every word is
+    // said there too and the run is never running silently.
+    const rail = document.querySelector('.rail-smart-status');
+    const say = (kind, text) => {
+      [status, status === rail ? null : rail].forEach(node => {
+        if (node) { node.textContent = text; node.className = `${node.classList[0]} ${kind}`; }
+      });
+    };
+    if (!state.run.dataset) {
+      selectTab('report', {focus:true});
+      say('error-text', 'Choose a set of examples first — the field is on this screen, then start again.');
+      return;
+    }
+    if (state.tab !== 'prompt') selectTab('prompt');
     button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Running';
     try {
       await smartRun(say);
@@ -310,12 +346,18 @@ function routeFromLocation() {
   };
 }
 
+/* Which of the mobile bar's five is lit. It used to be four hand-written lists,
+ * which meant a screen missing from all of them — Techniques, Jobs & logs, Help,
+ * Models & keys — lit nothing at all, and the bar stopped answering "where am I"
+ * on exactly the screens a reader is most likely to be lost on. It is one
+ * question, so it is asked once: which section is this screen in, and which
+ * destination stands for that section. */
+const sectionDestinations = {
+  prompt:'prompt', examples:'dataset-library', check:'history', ship:'regressions', reference:'s-reference'
+};
+
 function primaryDestination(tab) {
-  if (resultTabs.includes(tab)) return 'prompt';
-  if (['dataset-library', 'dataset-upload', 'dataset-hub', 'dataset-builder'].includes(tab)) return 'dataset-library';
-  if (['history', 'judge', 'model-matrix', 'context-lab', 'analysis'].includes(tab)) return 'history';
-  if (['regressions', 'reviews', 'releases', 'production'].includes(tab)) return 'regressions';
-  return null;
+  return sectionDestinations[sectionOf(tab)] || null;
 }
 
 function setSidebarInteractive(interactive) {
@@ -392,16 +434,16 @@ function sectionTiles() {
   const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
   const technique = state.program?.technique_id || state.chosen;
   return [
-    ['s-prompt', 'Prompt', 'Everything about the prompt itself — writing it, and the measurements taken on it.',
+    ['s-prompt', 'Prompt', 'Write the prompt, measure it on your examples, compare methods, and search for better wording. Start here.',
       technique ? ['ok', 'Prompt ready'] : ['idle', 'Not written yet']],
     ['s-examples', 'Datasets', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
       state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…']],
-    ['s-check', 'Check', 'Different ways of asking the same question: is this prompt actually good, or did it just get lucky?',
+    ['s-check', 'Check', 'Test whether a good score holds up — on other models, with other context, or against statistics.',
       state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')} recorded`] : ['idle', 'Nothing measured yet']],
-    ['s-ship', 'Production', 'The gate between a prompt that scores well here and a prompt running in front of real users.',
+    ['s-ship', 'Production', 'Freeze the version you ship, gate changes against the last run, and answer what is waiting for you.',
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
-    ['s-reference', 'Reference', 'The catalogue, the machinery, and the reading. Nothing here changes your prompt.',
-      state.techniqueCatalog.size ? ['idle', `${plural(state.techniqueCatalog.size, 'technique')}`] : ['idle', 'Loading…']]
+    ['s-reference', 'Reference', 'Set the models and keys, watch what the server is doing, and read what every number means.',
+      ['idle', state.jobs.some(job => job.status === 'running') ? 'A job is running' : 'Nothing running']]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
       <span class="tile-top">${sectionArt(tab.slice(2), 34)}<strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
@@ -413,27 +455,28 @@ function sectionTiles() {
 // five of them, so it gets one short line; the screen itself gets the longer
 // one, read once you are there. Same source, two lengths.
 const tileDesc = {
-  prompt:'Describe the job in plain words; a proven technique is picked and the prompt written for you.',
-  report:'The scorecard for the prompt as it stands, example by example.',
-  comparison:'Every recommended technique scored side by side on the same examples.',
-  optimization:'Rewrites the prompt over several rounds and keeps whichever version scores best.',
-  'dataset-library':'Ready-made data by kind of work, and every other set this server holds.',
-  'dataset-upload':'A JSONL file of your own rows — the only examples a score truly speaks about.',
-  'dataset-hub':'No examples of your own? Find a public dataset whose material resembles your task.',
-  'dataset-builder':'Generate edge cases, or rows around the failures of the last run. Nothing becomes truth before you approve it.',
-  history:'Every run this server has recorded, newest first, with a version-to-version diff.',
-  judge:'Two answers, one rubric, order hidden from the judge.',
-  'model-matrix':'The same prompt on several models, to catch wording that only works on one.',
-  'context-lab':'Same prompt, different context — documents, memory, retrieval, compressed.',
-  analysis:'Is the difference real? Confidence intervals and per-slice scores, so noise does not become a decision.',
-  regressions:'Better or worse? Two recorded runs against the quality and the speed you are willing to lose.',
-  reviews:'Generated examples, judge decisions, regressions and releases needing a yes or no.',
-  releases:'Draft → tested → approved → production, with a rollback that restores the previous prompt.',
-  production:'Input drift, agent runs, and injection attempts — three checks on what happens in production.',
-  techniques:'Every method with its own task and a real prompt compiled from the live registry.',
-  logs:'What is running right now, and what every finished run did.',
-  settings:'Three models: one writes the prompt, one runs the tests, one marks the answers.',
-  evaluation:'What the scores mean, and when a number is worth trusting.',
+  prompt:'Describe the job in plain words. A method with a track record is picked and the prompt written for you.',
+  report:'Run the prompt on your examples and see what it scored, example by example.',
+  comparison:'Score every recommended method on the same examples, so the ranking is measured and not assumed.',
+  optimization:'Rewrite the prompt over several rounds and keep whichever version scores best.',
+  'dataset-library':'All example sets on this server: ready-made ones by kind of work, then your own.',
+  'dataset-upload':'Upload your own rows as JSONL. Scores on them are the ones that describe your task.',
+  'dataset-hub':'Import a public dataset that looks like your task, for when you have no examples of your own.',
+  'dataset-builder':'Generate rows from your task, or around what the last run got wrong. You approve every one.',
+  'dataset-bundled':'The benchmarks inside the package, for trying the workflow out rather than judging your prompt.',
+  history:'Every finished run, newest first, with a version-to-version diff and a CSV export.',
+  judge:'Have a model compare two answers against a rubric, blind, for work no grader can score.',
+  'model-matrix':'Run the same prompt on several models, to see whether it works anywhere but yours.',
+  'context-lab':'Run the same prompt with different context, to see whether the extra text pays for its tokens.',
+  analysis:'Check whether a difference between two runs is real or just noise, before acting on it.',
+  regressions:'Compare two runs and fail the new one if it got worse or slower than you allow.',
+  reviews:'Everything waiting for your yes or no: generated rows, verdicts, failed gates, releases.',
+  releases:'Freeze the exact prompt you shipped, move it from draft to production, roll back when needed.',
+  production:'Three checks you run by hand on pasted text: input drift, agent tool calls, injection attempts.',
+  techniques:'The catalogue of methods, each with a real prompt compiled from the live registry.',
+  logs:'What is running right now, and what each finished job did, step by step.',
+  settings:'Set the three models and keys: one writes prompts, one runs them, one compares answers.',
+  evaluation:'Where every number comes from, and when it is worth trusting.',
   help:'How the whole thing fits together, start to finish.'
 };
 
@@ -476,10 +519,15 @@ function screenState(tab) {
       return mine ? ['ok', `${plural(mine, 'set')} of yours`] : ['idle', 'Nothing uploaded'];
     }
     case 'dataset-hub': return ['idle', 'Needs internet'];
+    case 'dataset-bundled': {
+      const bundled = [...state.datasetSizes.keys()].filter(name => !name.includes(':')).length;
+      // Same rule as the screen itself: a prefix means it came from somewhere.
+      return bundled ? ['idle', `${plural(bundled, 'benchmark')}`] : ['idle', 'Loading…'];
+    }
     case 'judge': return screenResultState('judge');
     case 'model-matrix': return screenResultState('model-matrix');
     case 'context-lab': return screenResultState('context-lab');
-    case 'production': return ['idle', '3 tools'];
+    case 'production': return ['idle', '3 checks'];
     case 'logs': {
       const running = state.jobs.filter(job => job.status === 'running').length;
       return running ? ['wait', `${plural(running, 'job')} running`] : ['idle', 'Idle'];
@@ -491,10 +539,10 @@ function screenState(tab) {
 
 const screenActionLabels = {
   prompt:'Open Editor', report:'Measure Now', comparison:'Compare', optimization:'Optimize',
-  'dataset-library':'Browse Sets', 'dataset-upload':'Upload', 'dataset-hub':'Import Hub', 'dataset-builder':'Generate',
-  history:'View Runs', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', analysis:'Analyze',
-  regressions:'Check Diff', reviews:'Review', releases:'Manage', production:'Inspect',
-  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More'
+  'dataset-library':'Browse Sets', 'dataset-upload':'Upload', 'dataset-hub':'Import Hub', 'dataset-builder':'Generate', 'dataset-bundled':'Browse',
+  history:'View Results', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', analysis:'Analyze',
+  regressions:'Check Diff', reviews:'Review', releases:'Manage', production:'Run a check',
+  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', settings:'Set Models'
 };
 
 const sectionSpotlights = {
@@ -504,9 +552,9 @@ const sectionSpotlights = {
       const isReady = Boolean(st.program?.technique_id || st.chosen);
       return `<span>Prompt Health:</span> <span class="state ${isReady ? 'ok' : 'wait'}">${isReady ? 'Ready' : 'Requires Attention'}</span><span class="info-dot" title="Prompt status">ℹ</span>`;
     },
-    desc: (st) => st.chosen 
-      ? 'Your prompt is authored and ready. Run measurements against test examples, compare alternative techniques, and optimize for top quality.'
-      : 'No prompt authored yet. Describe your task to generate a high-performing prompt with automatic technique selection.'
+    desc: (st) => st.chosen
+      ? 'Your prompt is written. Measure it on your examples, compare it with the other methods, or search for better wording. The catalogue it came from is here too.'
+      : 'No prompt yet. Describe the task in plain words and one gets written for you, using a method picked for that kind of work.'
   },
   examples: {
     tag: 'Your Datasets',
@@ -514,7 +562,9 @@ const sectionSpotlights = {
       const count = st.datasetSizes.size || 0;
       return `<span>Dataset Health:</span> <span class="state ${count ? 'ok' : 'wait'}">${count ? `${plural(count, 'set')} loaded` : 'No datasets'}</span><span class="info-dot" title="Dataset health">ℹ</span>`;
     },
-    desc: () => 'Examples provide benchmark ground truth. Upload JSONL rows from production, import public sets from Hugging Face, or synthesize edge cases.'
+    desc: (st) => st.datasetSizes.size
+      ? 'Any set here can be measured against. If none of them looks like your real inputs, twenty rows of your own beat a public set of two hundred.'
+      : 'Nothing loaded yet. Upload a JSONL file of your own rows, import a public set, or generate rows from your task.'
   },
   check: {
     tag: 'Evaluation Suite',
@@ -522,10 +572,12 @@ const sectionSpotlights = {
       const count = st.experiments.length || 0;
       return `<span>Validation Health:</span> <span class="state ${count ? 'ok' : 'idle'}">${count ? `${plural(count, 'run')} recorded` : 'Ready to test'}</span><span class="info-dot" title="Validation status">ℹ</span>`;
     },
-    desc: () => 'Verify prompt quality across model families, blind judge side-by-side answers, and analyze statistical confidence before shipping.'
+    desc: (st) => st.experiments.length
+      ? 'Come here with a result you are about to act on, and check it survives another model, another context, or a confidence interval.'
+      : 'Nothing measured yet. Run the prompt on your examples first; these screens all compare something against something else.'
   },
   ship: {
-    tag: 'Deployment Gate',
+    tag: 'Release Gate',
     statusTitle: (st) => {
       const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
       return `<span>Release Health:</span> <span class="state ${pending ? 'wait' : 'ok'}">${pending ? `${pending} Pending` : 'All Clear'}</span><span class="info-dot" title="Release status">ℹ</span>`;
@@ -533,17 +585,17 @@ const sectionSpotlights = {
     desc: (st) => {
       const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
       return pending
-        ? `${pending} items are awaiting your manual approval before deployment. Check regression tolerances and promote with confidence.`
-        : 'All release pipelines are up to date. Monitor production quality, track input drift, and register version releases.';
+        ? `${pending} waiting for a yes or no. Nothing moves until you give one.`
+        : 'Nothing is waiting. Register a version, compare two recorded runs, or spot-check the inputs you have seen since.';
     }
   },
   reference: {
     tag: 'Knowledge Base',
     statusTitle: (st) => {
-      const count = st.techniqueCatalog.size || 61;
-      return `<span>Catalog Status:</span> <span class="state ok">${count} Methods</span><span class="info-dot" title="Catalog status">ℹ</span>`;
+      const running = st.jobs.filter(job => job.status === 'running').length;
+      return `<span>Reference:</span> <span class="state ${running ? 'wait' : 'idle'}">${running ? `${plural(running, 'job')} running` : 'Nothing running'}</span><span class="info-dot" title="Reference status">ℹ</span>`;
     },
-    desc: () => 'Complete reference manual, live prompting technique blueprints, execution jobs telemetry, and evaluation benchmarks.'
+    desc: () => 'Nothing here changes your prompt. Set a model before the first run — every screen that measures anything waits on it.'
   }
 };
 
@@ -591,6 +643,7 @@ function tally(items, keyOf) {
 const sectionStock = {
   prompt() {
     const program = state.program;
+    if (!program) return sectionStock.catalogue();
     const items = [];
     (program?.stages || []).forEach((stage, index) => stage.messages.forEach(message => items.push({
       label: promptPartName(program, index, message),
@@ -638,7 +691,7 @@ const sectionStock = {
       empty:'Nothing in flight. Releases and anything waiting for your yes or no are drawn here.'
     };
   },
-  reference() {
+  catalogue() {
     // Not by family: there are nearly as many families as techniques, and a map
     // of sixty circles of one is a list with extra steps. What the catalogue is
     // strong at is both coarse enough to draw and the thing you came to ask.
@@ -696,13 +749,13 @@ const sectionNextStep = {
     if (pending) return ['reviews', `Clear ${pending} waiting`, 'Nothing moves past this gate while something is unanswered.', 'pending'];
     if (!state.quality.releases.length) return ['releases', 'Register a release', 'A named, hashed version is what a rollback puts back.'];
     if (state.quality.releases.some(release => release.status === 'production')) {
-      return ['production', 'Watch for drift', 'Real inputs drift away from the ones you tested on.'];
+      return ['production', 'Check for drift', 'Paste the inputs you have seen since, and see how far they have moved from the ones you tested on.'];
     }
     return ['releases', 'Move the release along', 'Draft → tested → approved → production, one explicit step at a time.'];
   },
   reference() {
     if (!state.experiments.length && !state.report) return ['evaluation', 'Read what the scores mean', 'Worth ten minutes before the first number arrives.'];
-    return ['techniques', 'Browse the catalogue', 'Every method with a real prompt compiled from the live registry.'];
+    return ['logs', 'See what has run', 'Every finished job, and whatever is running right now.'];
   }
 };
 
@@ -836,6 +889,8 @@ function renderSectionMap(section) {
 function renderSection(tab) {
   const section = tab.slice(2);
   const group = document.querySelector(`.sidebar-group[data-section="${section}"]`);
+  // The rail's rows, and nothing else: a section screen claims to list what is
+  // under it, so the two lists have to be the same list.
   const screens = group ? [...group.querySelectorAll('.sidebar-links a')].map(link => link.dataset.screen) : [];
   const spotlight = sectionSpotlights[section];
 
@@ -871,7 +926,6 @@ function renderSection(tab) {
 function renderHome() {
   return `<div class="tiles">
       <div class="tile wide smart-tile">
-        <span class="smart-mark" aria-hidden="true">${icon('sparkle')}</span>
         <div>
           <strong>Smart run</strong>
           <p>Writes the prompt, measures it on your examples, improves it over a few rounds, and stops at the first step that needs you. Minutes, not seconds.</p>
@@ -900,7 +954,10 @@ function detailBody(tab) {
   if (platformTabs.includes(tab)) body = renderPlatformTab(tab);
   if (docPages[tab]) {
     const [src, title] = docPages[tab];
-    body = `<iframe class="doc-frame" src="${src}" title="${title}"></iframe>`;
+    // ?embed is the documents' own switch for "the screen around me is already
+    // carrying my name": without it the panel header and the page's title say
+    // the same words twice.
+    body = `<iframe class="doc-frame" src="${src}?embed" title="${title}"></iframe>`;
   }
   return body;
 }
@@ -1105,6 +1162,16 @@ function updateWorkspaceContext() {
   const dataset = state.run.dataset || 'Not selected';
   const model = state.settings.evaluation.model_id.trim() || 'Not set';
   [['context-prompt', prompt], ['context-dataset', dataset], ['context-model', model], ['rail-model-name', model]].forEach(([id, value]) => { const node=$(id); if (node) node.textContent=value; });
+  // The chip is labelled Prompt and the value beside it is the name of a method,
+  // which read as the method being the prompt. It is not: it is which method the
+  // prompt was written with, and that is what the chip now says in full.
+  const promptChip = document.querySelector('[data-testid="context-prompt-link"]');
+  if (promptChip) {
+    promptChip.title = technique
+      ? `The prompt on this workbench, written with the ${prompt} method`
+      : 'No prompt has been written yet';
+    promptChip.setAttribute('aria-label', promptChip.title);
+  }
   // The dataset named in the bar opens the library on that set, the same door
   // the circle for it opens on the section screen.
   const datasetLink = $('context-dataset-link');
@@ -1112,6 +1179,13 @@ function updateWorkspaceContext() {
     const chosen = state.run.dataset;
     datasetLink.dataset.showing = chosen || '';
     datasetLink.href = `#dataset-library${chosen ? `/${encodeURIComponent(chosen)}` : ''}`;
+  }
+  // The comparing screens hold every row on them to one set of examples, and
+  // name that set before the run starts. It is chosen on the screens that
+  // measure and can arrive after they have been drawn, so the line is rewritten
+  // here rather than left saying nothing is selected.
+  if (typeof runAgainst === 'function') {
+    document.querySelectorAll('.run-against').forEach(node => { node.innerHTML = runAgainst(node.dataset.lead); });
   }
   applyModelGate();
   renderSectionCounts();
@@ -1310,9 +1384,16 @@ function renderHistory() {
   // Arriving from the section map means arriving to look at one set: the chart,
   // the two version pickers and the table all speak about that set alone, so
   // the line you came to read is not one point among eleven.
+  // Arrived on a set, or on one run: a release names the run that justified it,
+  // and the link has to land on that row rather than on the whole file.
   const only = showingOn('history');
-  const records = only ? state.experiments.filter(item => item.dataset === only) : state.experiments;
-  if (!records.length) return `<div class="empty">No runs recorded on ${esc(only)}.</div>`;
+  const records = only
+    ? state.experiments.filter(item => item.dataset === only || item.id === only)
+    : state.experiments;
+  if (!records.length) {
+    return `<div class="empty">No run recorded under ${esc(only)}. Records live in this server's history
+      file; one registered before the file was cleared cannot be shown.</div>`;
+  }
   // One row per measured variant, numbers unformatted. The server writes the
   // file; the link only names it.
   const options = records.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');

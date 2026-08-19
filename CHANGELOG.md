@@ -9,6 +9,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `selector-eval`: the ranking is now graded, and the grade is a number. Every weight in the
+  selector was set by hand in reaction to a case somebody noticed, and nothing in the project could
+  say whether any of them helped. Wherever the measurement store holds two techniques benchmarked
+  on the same task, model and dataset, that is a settled contest; the harness hides the cell, asks
+  the ranking to place the entrants blind, and reports how much outcome following it costs against
+  a coin flip. It spends no model calls. On the bundled measurements it read **lift +0.01** — the
+  ranking was a coin flip with extra steps — which is what the entries below are answers to. Two of
+  its first findings were about the data rather than the ranking: techniques were being compared
+  across different datasets, and a model was being credited with fewer capabilities than the runs
+  had already demonstrated it had, which ruled `agents.react` ineligible for an agents contest it
+  had in fact won. CLI only for now; `--json` for the raw contests.
+- Priors that measurement can reach (`prompt_playoff.priors`). `benchmark_priors: 0.84` in a
+  technique file used to be the last word, unmovable by any number of benchmarks. It is now the
+  starting point, shifted by what the runs found. Two things make that harder than averaging:
+  scores from different datasets are not comparable, so nothing averages scores — every run becomes
+  an *advantage* over the other techniques measured on exactly the same rows — and there is almost
+  no data, so estimates are built coarse to fine and each level moves the one above it only as far
+  as its own runs justify. Measured latency and tokens feed the efficiency axes the same way.
+  Regret on the harness fell from **0.114 to 0.017**, lift from **+0.08 to +0.86**, worst single
+  contest from **0.80 to 0.12**, and the result is flat across shrinkage constants from 2 to 16, so
+  it is signal rather than a fitted number.
+
+- Benchmarks record the request they answered, not only its task type. A score without the shape
+  and constraints behind it is a number about a question nobody wrote down, and two of them cannot
+  be compared: the same technique on the same rows, run once with tools and once without, produced
+  two numbers, and the newer silently erased the older. `MeasuredEvidence.request` carries it,
+  contests are keyed by it, and `selector-eval` says how many of its grades are replays and how
+  many are reconstructions. Records made before this land under `unrecorded` and behave as they
+  always did.
+
+### Changed
+
+- `confidence` is a probability now, and one that can be checked. It was a blend of three numbers
+  that between them estimated nothing — a technique showing 0.71 was no likelier to be right than
+  one showing 0.58. It is now P(this technique beats the next one the ranking liked), from a spread
+  that narrows as benchmarks accumulate. Read as a two-horse race deliberately: the probability of
+  being best of sixty near-tied candidates is too small to print and too small to act on. On the
+  bundled measurements it claims **67%** and those pairs go that way **68%** of the time, and
+  `selector-eval` reports that gap every run.
+- A low-confidence recommendation now names the techniques the ranking cannot separate instead of
+  saying "run a task-specific benchmark" at nobody in particular.
+- The task type of a description is the best-matching one, not the first one to match. The keyword
+  fallback walked a literal list and stopped at the first hit, which made the order of that list
+  into a decision: "summarize this python script" was read as coding. Every type is now scored, a
+  word naming the work outranks any number of words naming the material, and `извлеч` gained the
+  stem `извлек` — it never matched `извлеки`, which is the form the requests actually use.
+- `Selector.rank` exposes the scoring without the family-diversity reshuffle `select` applies. The
+  reshuffle is right for a person reading three suggestions and wrong for grading, because it hides
+  whether the scoring put the right technique on top.
+
+- A path out of the Optimization screen. The search winner used to be text on a page: `Releases`
+  registered whatever was on `Prompt text`, which the search never touched, so a run could be
+  optimized and shipped and the two would have nothing to do with each other. **Adopt optimized
+  prompt** recompiles the winning instruction blocks against your own task and puts them on the
+  prompt screen, marked `artifact_source: optimizer`. It recompiles rather than copies: the preview
+  under the metrics was compiled against one row of the benchmark, so copying it would ship
+  somebody else's example as your task. The button is not offered when the baseline won — adopting
+  then would overwrite engine-written text with a plain compile of the recipe.
+- `POST /v1/export/technique`: `optimize --export` over HTTP. Without `save` the technique YAML
+  comes back for your own registry; with it, the server keeps the file and the id resolves — which
+  is what lets `/v1/run` and an exported runtime client execute the winner instead of the recipe it
+  was tuned from. Saved techniques are listed by `GET /v1/techniques` and removable with
+  `DELETE /v1/techniques/{id}`, are never ranked by `/v1/recommend`, and may not take a registry
+  recipe's name. They live in `PROMPT_PLAYOFF_TECHNIQUES`, one YAML each.
+- Releases record the run that justified them. `experiment_id` existed on the record and nothing
+  ever filled it, so a measured release and an unmeasured one looked alike; the register now shows
+  which run each version was shipped on, and says `unmeasured` where there was none.
+- Approving a release is gated on the thresholds in `prompt-playoff.yaml`, the same ones CI
+  enforces — until now they guarded the repository and not the thing being shipped. The bar is
+  applied to the run the release cites, with no new model calls. A bar that cannot be applied — no
+  recorded run, or a run missing the field the bar names — refuses too: not knowing is not passing.
+  A method the project set no bar for is gated by the person alone, as before. Readable ahead of
+  the click via `GET /v1/releases/{id}/gate`.
+
+- The search now rewrites your prompt, not the recipe behind it. Given the prompt you are holding,
+  each candidate is a rewrite of its own messages rather than a patch to a registry block — which
+  the block search could never reach, because by the time someone holds a prompt the blocks have
+  been rendered into messages and an engine may have rewritten them. Two things are refused
+  structurally: a rewrite that loses the place an example's input goes cannot be measured at all,
+  and one already tried wastes the round. Everything else is settled by measurement. The winner is
+  a prompt, so adopting it copies the measured text verbatim instead of recompiling, and no
+  technique file is offered — a file of the untouched recipe would reproduce none of it.
+- Releases verify the run they cite. A run records a fingerprint of the prompt it measured, and a
+  release is marked `measured` only when that matches the text being frozen; `indirect` when a run
+  is cited but measured something else — the optimization that produced the wording, say — and
+  `unverified` when nothing is cited. Registering any of the three is allowed and recorded;
+  approving on anything but `measured` is not.
+
+- A release registered before its run existed is no longer stranded. `POST /v1/releases/{id}/cite`
+  attaches a run after the fact, verified the same way as one supplied at registration — a run of a
+  different prompt still lands as `indirect`, so this supplies evidence rather than skipping it. An
+  approved release keeps the run it was approved on.
+- A saved technique travels. The runtime export carries the technique file when it is one this
+  server holds rather than one the package ships, and `POST /v1/techniques/import` takes it in at
+  the other end. Before this the generated client only ran on the machine that made it.
+
+- Worked examples for a prompt the search cannot find a place inside. A recipe renders
+  demonstrations into a block it owns; finished text has no such block, and guessing a spot inside
+  somebody's prose means deciding where their instructions end — which free text does not say. The
+  demonstrations go beside the text instead: user/assistant turns immediately ahead of the real
+  request, in the stage carrying the input, so the prompt underneath is untouched byte for byte.
+  They are labelled on the prompt screen and one button takes them back out. The marker is internal;
+  a provider is sent role and content and nothing else.
+
+### Fixed
+
+- Approving a release is refused when the examples have changed since the run it cites. The numbers
+  described rows that no longer exist, and a bar cleared on them proves nothing about today's data.
+- A comparison run records the fingerprint of the arm that was authored, so a release citing one is
+  no longer marked as measuring a different prompt when it did not.
+- The optimization screen claimed the search rewrites your words whichever backend was selected.
+  Only the native one does; a DSPy backend searches the recipe's instruction block whatever it is
+  measured against. The screen now says which, and the result carries the same note.
+- `/v1/optimize` accepted a `prompt` and ignored it. The baseline was a fresh compile of the
+  registry recipe while the screen beside it showed engine-written text, so a reported gain could
+  be a gain over a prompt nobody had ever seen — and a loss against the one on the screen. The
+  authored prompt is now the baseline in both the native and the DSPy backend, every result says
+  which baseline it measured, and a prompt from another technique or with nowhere to put an
+  example's input is refused before the run spends anything.
+
 - The business catalogue: 50 jobs businesses pay a model to do, in ten categories — email, customer
   support, meetings, document routing, invoices and receipts, legal and contracts, finance, privacy
   and compliance, HR and recruiting, marketing and e-commerce — each mapped to the public dataset
@@ -46,6 +166,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that starts the server and fails the build unless `/health` answers.
 
 ### Changed
+
+- The Evaluation guide is one document again, at `/evaluation` and `/evaluation/ru`. There were two:
+  a `Benchmarks` page the app actually opened, dark-only with its own copy of the design tokens
+  inside a `<style>` block, and the rewritten guide on the shared `/assets/docs.css` that no route
+  served and nothing linked. The rewritten one is what ships; the old paths redirect to it, so a
+  page cannot go stale by being the copy nobody edits. Its content now describes the workbench as it
+  is: twenty-eight bundled sets in the library's three zones, the fifty-case business catalogue and
+  the seventeen `business:*` sets behind it, `token_f1` and `injection_resistance` among the
+  graders, the meaning/contract split drawn where `RELIABILITY_GRADERS` draws it, what a release
+  needs before it can be approved, and what the search does to your own words. The Russian
+  translation exists for the first time.
+- Every screen and section now says, in plain words, what it is and what it is for. The one-liners
+  were written as aphorisms — "Better or worse?", "Is the difference real?", "The gate between a
+  prompt that scores well here and a prompt running in front of real users" — which read well and
+  told a newcomer nothing about what the screen does. Significance now says it checks whether a
+  difference is real or noise and what to paste in; Releases says it is a register of versions you
+  freeze and roll back; Reviews says nothing in the queue proceeds until you answer. The home tiles
+  and the status line under each section illustration were rewritten the same way, and the status
+  line no longer repeats the panel description above it — it says what to do next from where you
+  are.
+- A pass over the screen copy for length. The guide beside every screen said each thing twice — once
+  plainly and once as the reason it is that way — so each item is one or two sentences now and every
+  number, threshold and formula stayed: the releases guide lost a third of its words without losing
+  a rule. The section tiles no longer speak in another voice: "generate a high-performing prompt
+  with automatic technique selection" and "all release pipelines are up to date" were describing a
+  product rather than this one, which has no pipelines and deploys nothing. The upload screen
+  stopped repeating its own checkbox, and the library stopped restating the panel header above it.
+- The business categories are named in words that fit their tile: four of the ten headlines were
+  being cut mid-phrase — "Automate support…", "Send documents to…" — because they were written
+  longer than the two lines the shelf gives them.
+- Both documents carry a contents strip, built by `/assets/docs.js` from their own headings rather
+  than written out in four files that would drift from the pages under them. Twelve sections and
+  ten thousand pixels is the problem the technique catalogue already solved with an index, and this
+  is that idiom: a quiet kicker, the sections as links, the shape of the document before it is
+  scrolled. Inside the app the frame is drawn at the document's full height, so it has nothing to
+  scroll and a bare `#anchor` moved nothing — the jump is made on the page holding the frame, and
+  it honours `prefers-reduced-motion` like the rest of the app.
+- Help says what the workbench does now: twenty-eight bundled sets and the screen that generates
+  rows, the catalogue of methods under Prompt rather than Reference, `Where it went wrong` by the
+  name the measurement screen gives it, `token_f1` for prose, adopting an optimized prompt, and
+  what a release has to prove before it can be approved. Russian was updated in the same pass.
+- The document frame no longer pins `color-scheme:dark`: the page inside picks its scheme from the
+  theme, and a light app was getting dark scrollbars and controls in the frame.
+- A document opened inside the app is loaded with `?embed`, the switch both pages have carried
+  since they moved to the shared stylesheet and nothing ever set: the panel header and the
+  document's own title stopped saying the same words twice. The head keeps its language chip, which
+  is the one thing the rail around it has no button for.
 
 - Renamed the project from Prompt Selector to Prompt Playoff. Everything that carried the old
   name moves with it: the distribution is `prompt-playoff`, the import package is

@@ -338,6 +338,138 @@ def _compare(key: str, required: float, values: dict[str, float]) -> ThresholdRe
     )
 
 
+# --------------------------------------------------------------------------- #
+# the same thresholds, applied to a release instead of to a CI run
+# --------------------------------------------------------------------------- #
+
+
+class ReleaseGate(BaseModel):
+    """Whether a recorded run clears the bar this project committed to.
+
+    The bar is the one already in `prompt-playoff.yaml` — the same numbers CI
+    enforces. Approving a release used to need only a human to click yes, which
+    meant the committed thresholds guarded the repository and not the thing
+    actually being shipped.
+    """
+
+    status: Literal[
+        "passed", "failed", "stale", "unverified", "unmeasured", "unenforceable", "not_configured"
+    ]
+    config: str | None = None
+    checks: list[str] = Field(default_factory=list)
+    thresholds: list[ThresholdResult] = Field(default_factory=list)
+    reason: str | None = None
+
+    @property
+    def blocks_approval(self) -> bool:
+        """A gate that could not be evaluated is not a gate that passed."""
+        return self.status in {"failed", "stale", "unverified", "unmeasured", "unenforceable"}
+
+
+def default_check_path() -> Path:
+    return Path(os.getenv("PROMPT_PLAYOFF_CHECKS", "prompt-playoff.yaml")).expanduser()
+
+
+def release_gate(
+    technique_id: str,
+    metrics: dict[str, float] | None,
+    path: Path | None = None,
+    evidence: str = "measured",
+    dataset_changed: bool = False,
+) -> ReleaseGate:
+    """Read the committed thresholds for this technique and apply them to a run.
+
+    Nothing here calls a model: the release cites a recorded run, and that run's
+    numbers are what the bar is applied to. Re-measuring inside an approval would
+    turn one click into a job, and would score a different sample than the one
+    the release says it was approved on.
+    """
+    path = path or default_check_path()
+    if not path.is_file():
+        return ReleaseGate(
+            status="not_configured",
+            reason=f"No committed thresholds: {path} does not exist.",
+        )
+    try:
+        config = load_check_file(path)
+    except CheckConfigError as exc:
+        return ReleaseGate(status="unenforceable", config=str(path), reason=str(exc))
+
+    specs = [item for item in config.checks if item.technique == technique_id]
+    if not specs:
+        return ReleaseGate(
+            status="not_configured",
+            config=str(path),
+            reason=(
+                f"{path} commits no thresholds for {technique_id}, so there is no bar to "
+                "clear. Add a check for it to gate releases on numbers."
+            ),
+        )
+    names = [item.name for item in specs]
+    # A run that measured different text is not this prompt's number, however
+    # good it is. Registering such a release is allowed and recorded; shipping
+    # it on numbers that describe something else is not.
+    if evidence == "indirect":
+        return ReleaseGate(
+            status="unverified",
+            config=str(path),
+            checks=names,
+            reason=(
+                "The run this release cites measured a different prompt, so its numbers are "
+                "not about the text being shipped. Measure this prompt, then register it."
+            ),
+        )
+    if dataset_changed:
+        return ReleaseGate(
+            status="stale",
+            config=str(path),
+            checks=names,
+            reason=(
+                "The examples have changed since this run. Its numbers describe rows that no "
+                "longer exist, so clearing the bar on them proves nothing about today's data. "
+                "Measure again on the current set."
+            ),
+        )
+    if not metrics or evidence == "unverified":
+        return ReleaseGate(
+            status="unmeasured",
+            config=str(path),
+            checks=names,
+            reason=(
+                f"{path} sets a bar for {technique_id}, but this release cites no recorded "
+                "run to apply it to. Measure the prompt, then register it."
+            ),
+        )
+    required: dict[str, float] = {}
+    for spec in specs:
+        required |= spec.require
+    missing = sorted({key.rsplit("_", 1)[0] for key in required} - set(metrics))
+    if missing:
+        return ReleaseGate(
+            status="unenforceable",
+            config=str(path),
+            checks=names,
+            reason=(
+                f"The recorded run carries no {', '.join(missing)}, so "
+                f"{', '.join(sorted(required))} cannot be checked against it."
+            ),
+        )
+    thresholds = [_compare(key, value, metrics) for key, value in sorted(required.items())]
+    passed = all(item.passed for item in thresholds)
+    breached = [
+        f"{item.field} {item.measured:g} vs {item.bound} {item.required:g}"
+        for item in thresholds
+        if not item.passed
+    ]
+    return ReleaseGate(
+        status="passed" if passed else "failed",
+        config=str(path),
+        checks=names,
+        thresholds=thresholds,
+        reason=None if passed else f"Below the committed bar: {'; '.join(breached)}.",
+    )
+
+
 def _setup_error(exc: Exception, spec: CheckSpec, path: Path) -> str:
     if isinstance(exc, ProviderError):
         return f"Provider setup failed for {spec.name!r}: {exc}; check model credentials/base_url"

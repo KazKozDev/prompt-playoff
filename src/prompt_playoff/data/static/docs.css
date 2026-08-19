@@ -78,11 +78,28 @@ li::marker { color:var(--muted); }
 /* The head is for the page read on its own. Inside the app the screen already
    carries its name and its one line, so the document does not say them again. */
 .doc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:26px; }
-:root.embed .doc-head { display:none; }
+/* Embedded, the name and the one line are the panel's job — but the way to the
+   other language is nobody else's, so the head keeps that one chip and drops
+   the rest of itself. */
+:root.embed .doc-head { justify-content:flex-end; margin-bottom:14px; }
+:root.embed .doc-head > div { display:none; }
 .doc-head .lede { margin:6px 0 0; max-width:56ch; color:var(--muted); font-size:var(--fs-base); }
 /* Same box as the app's export link, so a link out of a page always looks the same. */
 .lang { flex:0 0 auto; padding:6px 11px; border:1px solid var(--border); border-radius:var(--r-sm); color:var(--muted); font-size:var(--fs-sm); font-weight:500; line-height:1.5; text-decoration:none; white-space:nowrap; }
 .lang:hover { border-color:var(--border-strong); color:var(--text); }
+/* The contents strip, built by docs.js from the headings. Same idiom as the
+   technique index in the app: a quiet kicker, then the sections as links that
+   wrap, so a long document shows its shape before it is scrolled. */
+/* No rule under it: the first section already draws one, and two lines a few
+   pixels apart read as a mistake. */
+.doc-index { margin:0; padding:14px 0 0; border-top:1px solid var(--border); }
+.doc-index-title { margin-bottom:8px; color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+.doc-index-links { display:flex; flex-wrap:wrap; gap:6px 18px; }
+.doc-index a { color:var(--text-2); font-size:var(--fs-base); line-height:1.5; white-space:nowrap; text-decoration-color:var(--border); text-underline-offset:3px; }
+.doc-index a:hover { color:var(--text); text-decoration-color:var(--border-strong); }
+/* A jumped-to heading sits under its own rule, not against the frame's edge. */
+h2[id] { scroll-margin-top:14px; }
+
 /* Read on its own, the page needs a way back; inside the app the rail is it. */
 .doc-foot { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
 .doc-foot a { color:var(--muted); }
@@ -151,4 +168,8 @@ details p, details li, details td { font-size:var(--fs-base); }
 @media (max-width:600px) {
   main { width:calc(100% - 20px); }
   h2 { margin:32px 0 12px; }
+  /* One entry per line at this width anyway; a long section name is allowed to
+     wrap rather than push the page sideways. */
+  .doc-index-links { gap:5px 14px; }
+  .doc-index a { white-space:normal; }
 }

@@ -37,6 +37,18 @@ document.addEventListener('click', async event => {
     return;
   }
 
+  // Taking the worked examples back out is a local edit: they are separate
+  // messages, so removing them leaves the text the person wrote, unchanged.
+  const dropDemos = event.target.closest('[data-action="drop-demos"]');
+  if (dropDemos) {
+    state.program = {...state.program, stages: state.program.stages.map(stage =>
+      ({...stage, messages: (stage.messages || []).filter(message => !message.demo)}))};
+    // The numbers were measured with them in, so they no longer describe this.
+    state.provenance = null;
+    renderDetail();
+    return;
+  }
+
   const runtimeExport = event.target.closest('[data-runtime-export]');
   if (runtimeExport) {
     runtimeExport.disabled = true;
@@ -48,6 +60,12 @@ document.addEventListener('click', async event => {
       });
       downloadText(bundle.filename, bundle.content);
       window.setTimeout(() => downloadText(bundle.config_filename, bundle.config, 'application/json'), 150);
+      // A technique this server holds rather than one the package ships has to
+      // travel with the client, or the export only runs on the machine it was
+      // made on. The note in the bundle says what to do with it.
+      if (bundle.technique) {
+        window.setTimeout(() => downloadText(bundle.technique_filename, bundle.technique, 'text/yaml'), 300);
+      }
       runtimeExport.textContent = 'Exported';
     } catch (e) { runtimeExport.textContent = 'Export failed'; runtimeExport.title = e.message; }
     finally { window.setTimeout(() => { runtimeExport.disabled = false; runtimeExport.textContent = original; }, 1800); }

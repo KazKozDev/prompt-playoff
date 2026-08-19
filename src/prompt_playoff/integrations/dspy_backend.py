@@ -20,7 +20,13 @@ from collections.abc import Callable
 from typing import Any, Literal, cast
 
 from prompt_playoff.compiler import PromptCompiler
-from prompt_playoff.domain import Exemplar, ModelProfile, TaskProfile, TechniqueSpec
+from prompt_playoff.domain import (
+    CompiledProgram,
+    Exemplar,
+    ModelProfile,
+    TaskProfile,
+    TechniqueSpec,
+)
 from prompt_playoff.evals import BenchmarkExample, BenchmarkRunner
 from prompt_playoff.graders import (
     QUALITY_PREFERENCE,
@@ -36,8 +42,10 @@ from prompt_playoff.optimizer import (
     OptimizationRound,
     ProgressCallback,
     TechniqueOverlay,
+    _baseline_note,
     _failure_digest,
     _rescore,
+    _search_note,
     _split,
     export_technique,
     pareto_front,
@@ -176,6 +184,7 @@ async def optimize_with_dspy(
     proposer_model: ModelProfile | None = None,
     compiler: PromptCompiler | None = None,
     progress: ProgressCallback | None = None,
+    authored: CompiledProgram | None = None,
 ) -> OptimizationResult:
     require("dspy", "dspy")
     if optimizer not in OPTIMIZERS:
@@ -220,7 +229,11 @@ async def optimize_with_dspy(
         block_bodies={block: outcome["instructions"].strip() + "\n"},
         exemplars=outcome["demos"],
     )
-    notes = list(outcome["notes"])
+    notes = [
+        *_baseline_note(authored),
+        *_search_note(authored, f"dspy:{optimizer}"),
+        *outcome["notes"],
+    ]
     if outcome["demos"] and not _renders_exemplars(technique):
         notes.append(
             f"{len(outcome['demos'])} demonstration(s) were bootstrapped, but {technique.id} "
@@ -237,6 +250,9 @@ async def optimize_with_dspy(
 
     # Held-out verification runs through our own benchmark, not DSPy's evaluator.
     bench = BenchmarkRunner(provider, compiler)
+    # The baseline is the prompt the caller holds when they sent one, exactly as
+    # in the native backend — DSPy still searches the technique's instruction
+    # block, but what its winner has to beat is the text on the screen.
     baseline_report = await bench.run(
         dataset=validation,
         task=task,
@@ -244,6 +260,7 @@ async def optimize_with_dspy(
         repeats=repeats,
         timeout_seconds=timeout_seconds,
         dataset_name=dataset_name,
+        authored=authored,
     )
     winner_report = await bench.run(
         dataset=_with_demos(validation, outcome["demos"]),

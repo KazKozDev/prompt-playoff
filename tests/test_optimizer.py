@@ -444,3 +444,208 @@ async def test_self_optimization_is_reported_not_hidden(extraction_task, entity_
     assert result.engine_is_target is True
     assert result.engine_model_id == "test-model"
     assert any("same model the numbers describe" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_the_authored_prompt_is_the_baseline_the_search_has_to_beat(
+    extraction_task, entity_schema, registry
+):
+    """Otherwise "improved" is a claim about a prompt the person never saw.
+
+    The baseline used to be a fresh compile of the registry technique, while the
+    screen showing the delta was showing engine-written text. A search could beat
+    the compile, report a gain, and still be losing to what the user holds.
+    """
+    from prompt_playoff.compiler import PromptCompiler
+
+    technique = registry.technique("structured.schema-first")
+    provider = ScriptedProvider(rewrite="SHARPER RULE: copy names verbatim.")
+    authored = PromptCompiler().compile(
+        task=extraction_task, technique=technique, user_input="{input}"
+    )
+    # The prompt the person is holding already carries the marker the scripted
+    # model needs, so the baseline scores as well as anything the search writes.
+    for stage in authored.stages:
+        stage.messages[-1].content = "SHARPER RULE: copy names verbatim.\n" + (
+            stage.messages[-1].content
+        )
+
+    result = await PromptOptimizer(provider).optimize(
+        task=extraction_task,
+        technique=technique,
+        dataset=dataset(entity_schema),
+        rounds=1,
+        dataset_name="unit",
+        authored=authored,
+    )
+
+    assert result.baseline_validation.quality == 1.0
+    assert result.winner.id == "baseline"
+    assert any("prompt you authored" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_without_an_authored_prompt_the_result_says_what_the_baseline_was(
+    extraction_task, entity_schema, registry
+):
+    result = await PromptOptimizer(ScriptedProvider(rewrite="same")).optimize(
+        task=extraction_task,
+        technique=registry.technique("structured.schema-first"),
+        dataset=dataset(entity_schema),
+        rounds=1,
+        dataset_name="unit",
+    )
+    assert any("compiled fresh" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_the_search_rewrites_the_prompt_it_was_given(
+    extraction_task, entity_schema, registry
+):
+    """The recipe search could not reach an authored prompt at all.
+
+    By the time someone is holding one, the recipe's blocks have been rendered
+    into messages and an engine model may have rewritten them — so patching a
+    block changed nothing about the text on their screen. Given a prompt, the
+    unit of search is the message.
+    """
+    from prompt_playoff.compiler import PromptCompiler
+
+    technique = registry.technique("structured.schema-first")
+    authored = PromptCompiler().compile(
+        task=extraction_task, technique=technique, user_input="{input}"
+    )
+    # The scripted model only answers correctly when the marker is present, and
+    # the authored prompt does not have it.
+    provider = ScriptedProvider(rewrite="SHARPER RULE: copy names verbatim.\n{input}")
+
+    result = await PromptOptimizer(provider).optimize(
+        task=extraction_task,
+        technique=technique,
+        dataset=dataset(entity_schema),
+        rounds=2,
+        candidates_per_round=1,
+        dataset_name="unit",
+        authored=authored,
+    )
+
+    assert provider.rewrites_requested >= 1
+    assert result.winner.id != "baseline"
+    assert result.winner.origin.startswith("reflection:prompt")
+    assert result.winner_validation.quality > result.baseline_validation.quality
+    # The winner is a prompt, and it is the prompt that was measured.
+    assert result.winner_program is not None
+    written = "\n".join(
+        message["content"]
+        for stage in result.winner_program["stages"]
+        for message in stage["messages"]
+    )
+    assert "SHARPER RULE: copy names verbatim." in written
+    assert "{input}" in written
+    # No technique file is offered: the recipe was never touched, so a file of it
+    # would reproduce none of this.
+    assert result.exported_technique == {}
+    assert any("rewrote the prompt itself" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_a_rewrite_with_nowhere_to_put_the_input_is_discarded(
+    extraction_task, entity_schema, registry
+):
+    """Not a worse prompt — an unrunnable one, and the run says which it was."""
+    from prompt_playoff.compiler import PromptCompiler
+
+    technique = registry.technique("structured.schema-first")
+    authored = PromptCompiler().compile(
+        task=extraction_task, technique=technique, user_input="{input}"
+    )
+    provider = ScriptedProvider(rewrite="SHARPER RULE: copy names verbatim, and nothing else.")
+
+    result = await PromptOptimizer(provider).optimize(
+        task=extraction_task,
+        technique=technique,
+        dataset=dataset(entity_schema),
+        rounds=2,
+        candidates_per_round=2,
+        dataset_name="unit",
+        authored=authored,
+    )
+
+    assert result.winner.id == "baseline"
+    assert any("dropped the place an example's input goes" in note for note in result.notes)
+
+
+def test_a_dspy_result_says_its_candidates_are_not_rewrites_of_your_prompt():
+    """Only the native search rewrites an authored prompt.
+
+    A DSPy backend searches the recipe's instruction block whatever it is
+    measured against, so a result from it must not read as "the tool improved
+    my wording" — the screen says the opposite for the native path.
+    """
+    from prompt_playoff.compiler import PromptCompiler
+    from prompt_playoff.optimizer import _search_note
+    from prompt_playoff.registry import Registry
+
+    program = PromptCompiler().compile(
+        task=TaskProfile(task_type=TaskType.structured_extraction, model=ModelProfile()),
+        technique=Registry.load().technique("structured.schema-first"),
+        user_input="{input}",
+    )
+    assert _search_note(program, "native") == []
+    assert _search_note(None, "dspy:mipro") == []
+    spoken = _search_note(program, "dspy:mipro")
+    assert spoken and "not rewrites of it" in spoken[0]
+
+
+@pytest.mark.asyncio
+async def test_demonstrations_go_beside_an_authored_prompt_not_into_it(
+    extraction_task, entity_schema, registry
+):
+    """A recipe has a block for examples. Finished text has nowhere to put them.
+
+    Guessing a place inside somebody's prose means deciding where their
+    instructions end, which free text does not say — so the examples become
+    worked turns ahead of the real request, and the prompt is untouched.
+    """
+    from prompt_playoff.compiler import PromptCompiler
+    from prompt_playoff.optimizer import without_demonstrations
+
+    technique = registry.technique("structured.schema-first")
+    authored = PromptCompiler().compile(
+        task=extraction_task, technique=technique, user_input="{input}"
+    )
+    # A model that always answers correctly, so the bootstrap has wins to keep.
+    provider = ScriptedProvider(rewrite="no better idea", marker="")
+
+    result = await PromptOptimizer(provider).optimize(
+        task=extraction_task,
+        technique=technique,
+        dataset=dataset(entity_schema),
+        rounds=1,
+        dataset_name="unit",
+        authored=authored,
+    )
+
+    seeded = next(item for item in result.rounds[0].evaluated if item.id == "bootstrap-demos")
+    assert seeded.program is not None
+    stage = seeded.program.stages[0]
+    demos = [index for index, m in enumerate(stage.messages) if m.demo]
+    assert demos, "the bootstrap produced no worked turns"
+    assert [stage.messages[i].role for i in demos] == ["user", "assistant"] * (len(demos) // 2)
+
+    # Before the real request, never after it.
+    real = max(i for i, m in enumerate(stage.messages) if m.role == "user" and not m.demo)
+    assert max(demos) < real
+
+    # And the prompt underneath is byte for byte the one that went in.
+    assert without_demonstrations(seeded.program).model_dump() == authored.model_dump()
+
+
+def test_demonstration_turns_are_never_sent_to_a_provider():
+    """The marker is ours. A provider is told role and content and nothing else."""
+    from prompt_playoff.domain import Message
+
+    assert Message(role="user", content="x", demo=True).wire() == {
+        "role": "user",
+        "content": "x",
+    }

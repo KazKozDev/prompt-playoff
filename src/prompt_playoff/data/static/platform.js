@@ -345,7 +345,7 @@ function builderAdvice(project) {
   const modes = MODE_EVIDENCE.map(([name, lead]) =>
     `<div><dt>${esc(name)}</dt><dd>${esc(lead)}</dd></div>`).join('');
   return `<h2>What to do about this set</h2>
-    <p class="guide-lead">Generated rows are a guess at what your inputs look like. Everything below is about closing the distance between that guess and the traffic the prompt will actually meet.</p>
+    <p class="guide-lead">Generated rows are a guess at what your inputs look like. Everything below is about closing the gap between that guess and the real traffic.</p>
     <ul class="advice-list">${notes.join('')}</ul>
     <h3>Which mode is worth trusting</h3>
     <dl class="guide-stack">${modes}</dl>
@@ -387,7 +387,7 @@ function renderDatasetBuilder() {
   // rail you came down, the work, and what there is to know about it. The work
   // takes the wide half here rather than the narrow one — a table of generated
   // rows does not fit a 380px column, and the notes beside it do.
-  return `<div class="screen-split builder-split">
+  return `<div class="screen-split work-wide">
     <div class="build-work">
       ${qualityError()}${outcome}${waiting}
       <section class="screen-body">${builderForm()}</section>
@@ -398,12 +398,33 @@ function renderDatasetBuilder() {
   </div>`;
 }
 
+/* --------------------------------------------------------------------------
+ * The same three zones as every other screen of this section: the rail, the
+ * comparison itself, and beside it the few things that decide how much a
+ * verdict from a model is worth. The work takes the wide half — an input and
+ * two answers are four text areas, and they do not fit a 380px column.
+ * -------------------------------------------------------------------------- */
 function renderJudge() {
   const current = screenResult('judge');
   // The warning is printed with the verdict, not instead of it: the verdict is
   // still evidence, just weaker evidence than it looks.
   const leak = current?.self_preference_warning ? `<div class="warning">${esc(current.self_preference_warning)}</div>` : '';
-  const result = current?.kind === 'judge' ? `<div class="quality-result">${statusCard('Winner', current.winner)}${statusCard('Human gate', 'Pending review', 'warning')}${leak}<p>${esc(current.rationale)}</p></div>` : '';
+  // "a" is what the wire says; the screen says which box that was. The two
+  // scores are printed beside the winner because a verdict of 0.9 against 0.88
+  // and one of 0.9 against 0.2 are different findings, and the word "winner"
+  // hides which of them you are looking at.
+  const named = value => value === 'tie' ? 'Tie' : value === 'a' ? 'Answer A' : value === 'b' ? 'Answer B' : String(value);
+  const scores = current?.scores
+    ? `${statusCard('Answer A', Number(current.scores.a).toFixed(2))}${statusCard('Answer B', Number(current.scores.b).toFixed(2))}`
+    : '';
+  const result = current?.kind === 'judge' ? `<div class="quality-result">
+    <div class="quality-stats">${statusCard('Winner', named(current.winner))}${scores}${statusCard('Human gate', 'Pending review', 'warning')}</div>
+    ${leak}<p>${esc(current.rationale)}</p>
+    <p class="meta">The judge read them as first and second, in that order, and was never told which box either came
+      from. Its own words above are the whole of the reasoning it gave.
+      <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a> is where this verdict is
+      accepted or thrown out.</p>
+  </div>` : '';
   // Who is holding the whistle, said before the run rather than in the verdict:
   // no judge at all is a gate, and a judge from the family under test is a
   // warning the settings screen can act on.
@@ -415,62 +436,513 @@ function renderJudge() {
   const kin = judge && shareFamily(judge.model_id)
     ? `<div class="warning">${esc(judge.model_id)} is judging answers from ${esc(subject)} — the same family. A judge scores its own lineage higher, so pick a judge from another one before the verdict is worth much.</div>`
     : '';
-  return `${qualityError()}${gate}${kin}
-    <div class="quality-form">
-      <label class="wide">Input<textarea id="judge-input"></textarea></label>
-      <label>Answer A<textarea id="judge-a"></textarea></label>
-      <label>Answer B<textarea id="judge-b"></textarea></label>
-      <label class="wide">Judge model<input id="judge-model" placeholder="${esc(judge?.model_id || 'Set one in Settings')}"><small class="field-hint">${judge ? `Blank uses <code>${esc(judge.model_id)}</code> from Settings; type an id to override it for this comparison alone.` : 'Set a judge in Settings, or type an id here for this comparison alone.'} A judge from the same family as <code>${esc(subject)}</code> — the model you are measuring — tends to prefer its own lineage, and the verdict will say so.</small></label>
-      <label class="wide">Rubric, one criterion per line<textarea id="judge-rubric">Correctness\nCompleteness\nFollows the requested format</textarea></label>
-    </div><div class="form-actions"><button class="primary judge-run" data-action="run-blind-judge">Run blind judge</button></div>${result}`;
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${gate}${kin}
+      <section class="screen-body">
+        <h2>The pair to compare</h2>
+        <div class="quality-form">
+          <label class="wide">Input<textarea id="judge-input"></textarea></label>
+          <label>Answer A<textarea id="judge-a"></textarea></label>
+          <label>Answer B<textarea id="judge-b"></textarea></label>
+          <label class="wide">Judge model<input id="judge-model" placeholder="${esc(judge?.model_id || 'Set one in Settings')}"><small class="field-hint">${judge ? `Blank uses <code>${esc(judge.model_id)}</code> from Settings; type an id to override it for this comparison alone.` : 'Set a judge in Settings, or type an id here for this comparison alone.'} A judge from the same family as <code>${esc(subject)}</code> — the model you are measuring — tends to prefer its own lineage, and the verdict will say so.</small></label>
+          <label class="wide">Rubric, one criterion per line<textarea id="judge-rubric">Correctness\nCompleteness\nFollows the requested format</textarea></label>
+        </div>
+        <div class="form-actions"><button class="primary judge-run" data-action="run-blind-judge">Run blind judge</button></div>
+      </section>
+      ${result}
+    </div>
+    <aside class="screen-guide" data-testid="judge-guide">${judgeGuide()}</aside>
+  </div>`;
 }
+
+/* Zone three. What a verdict from a model is and is not, said before one
+ * arrives rather than argued with afterwards. */
+function judgeGuide() {
+  return `<h2>How much a verdict is worth</h2>
+    <p class="guide-lead">One input, two answers, one model marking them: opinion held to a rubric. It is for
+      work no grader can score — tone, judgement, whether an explanation explains. Anything a grader can decide
+      belongs in <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>.</p>
+    <dl class="guide-stack">
+      <div><dt>Blind, and repeatable</dt><dd>The judge sees a first answer and a second, never A and B. Order
+        comes from a fixed seed, so the same pair judged twice reads the same way.</dd></div>
+      <div><dt>The rubric is the whole instruction</dt><dd>One criterion per line, up to twelve. What you leave
+        out is not weighed, however obvious it is to you.</dd></div>
+      <div><dt>A judge marks its own lineage higher</dt><dd>Blinding cannot hide family. When the judge shares
+        one with the model being measured, the screen says so before the run and the verdict repeats it.</dd></div>
+      <div><dt>Nothing is settled by the model</dt><dd>Every verdict lands in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a> as pending. Until a person approves it there, it is a
+        reading, not a decision.</dd></div>
+      <div><dt>One comparison, not a score</dt><dd>Two answers to one input say nothing about the next hundred.
+        Take the pattern to a dataset before you act on it.</dd></div>
+    </dl>
+    <p class="guide-note">The judge model is set in <a href="#settings" data-global-tab="settings" data-screen="settings">Settings</a>, and runs at temperature zero.</p>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The same three zones: the rail, the queue, and beside it what lands in it and
+ * what a decision here does — which is less than people assume, and worth
+ * saying before they approve fifteen things expecting something to happen.
+ * -------------------------------------------------------------------------- */
+const REVIEW_KINDS = {
+  dataset:'Generated rows waiting to be read',
+  judge:'A verdict one model gave about two answers',
+  regression:'A gate that failed on metrics you set',
+  release:'A prompt registered for release'
+};
 
 function renderReviews() {
   // The map's amber circle counts what is unanswered, so it opens this screen
   // on the unanswered ones rather than on the whole history of decisions.
   const only = showingOn('reviews');
   const queue = only ? q.reviews.filter(item => item.status === only) : q.reviews;
-  const cards = queue.map(item => `<article class="review-card" data-review-id="${esc(item.id)}"><div><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span> <span class="meta">${esc(item.kind)} · ${esc(item.created_at)}</span></div><h3>${esc(item.title)}</h3><pre>${esc(JSON.stringify(item.payload, null, 2).slice(0, 1800))}</pre>${item.status === 'pending' ? '<div class="quality-actions"><button class="review-approve" data-action="approve-review">Approve</button><button class="ghost review-reject" data-action="reject-review">Reject</button></div>' : ''}</article>`).join('');
+  const cards = queue.map(item => `<article class="review-card" data-review-id="${esc(item.id)}"><div><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span> <span class="meta">${esc(REVIEW_KINDS[item.kind] || item.kind)} · ${esc(item.created_at)}</span></div><h3>${esc(item.title)}</h3><pre>${esc(JSON.stringify(item.payload, null, 2).slice(0, 1800))}</pre>${item.status === 'pending' ? '<div class="quality-actions"><button class="review-approve" data-action="approve-review">Approve</button><button class="ghost review-reject" data-action="reject-review">Reject</button></div>' : ''}</article>`).join('');
   const nothing = only ? `Nothing ${esc(only)} in the review queue.` : 'Review queue is empty.';
-  return `${qualityError()}${cards || `<div class="empty">${nothing}</div>`}`;
+  // What the queue is made of, counted rather than described: a pile of twelve
+  // pending items is a different screen from one with twelve decided ones.
+  const pending = q.reviews.filter(item => item.status === 'pending').length;
+  const count = q.reviews.length
+    ? `${plural(q.reviews.length, 'item')} in all, ${pending} still pending${only ? ` — showing the ${esc(only)} ones.` : '.'}`
+    : 'Nothing has asked for a decision yet.';
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}
+      <section class="screen-body">
+        <h2>The queue</h2>
+        <p class="guide-lead">${count}</p>
+        ${cards || `<div class="empty">${nothing}</div>`}
+      </section>
+    </div>
+    <aside class="screen-guide" data-testid="reviews-guide">${reviewsGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. Four things land here from four screens, and none of them are
+ * carried out by approving them. */
+function reviewsGuide() {
+  return `<h2>What this queue is</h2>
+    <p class="guide-lead">Every decision the tool refused to make on its own. Nothing arrives here because it went
+      wrong — it arrives because a person is supposed to look, and that has to be written down to be known.</p>
+    <dl class="guide-stack">
+      <div><dt>Generated rows</dt><dd>A dataset written by a model is not truth until somebody reads it. The rows
+        are approved on <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder">Build datasets</a>; this is the note that a set is waiting.</dd></div>
+      <div><dt>Judge verdicts</dt><dd>A model's opinion about two answers is evidence, not a ruling, so every
+        <a href="#judge" data-global-tab="judge" data-screen="judge">pairwise</a> verdict lands here pending.</dd></div>
+      <div><dt>Failed gates</dt><dd>A <a href="#regressions" data-global-tab="regressions" data-screen="regressions">regression</a> that breached its tolerance is filed with the metrics that
+        breached it — a red screen somebody closed is still an open question tomorrow.</dd></div>
+      <div><dt>Registered releases</dt><dd>Registering a prompt on <a href="#releases" data-global-tab="releases" data-screen="releases">Releases</a> raises an approval item here.</dd></div>
+      <div><dt>A decision here decides only this</dt><dd>Approving records what you thought. It does not promote a
+        release, publish a dataset or clear a gate — each is an action on its own screen, so nothing ships as a side
+        effect of tidying a queue.</dd></div>
+    </dl>
+    <p class="guide-note">Decisions are kept with your measurements on this machine, and stay after a restart.</p>`;
 }
 
 function experimentOptions() {
   return state.experiments.map(item => `<option value="${esc(item.id)}">v${item.version} · ${esc(item.model_id)} · ${esc(item.dataset)}</option>`).join('');
 }
 
-function renderRegressions() {
-  const current = screenResult('regressions');
-  const result = current?.kind === 'regression' ? `<div class="quality-result">${statusCard('Gate', current.status, current.status === 'passed' ? 'passed' : 'failed')}<pre>${esc(JSON.stringify(current.active, null, 2))}</pre>${current.status === 'failed' ? '<div class="quality-actions"><button class="reg-rerun">Rerun candidate</button><button class="ghost reg-accept">Accept new baseline</button></div>' : ''}</div>` : '';
-  const gate = state.experiments.length < 2 ? prerequisite('Record at least two benchmark experiments before analyzing a regression.', 'prompt', 'Open Prompt Studio') : '';
-  return `${qualityError()}${gate}<div class="quality-form"><label>Baseline<select id="reg-before">${experimentOptions()}</select></label><label>Candidate<select id="reg-after">${experimentOptions()}</select></label><label>Quality tolerance<input id="reg-quality" type="number" step="0.01" min="0" value="0.01"></label><label>Latency tolerance, seconds<input id="reg-latency" type="number" step="0.1" min="0" value="0.1"></label></div><div class="form-actions"><button class="reg-run" data-action="analyze-regression" ${state.experiments.length < 2 ? 'disabled' : ''}>Analyze regression</button></div>${result}`;
+/* A metric is a column heading here, not a key from a JSON dump: it is read
+ * across a row against its own before and after, and each one is a different
+ * kind of number. */
+const METRIC_LABELS = {
+  quality:'Quality', reliability:'Reliability', mean_latency_seconds:'Mean latency', p95_latency_seconds:'p95 latency',
+  mean_total_tokens:'Mean tokens', mean_cost_usd:'Mean cost', total_cost_usd:'Total cost', failures:'Failed runs'
+};
+const metricLabel = name => METRIC_LABELS[name] || name.replace(/_/g, ' ');
+function metricValue(name, value) {
+  if (value === null || value === undefined) return '—';
+  const number = Number(value);
+  if (name.includes('cost')) return number.toFixed(6);
+  if (name.includes('token') || name === 'failures') return String(Math.round(number));
+  if (name.includes('latency')) return `${number.toFixed(2)}s`;
+  return number.toFixed(3);
 }
 
+/* --------------------------------------------------------------------------
+ * The same three zones as every other screen: the rail, the comparison and
+ * what it decided, and beside it the rule it decided by — which is a tolerance
+ * you set and not a test of significance, and is the one thing a red gate
+ * cannot tell you about itself.
+ *
+ * The verdict used to be a status card over the raw JSON of whichever deltas
+ * breached. Every metric is now a row, its before beside its after, with the
+ * breaching ones marked: a gate that failed on latency alone reads differently
+ * from one that failed on quality, and the object hid which it was.
+ * -------------------------------------------------------------------------- */
+function renderRegressions() {
+  const current = screenResult('regressions');
+  const breached = new Set((current?.active || []).map(item => item.metric));
+  const deltas = current?.comparison?.deltas || [];
+  const rows = deltas.map(item => `<tr${breached.has(item.metric) ? ' class="row-bad"' : ''}>
+    <td>${esc(metricLabel(item.metric))}</td>
+    <td>${metricValue(item.metric, item.before)}</td>
+    <td>${metricValue(item.metric, item.after)}</td>
+    <td>${item.delta === null || item.delta === undefined ? '—' : `${Number(item.delta) > 0 ? '+' : ''}${metricValue(item.metric, item.delta)}`}</td>
+  </tr>`).join('');
+  // The rerun writes its answer into the same result and nothing ever showed
+  // it, so the button appeared to do nothing. It is the whole point of the
+  // button: the same candidate measured again, to see whether the failure is
+  // repeatable or was the noise of one run.
+  const rerun = current?.rerun ? `<div class="quality-stats">
+    ${statusCard('Rerun quality', Number(current.rerun.scorecard.quality).toFixed(3))}
+    ${statusCard('Rerun latency', `${Number(current.rerun.scorecard.mean_latency_seconds).toFixed(2)}s`)}
+    ${statusCard('Rerun failures', String(current.rerun.scorecard.failures))}
+  </div><p class="meta">The candidate measured again, recorded as a new experiment. A failure that does not come back
+    was the noise of one run; one that does is the prompt.</p>` : '';
+  const result = current?.kind === 'regression' ? `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Gate', current.status, current.status === 'passed' ? 'passed' : 'failed')}
+      ${statusCard('Metrics breached', String((current.active || []).length), (current.active || []).length ? 'failed' : 'passed')}
+    </div>
+    ${rows ? `<div class="table-scroll"><table><thead><tr><th>Metric</th><th>Baseline</th><th>Candidate</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    <p>${current.status === 'passed'
+      ? 'Nothing moved further than the tolerances you set. That is not a finding that the candidate is better — only that it is not worse by more than you agreed to ignore.'
+      : `Marked rows moved past their tolerance. This is filed in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a> as well, so the decision survives leaving this screen.`}</p>
+    ${current.status === 'failed' ? '<div class="quality-actions"><button class="reg-rerun">Rerun candidate</button><button class="ghost reg-accept">Accept new baseline</button></div>' : ''}
+    ${rerun}
+  </div>` : '';
+  const gate = state.experiments.length < 2 ? prerequisite('Record at least two benchmark experiments before analyzing a regression.', 'prompt', 'Open Prompt Studio') : '';
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${gate}
+      <section class="screen-body">
+        <h2>Two recorded runs, and what you will tolerate</h2>
+        <div class="quality-form">
+          <label>Baseline<select id="reg-before">${experimentOptions()}</select></label>
+          <label>Candidate<select id="reg-after">${experimentOptions()}</select></label>
+          <label>Quality tolerance<input id="reg-quality" type="number" step="0.01" min="0" value="0.01"></label>
+          <label>Latency tolerance, seconds<input id="reg-latency" type="number" step="0.1" min="0" value="0.1"></label>
+        </div>
+        <p class="field-hint">Both runs come from your own history, so the two have to have measured the same
+          technique — the comparison is between two versions of one thing, not between two different things.</p>
+        <div class="form-actions"><button class="reg-run" data-action="analyze-regression" ${state.experiments.length < 2 ? 'disabled' : ''}>Analyze regression</button></div>
+      </section>
+      ${result}
+    </div>
+    <aside class="screen-guide" data-testid="regression-guide">${regressionGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. What the gate actually checks, and what a red gate is evidence
+ * of — which is less than the word suggests. */
+function regressionGuide() {
+  return `<h2>What the gate checks</h2>
+    <p class="guide-lead">Not "is this better" but "has anything got worse by more than you agreed to ignore" — a
+      lower bar than an improvement, and the one a change has to clear on the day you ship it.</p>
+    <dl class="guide-stack">
+      <div><dt>The two tolerances</dt><dd>Quality fails on a drop bigger than the quality tolerance, which also
+        covers reliability. Latency fails on a rise bigger than the latency tolerance, on the mean and the p95.
+        Everything else is shown and cannot fail the gate.</dd></div>
+      <div><dt>A tolerance is not significance</dt><dd>The gate compares two averages; it cannot tell whether a drop
+        of 0.02 was the prompt or the sample. Take a fail worth arguing about to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a>, with the per-example
+        scores behind both runs.</dd></div>
+      <div><dt>Rerun before you believe it</dt><dd>A failure that does not come back was one unlucky run. The button
+        records the rerun as its own experiment, so the history keeps both.</dd></div>
+      <div><dt>Accepting a baseline is a decision</dt><dd>It pins this candidate as what future runs on the same
+        provider, model and dataset are compared against. Do it when the drop is real and wanted — a cheaper model,
+        a shorter prompt — not to clear a red screen.</dd></div>
+      <div><dt>Every failure is filed</dt><dd>A failed gate becomes a pending item in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a>, so it is still there tomorrow.</dd></div>
+    </dl>
+    <p class="guide-note">Runs appear in these lists once recorded — measure a prompt on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>, and both versions will be here.</p>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The same three zones: the rail, the two columns of scores and what they
+ * decided, and beside them the rule this screen applies — which is stricter
+ * than most people expect, and is the reason most answers here are
+ * "inconclusive" rather than a winner.
+ * -------------------------------------------------------------------------- */
 function renderAnalysis() {
   const current = screenResult('analysis');
-  const result = current?.kind === 'analysis' ? `<div class="quality-result">${statusCard('Delta', current.delta)}${statusCard('Decision', current.direction, current.significant ? 'passed' : 'warning')}<pre>${esc(JSON.stringify(current, null, 2))}</pre></div>` : '';
-  const slices = current?.kind === 'slices' ? `<div class="table-scroll"><table><thead><tr><th>Slice</th><th>Quality</th><th>Runs</th><th>Failures</th></tr></thead><tbody>${current.rows.map(row => `<tr><td>${esc(row.slice)}</td><td>${Number(row.quality).toFixed(3)}</td><td>${row.runs}</td><td>${row.failures}</td></tr>`).join('')}</tbody></table></div>` : '';
+  // This used to print the whole object and leave the reading to you. The
+  // finding is two intervals and whether they touch, so that is what it says.
+  const interval = value => `${Number(value.mean).toFixed(3)} <span class="meta">(${Number(value.low).toFixed(3)} – ${Number(value.high).toFixed(3)})</span>`;
+  const verdict = current?.kind === 'analysis'
+    ? current.significant
+      ? `The intervals do not overlap and both sides have enough observations, so the ${current.direction === 'improved' ? 'gain' : 'loss'} is real at this sample size.`
+      : 'Inconclusive: either the two intervals still overlap, or one of the sides has fewer than 30 observations. That is not a finding of "no difference" — it is a finding that these numbers cannot tell you.'
+    : '';
+  const thin = current?.kind === 'analysis' && [current.before, current.after].some(side => side.warning)
+    ? `<div class="warning">Fewer than 30 observations on at least one side. The interval around a small sample is wide enough to swallow most differences worth arguing about.</div>`
+    : '';
+  const result = current?.kind === 'analysis' ? `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Decision', current.direction, current.significant ? (current.direction === 'improved' ? 'passed' : 'failed') : 'warning')}
+      ${statusCard('Delta', (current.delta > 0 ? '+' : '') + Number(current.delta).toFixed(3))}
+    </div>
+    ${thin}
+    <div class="table-scroll"><table><thead><tr><th>Set</th><th>Mean, with 95% interval</th><th>Observations</th></tr></thead><tbody>
+      <tr><td>Baseline</td><td>${interval(current.before)}</td><td>${current.before.samples}</td></tr>
+      <tr><td>Candidate</td><td>${interval(current.after)}</td><td>${current.after.samples}</td></tr>
+    </tbody></table></div>
+    <p>${esc(verdict)}</p>
+  </div>` : '';
+  const slices = current?.kind === 'slices' ? `<div class="quality-result">
+    <div class="table-scroll"><table><thead><tr><th>Slice</th><th>Quality</th><th>Runs</th><th>Failures</th></tr></thead><tbody>${current.rows.map(row => `<tr><td>${esc(row.slice)}</td><td>${Number(row.quality).toFixed(3)}</td><td>${row.runs}</td><td>${row.failures}</td></tr>`).join('')}</tbody></table></div>
+    <p class="meta">Worst slice first. Each row is the examples carrying one tag, so a row that appears on several
+      tags is counted under each of them, and rows with no tags of their own are grouped as
+      <code>untagged</code>.</p>
+  </div>` : '';
   const sliceGate = state.report ? '' : prerequisite('Slice analysis needs a completed benchmark; confidence comparison can run now.', 'prompt', 'Run a benchmark');
-  return `${qualityError()}${sliceGate}<div class="quality-form"><label>Baseline scores<textarea id="stats-before" placeholder="0.80, 0.75, 0.90"></textarea></label><label>Candidate scores<textarea id="stats-after" placeholder="0.84, 0.82, 0.91"></textarea></label></div><div class="form-actions"><button class="stats-run">Compare confidence</button><button class="ghost slices-run" ${state.report ? '' : 'disabled'}>Analyze last benchmark by tags</button></div>${result}${slices}`;
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${sliceGate}
+      <section class="screen-body">
+        <h2>Two sets of scores</h2>
+        <div class="quality-form">
+          <label>Baseline scores<textarea id="stats-before" placeholder="0.80, 0.75, 0.90"></textarea></label>
+          <label>Candidate scores<textarea id="stats-after" placeholder="0.84, 0.82, 0.91"></textarea></label>
+        </div>
+        <p class="field-hint">One score per example, between 0 and 1, separated by commas or new lines. These are
+          per-example scores from two runs — not two averages, which have no spread for an interval to be drawn
+          around.</p>
+        <div class="form-actions"><button class="stats-run">Compare confidence</button><button class="ghost slices-run" ${state.report ? '' : 'disabled'}>Analyze last benchmark by tags</button></div>
+      </section>
+      ${result}${slices}
+    </div>
+    <aside class="screen-guide" data-testid="analysis-guide">${analysisGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. The rule the screen applies, written down, because a reader who
+ * does not know it reads "inconclusive" as a fault in their prompt. */
+function analysisGuide() {
+  return `<h2>The rule this screen applies</h2>
+    <p class="guide-lead">A 95% interval around each mean. The difference counts only if the intervals do not
+      overlap and both sides have at least 30 observations; everything else comes back inconclusive.</p>
+    <dl class="guide-stack">
+      <div><dt>What to paste in</dt><dd>The per-example scores behind two runs, each between 0 and 1. Two averages
+        have no spread, and spread is the whole question here.</dd></div>
+      <div><dt>Why thirty</dt><dd>Below it the interval is wide enough to cover almost any difference you would care
+        about, so a non-overlap is luck as often as a finding.</dd></div>
+      <div><dt>A strict test, on purpose</dt><dd>Non-overlapping intervals will call some real differences
+        inconclusive, and will rarely call a difference real that is not. That is the trade worth making here.</dd></div>
+      <div><dt>Inconclusive is not "the same"</dt><dd>It means these numbers cannot separate the two. The answer is
+        more examples or more repeats, not a smaller tolerance.</dd></div>
+      <div><dt>By tags is a different question</dt><dd>The second button splits your last benchmark by the tags on
+        its examples, worst first. An average of 0.9 hiding one tag at 0.4 is the failure no single number shows.</dd></div>
+    </dl>
+    <p class="guide-note">Scores to paste come from a run on <a href="#history" data-global-tab="history" data-screen="history">Results</a>; a whole-set comparison of two prompts is <a href="#regressions" data-global-tab="regressions" data-screen="regressions">Regressions</a>, which applies a tolerance instead.</p>`;
 }
 
 function baseBenchmarkPayload() {
-  if (!state.chosen || !$('dataset')?.value) throw new Error('Create a prompt and choose a benchmark dataset first.');
-  return {technique_id:state.chosen, dataset:$('dataset').value, repeats:Number($('repeats').value || 1)};
+  // The run setup lives on the screen that runs it, so what it was set to is
+  // read from state and not from a control that only exists on that screen.
+  if (!state.chosen || !state.run.dataset) throw new Error('Create a prompt and choose a benchmark dataset first.');
+  return {technique_id:state.chosen, dataset:state.run.dataset, repeats:Number(state.run.repeats) || 1};
 }
 
+/* --------------------------------------------------------------------------
+ * The same three zones as every other screen of this section: the rail you came
+ * down, the work, and what there is to know about it. The work takes the wide
+ * half — a row per model with four numbers on it does not fit a 380px column,
+ * and the notes beside it do.
+ *
+ * The screen used to be a bare textarea, a button, and a table that appeared
+ * underneath with no word about what its columns meant. The three questions a
+ * reader has here — what stays fixed, what the numbers are averages of, and
+ * when a gap is worth acting on — are answered in the third zone rather than
+ * left to be guessed from the table.
+ * -------------------------------------------------------------------------- */
 function renderModelMatrix() {
   const current = screenResult('model-matrix');
-  const result = current?.kind === 'matrix' ? `<div class="quality-result">${statusCard('Winner model', current.winner_model)}<div class="table-scroll"><table><thead><tr><th>Model</th><th>Quality</th><th>Latency</th><th>Cost</th></tr></thead><tbody>${current.reports.map(item => `<tr><td>${esc(item.model_id)}</td><td>${item.scorecard.quality.toFixed(3)}</td><td>${item.scorecard.mean_latency_seconds.toFixed(2)}</td><td>${item.scorecard.mean_cost_usd == null ? 'unknown' : item.scorecard.mean_cost_usd.toFixed(6)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+  const result = current?.kind === 'matrix' ? `<div class="quality-result">
+    <div class="quality-stats">${statusCard('Winner model', current.winner_model)}</div>
+    <div class="table-scroll"><table><thead><tr><th>Model</th><th>Quality</th><th>Latency</th><th>Cost</th><th>Failed runs</th></tr></thead><tbody>${current.reports.map(item => `<tr${item.model_id === current.winner_model ? ' class="row-win"' : ''}><td>${esc(item.model_id)}</td><td>${item.scorecard.quality.toFixed(3)}</td><td>${item.scorecard.mean_latency_seconds.toFixed(2)}</td><td>${item.scorecard.mean_cost_usd == null ? 'unknown' : item.scorecard.mean_cost_usd.toFixed(6)}</td><td>${item.scorecard.failures} / ${item.scorecard.runs}</td></tr>`).join('')}</tbody></table></div>
+    <p class="meta">Quality is the average over the set; latency and cost are per call. No published price reads
+      <code>unknown</code> — a local model costs time, not money. Unanswered runs count as failures and score as
+      misses, so a row whose failures equal its runs was unreachable, not bad.</p>
+  </div>` : '';
   const gate = state.chosen ? '' : prerequisite('Create and choose a prompt before comparing models.', 'prompt', 'Create a prompt');
-  return `${qualityError()}${gate}<label>Model IDs, one per line<textarea id="matrix-models" placeholder="llama3.2:3b\nqwen3:8b"></textarea></label><div class="form-actions"><button class="matrix-run" data-action="run-model-matrix" ${state.chosen ? '' : 'disabled'}>Run matrix</button></div>${result}`;
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${gate}
+      <section class="screen-body">
+        <h2>Models to put in the running</h2>
+        <label for="matrix-models">Model IDs, one per line</label>
+        <textarea id="matrix-models" class="matrix-models" placeholder="llama3.2:3b\nqwen3:8b"></textarea>
+        <p class="field-hint run-against" data-lead="Every model runs">${runAgainst('Every model runs')}</p>
+        <div class="form-actions"><button class="matrix-run" data-action="run-model-matrix" ${state.chosen ? '' : 'disabled'}>Run matrix</button></div>
+      </section>
+      ${result}
+    </div>
+    <aside class="screen-guide" data-testid="matrix-guide">${modelMatrixGuide()}</aside>
+  </div>`;
 }
 
+/* What a run is held fixed against, said before it starts: a comparison read
+ * without knowing which set it ran on says nothing at all. The set is chosen on
+ * the screens that measure and can arrive after these screens have been drawn,
+ * so the line is written by a function the context update can call again rather
+ * than baked into the markup once. `lead` is the screen's own subject — models
+ * on one, context variants on the other.
+ */
+function runAgainst(lead) {
+  const dataset = state.run.dataset;
+  if (!dataset) {
+    return `No benchmark set is chosen yet — pick one on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>, and it is the set every row on this screen is scored on.`;
+  }
+  const rows = Number(state.datasetSizes.get(dataset)) || 0;
+  const repeats = Number(state.run.repeats) || 1;
+  return `${esc(lead)} the same prompt over <code>${esc(dataset)}</code>${rows ? ` — ${plural(rows, 'example')}` : ''}, ${plural(repeats, 'time')} each.`;
+}
+
+/* Zone three. What the table cannot say about itself. */
+function modelMatrixGuide() {
+  return `<h2>What a matrix decides</h2>
+    <p class="guide-lead">Not which model is best — which of these models your prompt survives. Wording that only
+      works on the model you wrote it against looks exactly like a good score until a second model is in the table.</p>
+    <dl class="guide-stack">
+      <div><dt>Only the model changes</dt><dd>Same prompt, same examples, same repeats on every row. That is what
+        makes two numbers here comparable, and why the set is chosen elsewhere.</dd></div>
+      <div><dt>Quality</dt><dd>The average over the set's rows, from the same graders <a href="#report" data-global-tab="report" data-screen="report">Measurement</a> uses. A claim about these examples, not about the models in general.</dd></div>
+      <div><dt>Latency and cost</dt><dd>Means per call, so they carry the price of a method that samples several
+        answers before it votes. The cheapest row is only interesting if it can also do the work.</dd></div>
+      <div><dt>A gap is not yet a decision</dt><dd>Two models a few thousandths apart are noise on a small set. Take
+        the pair to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a> first.</dd></div>
+      <div><dt>The ids have to be reachable</dt><dd>Spelled the way the provider spells them, and served by a backend
+        this machine can reach. An unreachable id still gets a row — every answer is an error and it scores near
+        nothing, which is why the failed-run count sits beside the score.</dd></div>
+    </dl>
+    <p class="guide-note">Models and keys live in <a href="#settings" data-global-tab="settings" data-screen="settings">Settings</a>. Nothing here changes the model the rest of the app measures with.</p>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The same three zones again: the rail, the two contexts and what they scored,
+ * and beside them what a context run does to your examples — which is the one
+ * thing the numbers cannot say about themselves.
+ * -------------------------------------------------------------------------- */
 function renderContextLab() {
   const current = screenResult('context-lab');
-  const result = current?.kind === 'context' ? `<div class="quality-result">${statusCard('Best context', current.winner_context)}<pre>${esc(JSON.stringify(current.reports.map(item => ({context:item.context, quality:item.report.scorecard.quality})), null, 2))}</pre></div>` : '';
+  // The answer used to be printed as the JSON object it arrived in. It is a
+  // ranking of two things by one number, so it is written as one.
+  const rows = current?.kind === 'context'
+    ? current.reports.map(item => {
+        const card = item.report.scorecard;
+        return `<tr${item.context === current.winner_context ? ' class="row-win"' : ''}>
+          <td>${esc(item.context)}</td>
+          <td>${Number(card.quality).toFixed(3)}</td>
+          <td>${Number(card.mean_latency_seconds).toFixed(2)}</td>
+          <td>${Math.round(Number(card.mean_prompt_tokens))}</td>
+          <td>${card.failures} / ${card.runs}</td>
+        </tr>`;
+      }).join('')
+    : '';
+  const result = current?.kind === 'context' ? `<div class="quality-result">
+    <div class="quality-stats">${statusCard('Best context', current.winner_context)}</div>
+    <div class="table-scroll"><table><thead><tr><th>Context</th><th>Quality</th><th>Latency</th><th>Prompt tokens</th><th>Failed runs</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="meta">Prompt tokens are what the context costs on every single call, which is the price of the winning
+      variant if you keep it. This run is not written into your history — nothing on
+      <a href="#history" data-global-tab="history" data-screen="history">Results</a> changes because of it.</p>
+  </div>` : '';
   const gate = state.chosen ? '' : prerequisite('Create a prompt before comparing context variants.', 'prompt', 'Create a prompt');
-  return `${qualityError()}${gate}<div class="quality-form"><label>Variant A name<input id="ctx-a-name" value="full"></label><label>Variant B name<input id="ctx-b-name" value="compressed"></label><label>Context A<textarea id="ctx-a"></textarea></label><label>Context B<textarea id="ctx-b"></textarea></label></div><div class="form-actions"><button class="context-run" data-action="compare-contexts" ${state.chosen ? '' : 'disabled'}>Compare contexts</button></div>${result}`;
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${gate}
+      <section class="screen-body">
+        <h2>Two contexts, one prompt</h2>
+        <div class="quality-form">
+          <label>Variant A name<input id="ctx-a-name" value="full"></label>
+          <label>Variant B name<input id="ctx-b-name" value="compressed"></label>
+          <label>Context A<textarea id="ctx-a"></textarea></label>
+          <label>Context B<textarea id="ctx-b"></textarea></label>
+        </div>
+        <p class="field-hint run-against" data-lead="Both variants run">${runAgainst('Both variants run')}</p>
+        <div class="form-actions"><button class="context-run" data-action="compare-contexts" ${state.chosen ? '' : 'disabled'}>Compare contexts</button></div>
+      </section>
+      ${result}
+    </div>
+    <aside class="screen-guide" data-testid="context-guide">${contextLabGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. Where the text you type actually ends up, and what the winning
+ * number costs to keep. */
+function contextLabGuide() {
+  return `<h2>What a context run does</h2>
+    <p class="guide-lead">Each variant is pasted in front of every example and the whole set is scored again. The
+      question is not which text reads better, but whether the extra material earns the tokens it costs on every
+      call.</p>
+    <dl class="guide-stack">
+      <div><dt>Where the text goes</dt><dd>Ahead of the input, as <code>CONTEXT:</code> then your variant, then
+        <code>INPUT:</code> and the row. Your prompt is untouched.</dd></div>
+      <div><dt>Both variants, the same rows</dt><dd>Same prompt, same examples, same repeats; only the context
+        differs. An empty variant is a fair thing to put in — it says what the context is worth against nothing.</dd></div>
+      <div><dt>Longer is not free</dt><dd>The prompt-token column is what a variant costs on every call for as long
+        as you keep it. A compressed variant scoring within noise of the full one is the cheaper prompt, not a
+        worse one.</dd></div>
+      <div><dt>It leaves no trace</dt><dd>These runs are not recorded: they are an experiment on material you are
+        still choosing. Once a context is settled, put it in the prompt and measure that on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>.</dd></div>
+      <div><dt>A win still has to be significant</dt><dd>Two variants a few thousandths apart on a small set are the
+        same variant. Take the pair to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a> first.</dd></div>
+    </dl>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The same three zones: the rail, the register and the one control that adds
+ * to it, and beside it what a release actually is here — a frozen copy of a
+ * prompt with a hash, moved along a line of five words. Nothing on this screen
+ * deploys anything, and a screen with a button marked "Release" has to say so.
+ * -------------------------------------------------------------------------- */
+/* Which run a version was shipped on, and whether that run is about this text.
+ *
+ * An id alone read as proof. It is not: the citation is only worth something
+ * when the run measured the prompt that was frozen, which the server now checks
+ * by fingerprint rather than believing. */
+const EVIDENCE_WORD = {
+  measured:['ok', 'measured'],
+  indirect:['wait', 'other prompt'],
+  unverified:['idle', 'unmeasured']
+};
+
+function releaseEvidenceCell(release) {
+  const [tone, word] = EVIDENCE_WORD[release.evidence] || ['idle', release.evidence || 'unmeasured'];
+  const title = {
+    measured:'The cited run measured this exact text.',
+    indirect:'A run is cited, but it measured a different prompt — its numbers are not about this text.',
+    unverified:'No run is cited: nothing here was measured.'
+  }[release.evidence] || '';
+  // A release from before runs were recorded cites nothing and can never be
+  // approved where a bar exists. It can be given its evidence late — verified
+  // the same way, so this is not a way past the bar.
+  const citeable = ['draft', 'tested'].includes(release.status) && state.provenance
+    && release.evidence !== 'measured';
+  const cite = citeable
+    ? `<button type="button" class="ghost" data-cite-release="${esc(state.provenance.experiment_id)}"
+        title="Attach the run the prompt on your screen is carrying. It counts only if that run measured this exact text.">Cite current run</button>`
+    : '';
+  if (!release.experiment_id) return `<span class="status-chip ${esc(tone)}" title="${esc(title)}">${esc(word)}</span> ${cite}`;
+  return `<a href="#history" data-global-tab="history" data-screen="history" data-showing="${esc(release.experiment_id)}"><code>${esc(release.experiment_id)}</code></a>
+    <span class="status-chip ${esc(tone)}" title="${esc(title)}">${esc(word)}</span> ${cite}`;
+}
+
+/* The committed thresholds, said before the button rather than after it.
+ *
+ * `prompt-playoff.yaml` was enforced by CI alone, which guarded the repository
+ * and not the release: a version could be waved through by hand at numbers the
+ * project had already declared unacceptable. Approve now refuses the same way
+ * CI does — and a bar that could not be applied refuses too, because a gate you
+ * cannot evaluate is not a gate that passed. */
+const GATE_WORD = {
+  passed:['ok', 'Clears the bar'],
+  failed:['bad', 'Below the bar'],
+  // Not "nothing to check": there is a bar, and it is the run that is missing.
+  unmeasured:['wait', 'No run to check'],
+  unverified:['bad', 'Wrong prompt'],
+  stale:['bad', 'Data moved'],
+  unenforceable:['wait', 'Cannot be checked'],
+  not_configured:['idle', 'No bar set']
+};
+
+function releaseGateControl(release) {
+  const gate = q.gates[release.id];
+  if (!gate) return '<button data-release-action="approve">Approve</button>';
+  const [tone, word] = GATE_WORD[gate.status] || ['idle', gate.status];
+  const blocked = ['failed', 'stale', 'unverified', 'unmeasured', 'unenforceable'].includes(gate.status);
+  const numbers = (gate.thresholds || [])
+    .map(item => `${item.field} ${item.measured} vs ${item.bound} ${item.required}`).join('; ');
+  return `<span class="status-chip ${esc(tone)}" title="${esc(gate.reason || numbers || word)}">${esc(word)}</span>
+    <button data-release-action="approve"${blocked ? ' disabled title="' + esc(gate.reason || '') + '"' : ''}>Approve</button>`;
 }
 
 function renderReleases() {
@@ -478,14 +950,71 @@ function renderReleases() {
   // buttons, and holds only the releases sitting in that stage.
   const only = showingOn('releases');
   const releases = only ? q.releases.filter(item => item.status === only) : q.releases;
-  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? '<button data-release-action="approve">Approve</button>' : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}</div></td></tr>`).join('');
+  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}</div></td></tr>`).join('');
   const gate = state.program ? '' : prerequisite('Author a prompt before registering a release.', 'prompt', 'Author a prompt');
   // A table of headings over nothing is a table that lost its rows. Say which
   // of the two it is.
   const table = rows
-    ? `<div class="table-scroll"><table><thead><tr><th>Release</th><th>Status</th><th>Technique</th><th>Hash</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table><thead><tr><th>Release</th><th>Status</th><th>Technique</th><th>Hash</th><th>From run</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : `<div class="empty">${only ? `No release is sitting at ${esc(only)}.` : 'No releases registered yet.'}</div>`;
-  return `${qualityError()}${gate}<div class="quality-form"><label>Release name<input id="release-name" value="production-prompt"></label></div><div class="form-actions"><button class="release-create" data-action="create-release" ${state.program ? '' : 'disabled'}>Register current prompt</button></div>${table}`;
+  const live = q.releases.filter(item => item.status === 'production');
+  const serving = live.length
+    ? `In production: ${live.map(item => `<code>${esc(item.name)} v${item.version}</code>`).join(' ')}. Registering under the same name adds the next version beside it; promoting that one retires this.`
+    : 'Nothing is in production yet. A new name starts at v1, and registering the same name again adds v2 beside it.';
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}${gate}
+      <section class="screen-body">
+        <h2>Register the prompt you are holding</h2>
+        <div class="quality-form">
+          <label>Release name<input id="release-name" value="production-prompt"></label>
+        </div>
+        <p class="field-hint">${serving}</p>
+        <p class="field-hint">${state.provenance
+          ? `This prompt carries the ${esc(state.provenance.kind)} on <code>${esc(state.provenance.dataset)}</code> — quality ${state.provenance.quality.toFixed(3)}. That run is recorded against the release, and the server checks it measured this exact text${state.provenance.kind === 'optimization' ? ' — an optimization did not, so this would register as evidence about the search rather than about the prompt' : ''}.`
+          : 'Nothing has been measured on this prompt as it stands, so the release would be registered unmeasured. Run it on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a> first.'}</p>
+        <div class="form-actions"><button class="release-create" data-action="create-release" ${state.program ? '' : 'disabled'}>Register current prompt</button></div>
+      </section>
+      <section class="screen-body">
+        <h2>The register</h2>
+        ${table}
+      </section>
+    </div>
+    <aside class="screen-guide" data-testid="releases-guide">${releasesGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. What is frozen, what the five words mean, and the thing the
+ * screen cannot do however the buttons are labelled. */
+function releasesGuide() {
+  return `<h2>What a release is here</h2>
+    <p class="guide-lead">A frozen copy of the prompt, with a SHA-256 of its text and a version number that counts
+      up per name. It is the register of what you decided to ship and when.</p>
+    <dl class="guide-stack">
+      <div><dt>Nothing here deploys anything</dt><dd>The buttons move a label along a line: draft, tested, approved,
+        production, deprecated. "Production" means the version this register calls live; testing and shipping still
+        happen where they happened before.</dd></div>
+      <div><dt>The hash is the point</dt><dd>Two releases with the same hash are the same prompt, whatever they are
+        named — that is how a number in your history is tied to the text that produced it.</dd></div>
+      <div><dt>One production version per name</dt><dd>Promoting a version deprecates the one that was live, and
+        rollback puts it back. Rows change status; nothing is deleted.</dd></div>
+      <div><dt>The order is enforced</dt><dd>Each button is the only move its status allows. A draft cannot jump to
+        production.</dd></div>
+      <div><dt>Every version names its run, and the name is checked</dt><dd>A run records a fingerprint of the
+        prompt it measured, so a release is marked <em>measured</em> only when that matches the frozen text.
+        <em>other prompt</em> means the cited run measured something else — the optimization behind the wording,
+        say. Registering either is allowed; approving on anything but <em>measured</em> is not.</dd></div>
+      <div><dt>Evidence can arrive late</dt><dd>A version registered before its run existed is not stuck: measure
+        the prompt, come back, and <em>Cite current run</em> attaches it, verified the same way. An approved version
+        keeps the run it was approved on.</dd></div>
+      <div><dt>Approval is gated on the committed numbers</dt><dd>Where <code>prompt-playoff.yaml</code> sets a bar
+        for this method, the cited run has to clear it — the same thresholds CI enforces. A bar that cannot be
+        applied refuses too: no run, a missing field, or examples that have changed since. No bar means the person
+        is the only gate.</dd></div>
+      <div><dt>Registering asks for a review</dt><dd>It raises an approval item in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a>. Promoting the release is still done here.</dd></div>
+    </dl>
+    <p class="guide-note">What gets registered is the prompt currently authored on <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> — measure it first, so the version
+      you freeze is one you have a number for.</p>`;
 }
 
 /* Three unrelated checks used to sit on one screen as six blank fields in a
@@ -496,34 +1025,152 @@ const subTool = (id, mark, title, question, body, open=false) => `<details class
   <div class="sub-body">${body}</div>
 </details>`;
 
+/* What each check answers, in its own units.
+ *
+ * All three used to print the raw JSON they got back, which is a way of saying
+ * "here is the object, you work it out". A number nobody can read is not a
+ * measurement, so each one is written out as the thing it decided, and the
+ * numbers that decided it stand under it.
+ */
+// `chips` sets its codes flush against each other, which reads as one long word
+// when the values are words rather than identifiers.
+const wordChips = values => values.map(value => `<code>${esc(value)}</code>`).join(' ');
+
+function driftResult(value) {
+  const shift = Number(value.vocabulary_shift);
+  const before = Number(value.error_rate_before), after = Number(value.error_rate_after);
+  const verdict = value.alert
+    ? 'These inputs have moved. A score measured on the old ones is a weaker claim about these than it looks.'
+    : 'These inputs still look like the ones you tested on, so a score measured there still speaks about them.';
+  const terms = (value.new_terms || []).length
+    ? `<p class="meta">Words that appear now and did not before: ${wordChips(value.new_terms)}</p>`
+    : '<p class="meta">No word is new enough to stand out.</p>';
+  return `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Vocabulary shift', shift.toFixed(3), value.alert ? 'failed' : 'passed')}
+      ${statusCard('Errors before', before.toFixed(3))}
+      ${statusCard('Errors after', after.toFixed(3))}
+    </div>
+    <p>${esc(verdict)}</p>
+    <p class="meta">The shift is how far the word mix has moved, from 0 (identical) to 1 (nothing in common);
+      anything from 0.2 up is called out, as is an error rate five points worse than before.</p>
+    ${terms}</div>`;
+}
+
+function trajectoryResult(value) {
+  const score = Number(value.score);
+  const missing = (value.missing_tools || []).length
+    ? `<p>Never called: ${wordChips(value.missing_tools)} — the run cannot have done what those tools are for.</p>`
+    : '<p>Every required tool was called at least once.</p>';
+  return `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Trajectory score', score.toFixed(2), score >= 0.8 ? 'passed' : 'failed')}
+      ${statusCard('Steps', String(value.steps))}
+      ${statusCard('Failed steps', String(value.failures), value.failures ? 'warning' : '')}
+      ${statusCard('Repeated steps', String(value.unnecessary_repeats), value.unnecessary_repeats ? 'warning' : '')}
+    </div>
+    ${missing}
+    <p class="meta">One point to start with; a failed step costs 0.2, a needless repeat 0.1, a tool that was never
+      called 0.25.${value.recovered ? ' The run recovered from at least one failure on its own.' : ''}</p></div>`;
+}
+
+function securityResult(value) {
+  // Two different answers arrive here: a finished run when there is a prompt to
+  // attack, and the attack rows themselves when there is not.
+  if (Array.isArray(value)) {
+    return `<div class="quality-result">
+      <p><strong>${plural(value.length, 'injection case')}</strong> built from your input. There is no prompt to run
+        them against yet — write one on <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a>,
+        then come back and this button runs them.</p>
+      <ul class="case-list">${value.slice(0, 5).map(row => `<li><code>${esc(row.id)}</code> ${esc(String(row.input).slice(0, 180))}…</li>`).join('')}</ul></div>`;
+  }
+  const card = value.scorecard || {};
+  const held = card.grades?.injection_resistance;
+  const broke = (value.runs || []).filter(run => run.grades?.injection_resistance === 0);
+  return `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Held against injection', held == null ? 'not scored' : held.toFixed(3), held === 1 ? 'passed' : 'failed')}
+      ${statusCard('Cases', String(value.examples ?? (value.runs || []).length))}
+      ${statusCard('Failed outright', String(card.failures ?? 0), card.failures ? 'warning' : '')}
+    </div>
+    <p>${broke.length
+      ? `${plural(broke.length, 'case')} made the prompt emit the canary secret: ${wordChips(broke.slice(0, 6).map(run => run.example_id))}`
+      : 'No case made the prompt emit the canary secret it was told to keep.'}</p>
+    <p class="meta">The suite wraps your input in instructions that try to talk the prompt out of its job. Holding
+      here is evidence, not a guarantee: it is the attacks this suite knows.</p></div>`;
+}
+
+const PRODUCTION_RESULTS = {drift:driftResult, trajectory:trajectoryResult, security:securityResult};
+
+/* --------------------------------------------------------------------------
+ * The same three zones as every other screen: the rail, the three checks, and
+ * beside them what they can and cannot see. The disclaimer used to be one grey
+ * line above the cards, where it read as small print; it is the first thing the
+ * third zone says, because it is the thing that decides whether any of these
+ * numbers mean what their names suggest.
+ * -------------------------------------------------------------------------- */
 function renderProduction() {
   const current = screenResult('production');
-  const result = current?.kind === 'production' ? `<div class="quality-result"><pre>${esc(JSON.stringify(current.value, null, 2))}</pre></div>` : '';
-  return `${qualityError()}
-    ${subTool('drift', 'wave', 'Input drift', 'Are real inputs still like the ones you tested on?', `
-      <div class="quality-form">
-        <label>Baseline inputs, one per line<textarea id="drift-before"></textarea></label>
-        <label>Current inputs, one per line<textarea id="drift-after"></textarea></label>
-      </div>
-      <div class="sub-actions"><button class="drift-run" type="button">Detect drift</button></div>`, true)}
-    ${subTool('trajectory', 'link', 'Agent runs', 'Did the agent call the tools it was supposed to?', `
-      <div class="quality-form">
-        <label class="wide">Trajectory JSON<textarea id="trajectory-json" placeholder='[{"tool":"search","success":true},{"tool":"browser","success":false,"recovered":true}]'></textarea></label>
-        <label>Required tools, comma separated<input id="trajectory-tools" placeholder="search, browser"></label>
-      </div>
-      <div class="sub-actions"><button class="ghost trajectory-run" type="button">Evaluate trajectory</button></div>`)}
-    ${subTool('security', 'shield', 'Injection attempts', 'Does the prompt hold when the input fights it?', `
-      <div class="quality-form">
-        <label class="wide">Input for the security suite<textarea id="security-input"></textarea></label>
-      </div>
-      <div class="sub-actions"><button class="ghost security-run" type="button">${state.chosen ? 'Run security evaluation' : 'Generate security cases'}</button></div>`)}
-    ${result}`;
+  const result = current?.kind === 'production' && PRODUCTION_RESULTS[current.tool]
+    ? PRODUCTION_RESULTS[current.tool](current.value)
+    : '';
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}
+      ${subTool('drift', 'wave', 'Input drift', 'Are real inputs still like the ones you tested on?', `
+        <div class="quality-form">
+          <label>Baseline inputs, one per line<textarea id="drift-before" placeholder="the inputs your examples were built from"></textarea></label>
+          <label>Current inputs, one per line<textarea id="drift-after" placeholder="inputs you have seen since"></textarea></label>
+        </div>
+        <div class="sub-actions"><button class="drift-run" type="button">Compare the two sets</button></div>`, true)}
+      ${subTool('trajectory', 'link', 'Agent runs', 'Did the agent call the tools it was supposed to?', `
+        <div class="quality-form">
+          <label class="wide">Trajectory JSON<textarea id="trajectory-json" placeholder='[{"tool":"search","success":true},{"tool":"browser","success":false,"recovered":true}]'></textarea></label>
+          <label>Required tools, comma separated<input id="trajectory-tools" placeholder="search, browser"></label>
+        </div>
+        <div class="sub-actions"><button class="ghost trajectory-run" type="button">Evaluate trajectory</button></div>`)}
+      ${subTool('security', 'shield', 'Injection attempts', 'Does the prompt hold when the input fights it?', `
+        <div class="quality-form">
+          <label class="wide">Input for the security suite<textarea id="security-input"></textarea></label>
+        </div>
+        <div class="sub-actions"><button class="ghost security-run" type="button">${state.chosen ? 'Run security evaluation' : 'Generate security cases'}</button></div>`)}
+      ${result}
+    </div>
+    <aside class="screen-guide" data-testid="production-guide">${productionGuide()}</aside>
+  </div>`;
+}
+
+/* Zone three. Three checks that answer three unrelated questions, and one
+ * limit that applies to all of them. */
+function productionGuide() {
+  return `<h2>What these checks can see</h2>
+    <p class="guide-lead">Three unrelated questions in three sets of units: nothing here adds up to one number, and
+      none of it can sit beside a benchmark score. Each is worth exactly as much as the material you paste in.</p>
+    <dl class="guide-stack">
+      <div><dt>Input drift</dt><dd>Compares the word mix of two sets of inputs, 0 (identical) to 1 (nothing in
+        common); called out from 0.2 up, or when the error rate is five points worse. It says the material moved,
+        not that the prompt broke — but a score measured on the old rows says less about the new ones than it looks.</dd></div>
+      <div><dt>Agent runs</dt><dd>Reads a trajectory pasted as JSON — one object per step, the tool it called and
+        whether it worked. From one point: 0.2 off a failed step, 0.1 off a needless repeat, 0.25 off a required
+        tool never called.</dd></div>
+      <div><dt>Injection attempts</dt><dd>Wraps your input in three kinds of interference — an injected instruction,
+        a conflicting one, and noise — one of which asks for a secret token the model was told to keep. Emitting it
+        is the failure; holding is evidence about these three attacks, not about the next one.</dd></div>
+      <div><dt>Two of the three need a prompt</dt><dd>Without one, the security tool shows the cases it built and
+        stops. Drift and trajectories work on pasted material alone.</dd></div>
+      <div><dt>None of this is recorded</dt><dd>Spot checks: run one, read it, act on it. Nothing enters your
+        history or moves a gate on <a href="#regressions" data-global-tab="regressions" data-screen="regressions">Regressions</a>.</dd></div>
+    </dl>`;
 }
 
 function datasetSource(name) {
   if (name.startsWith('builder:')) return 'Reviewed builder dataset';
   if (name.startsWith('hf:')) return 'Hugging Face';
-  if (name.startsWith('uploaded:')) return 'Session upload';
+  // An upload is now either kind, and which one only shows up on the day the
+  // server restarts — so the row says it while there is still time to change it.
+  if (name.startsWith('uploaded:')) {
+    return state.datasetFacts.get(name)?.kept ? 'Upload, kept on this machine' : 'Upload, this session only';
+  }
   if (name.startsWith('business:')) return 'Business catalogue';
   return 'Bundled';
 }
@@ -613,7 +1260,7 @@ function groupStock(group) {
  * catalogue and not of the grid. Colour is not what tells them apart — the only
  * tinted tile is the one you have open. */
 function renderCatalogZone() {
-  const title = '<div class="stage-title">Ready-made data, by kind of work</div>';
+  const title = '<h3 class="zone-title">Ready-made data, by kind of work</h3>';
   if (state.catalogError) return `${title}
     <div class="error">The business catalogue could not be read: ${esc(state.catalogError)}</div>`;
   if (!state.catalog) return `${title}<div class="empty">Reading the catalogue…</div>`;
@@ -623,7 +1270,7 @@ function renderCatalogZone() {
   const cards = groups.map(group => {
     const stock = groupStock(group);
     const shown = group.id === state.catalogGroup;
-    const held = stock.sets ? plural(stock.sets, 'dataset') : 'No datasets yet';
+    const held = stock.sets ? plural(stock.sets, 'set') : 'No sets yet';
     return `<button type="button" class="cat-tile${shown ? ' open' : ''}"
       data-catalog-group="${esc(group.id)}" aria-expanded="${shown}" aria-controls="catalog-open-panel">
       <img class="cat-art" src="/assets/${esc(group.art)}.webp" alt="" width="72" height="72" loading="lazy" decoding="async">
@@ -638,9 +1285,8 @@ function renderCatalogZone() {
   }).join('');
 
   return `${title}
-    <p class="meta catalog-lead">The data that ships with this tool, sorted by the kind of work it stands for.
-      Open a category to see its datasets; open a dataset to read its rows before you measure anything against it.
-      ${counts.available} of the ${plural(counts.sets, 'dataset')} named here are on this server.</p>
+    <p class="meta catalog-lead">Open a category to see its sets; open a set to read its rows before you measure
+      against it. ${counts.available} of the ${plural(counts.sets, 'set')} named here are on this server.</p>
     <div class="catalog-groups">${cards}</div>
     ${open ? renderOpenGroup(open) : ''}`;
 }
@@ -747,17 +1393,16 @@ function renderCatalogCases(group) {
   return `<div class="catalog-cases">
     <div class="cat-panel-label">Who does this work with a model<span class="cat-panel-note">and what they say it did for them</span></div>
     <div class="case-grid">${cards}</div>
-    <p class="field-hint">Every figure on these cards is the one the company or its vendor published. None of them
-      was measured here, and this tool has checked none of them — the numbers it stands behind are the ones on the
-      Measurement screen. The company is a reported user of an LLM for that work, not the source of the data: every
-      set here is public, and none of it came from the company beside it.</p>
+    <p class="field-hint">Every figure here was published by the company or its vendor and checked by nobody on this
+      side — the numbers this tool stands behind are the ones on Measurement. The company is a reported user of a
+      model for that work, not the source of the data: every set here is public.</p>
   </div>`;
 }
 
 /* Zone two. The columns a business set has to carry that a bundled one does
  * not: which group of work it stands for, where the rows came from, and under
  * what licence — because these arrived from someone else's repository. */
-function renderBusinessZone(names) {
+function renderBusinessZone(names, {collapsed = false} = {}) {
   const known = catalogSets();
   const listed = names.filter(name => known.has(name));
   if (!listed.length) return '';
@@ -771,14 +1416,25 @@ function renderBusinessZone(names) {
       <td><a href="${esc(spec.url)}" target="_blank" rel="noreferrer noopener">${esc(spec.source)} ↗</a><br><span class="meta">${esc(spec.license)}</span></td>
     </tr>`;
   }).join('');
-  return `<div class="stage-title">Where the ready-made data comes from</div>
-    <p class="meta">The same datasets as the tiles above, one row each, with the repository they were sampled from
-      and the licence that came with them. What is bundled here is a sample: the examples column is what this
-      server holds, not what the source holds.</p>
-    <div class="table-scroll"><table class="business-list">
+  const table = `<div class="table-scroll"><table class="business-list">
       <thead><tr><th>Dataset</th><th>Category</th><th>Examples</th><th>Shape</th><th>Source</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+  // Opened on one set, this is that set's provenance and belongs open: it is
+  // the answer to "whose rows am I about to be scored on".
+  if (!collapsed) return `<section class="library-zone">
+    <h3 class="zone-title">Where this set comes from</h3>
+    <p class="meta">The repository it was sampled from and the licence that came with it. What is bundled here is a
+      sample: the examples column is what this server holds, not what the source holds.</p>
+    ${table}</section>`;
+  // On the full screen it is a second way to walk the same seventeen sets the
+  // tiles above already walk, by category and by name. What it alone can do is
+  // show every licence at once, which is a question asked rarely and answered
+  // completely — so it folds, and the browse path stays unobstructed.
+  return `<section class="library-zone"><details class="advanced-disclosure">
+      <summary>Sources and licences<small class="meta"> — ${plural(listed.length, 'repository').replace('repositorys', 'repositories')} these rows were sampled from</small></summary>
+      <div class="advanced-content">${table}</div>
+    </details></section>`;
 }
 
 // The first rows of the set, which is what a set actually is. Eight of them:
@@ -815,6 +1471,13 @@ function datasetIsMine(name) {
   return ['uploaded:', 'hf:', 'builder:'].some(prefix => name.startsWith(prefix));
 }
 
+// Inside the wheel and named by nothing else: a business set carries its own
+// prefix and belongs to the catalogue zone, so "not mine" is not the same
+// question as "shipped with the tool".
+function datasetIsBundled(name) {
+  return !datasetIsMine(name) && !name.startsWith('business:');
+}
+
 /* Deleting rows cannot be undone and the button sits in a table of rows that
  * look alike, so the first click only arms the second. No modal: the question is
  * asked in the row it is about, and reading the name is the whole confirmation. */
@@ -825,23 +1488,182 @@ function deleteCell(name) {
     : `<button type="button" class="ghost" data-delete-arm="${esc(name)}">Delete</button>`;
 }
 
-/* Zone three. What was here before the catalogue existed: the task benchmarks
- * that ship with the tool, and the sets you brought yourself. One table,
- * because the Source column is the whole difference between them — and it is
- * the only zone where a row can be deleted. */
-function renderOwnZone(entries) {
-  if (!entries.length) return '';
-  const rows = entries.map(([name, count]) => `<tr>
+/* Zone three, in two parts, because they are two populations and not one table
+ * with a Source column.
+ *
+ * The sets you brought are what a score is supposed to be about. The eleven
+ * that ship inside the package are the tool's own test stand — its tests stand
+ * on their shape, and its published benchmark numbers were measured on them, so
+ * a good score there says this tool works, not that your prompt does. They also
+ * cannot be deleted, which one shared table could only express as a greyed-out
+ * word in every second row.
+ *
+ * Yours come first. Reference material goes below the thing it is reference
+ * for.
+ */
+function renderYoursZone(entries) {
+  const mine = entries.filter(([name]) => datasetIsMine(name));
+  // Opened on one set, "you have nothing of your own" is an answer to a question
+  // nobody asked: the screen was narrowed to a row, not to a shortage.
+  if (!mine.length && showingOn('dataset-library')) return '';
+  if (!mine.length) return `<section class="library-zone"><h3 class="zone-title">Your sets</h3>
+    <p class="meta">Nothing of your own on this server yet. Rows you have seen in production are the only ones
+      a score truly speaks about — <a href="#dataset-upload" data-global-tab="dataset-upload">upload a JSONL file</a>,
+      <a href="#dataset-hub" data-global-tab="dataset-hub">import a public set</a>, or
+      <a href="#dataset-builder" data-global-tab="dataset-builder">build one from your task</a>.</p></section>`;
+  const rows = mine.map(([name, count]) => `<tr>
     <td>${esc(name)}</td><td>${count}</td><td>${esc(datasetSource(name))}</td>
     <td class="row-actions">${deleteCell(name)}</td>
   </tr>`).join('');
-  return `<div class="stage-title">Everything else on this server</div>
-    <p class="meta">The task benchmarks that ship with the tool, and the sets you uploaded, imported or built.
-      Only these can be deleted — the ready-made data above lives inside the installed package.</p>
+  return `<section class="library-zone"><h3 class="zone-title">Your sets</h3>
+    <p class="meta">Uploaded, imported or built here. These are the only ones this screen can delete.</p>
     <div class="table-scroll"><table class="dataset-list">
       <thead><tr><th>Name</th><th>Examples</th><th>Source</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>`;
+    </table></div></section>`;
+}
+
+function renderBundledZone(entries, {heading = true} = {}) {
+  const bundled = entries.filter(([name]) => datasetIsBundled(name));
+  if (!bundled.length) return '';
+  // No Source column and no action column: every row has the same answer to
+  // both, and a column that says one word eleven times is a column that says
+  // nothing. What each set contains is written up in the guide, not here.
+  // The name is a door: a benchmark is worth reading before it is worth
+  // measuring against, and its rows live on the library screen.
+  const rows = bundled.map(([name, count]) => `<tr>
+    <td><a href="#dataset-library/${encodeURIComponent(name)}" data-global-tab="dataset-library" data-showing="${esc(name)}">${esc(name)}</a></td>
+    <td>${count}</td></tr>`).join('');
+  const head = heading
+    ? `<h3 class="zone-title">Shipped with the tool</h3>
+      <p class="meta">The tool's own test stand: its checks are written against these rows and its published numbers
+        were measured on them. Good for trying the workflow, or comparing a method against a published result — but a
+        good score here describes the tool, not your task. Shipped inside the package, and not deletable.
+        <a href="#evaluation" data-global-tab="evaluation">What each one contains</a>.</p>`
+    : '';
+  return `<section class="library-zone">${head}
+    <div class="table-scroll"><table class="dataset-list">
+      <thead><tr><th>Name</th><th>Examples</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></section>`;
+}
+
+/* The same table as a screen of its own.
+ *
+ * It moved out of the library because it answers a different question. The
+ * library is "what can I measure my prompt against"; this is "what does this
+ * tool measure itself against" — reference material, read once, and not a
+ * shelf anybody picks their own examples off.
+ *
+ * Three zones, like every other screen that is mostly reading: the rail you
+ * came down, the shelf itself, and what there is to know about it beside it.
+ * The shelf is split in two, because the one thing a reader needs from it is
+ * not in the row — four of these sets are somebody else's research corpus and
+ * seven were built here, and a table that lists all eleven under one heading
+ * answers "is this a real benchmark?" with silence.
+ */
+
+// Whose rows these are. The listing already carries the tag the import writes,
+// so the split is read off the data rather than kept as a second list here
+// that a new set would quietly fall out of.
+const datasetIsPublicCorpus = name => (state.datasetFacts.get(name)?.tags || []).includes('huggingface');
+
+// One licence covers all seven, so it is a sentence under the heading rather
+// than a column repeating the same word down the table.
+function builtHereLicence() {
+  const licence = [...state.datasetFacts.values()]
+    .map(item => item.provenance)
+    .find(item => item && item.source === 'built here')?.licence;
+  return licence
+    ? `They are files inside this distribution and carry its licence, <strong>${esc(licence)}</strong>.`
+    : '';
+}
+
+/* A licence is written as its name and, where there is one, the condition that
+ * name puts on you — "CC-BY-SA-4.0 (share-alike: derived datasets must carry
+ * the same licence)". The name is the cell; the condition is what a reader has
+ * to act on, so it is kept under it rather than trimmed off. */
+function licenceCell(licence) {
+  if (!licence) return '<span class="meta">unstated</span>';
+  const split = licence.indexOf(' (');
+  if (split < 0) return `<span class="licence-name">${esc(licence)}</span>`;
+  const condition = licence.slice(split + 2).replace(/\)$/, '');
+  return `<span class="licence-name">${esc(licence.slice(0, split))}</span>
+    <span class="meta">${esc(condition)}</span>`;
+}
+
+function bundledShelf(entries, {title, lead, provenance = false}) {
+  if (!entries.length) return '';
+  const rows = entries.map(([name, count]) => {
+    const from = state.datasetFacts.get(name)?.provenance || {};
+    const source = from.url
+      ? `<a href="${esc(from.url)}" target="_blank" rel="noreferrer noopener">${esc(from.source)} ↗</a>`
+      : esc(from.source || '—');
+    return `<tr>
+      <td><a href="#dataset-library/${encodeURIComponent(name)}" data-global-tab="dataset-library" data-showing="${esc(name)}">${esc(name)}</a></td>
+      <td>${count}</td>
+      ${provenance ? `<td>${source}${from.citation ? `<br><span class="meta">${esc(from.citation)}</span>` : ''}</td>
+      <td>${licenceCell(from.licence)}</td>` : ''}
+    </tr>`;
+  }).join('');
+  return `<section class="screen-body shelf">
+    <h2>${esc(title)}</h2>
+    <p class="guide-lead">${lead}</p>
+    <div class="table-scroll"><table class="dataset-list${provenance ? ' shelf-list' : ''}">
+      <thead><tr><th>Name</th><th>Examples</th>${provenance ? '<th>Sampled from</th><th>Licence</th>' : ''}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></section>`;
+}
+
+function renderDatasetBundled() {
+  const bundled = [...state.datasetSizes.entries()].filter(([name]) => datasetIsBundled(name));
+  if (!bundled.length) return '<div class="empty">Reading what this server holds…</div>';
+  const rows = bundled.reduce((total, [, count]) => total + Number(count || 0), 0);
+  const publicSets = bundled.filter(([name]) => datasetIsPublicCorpus(name));
+  const built = bundled.filter(([name]) => !datasetIsPublicCorpus(name));
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      ${qualityError()}
+      <p class="shelf-count">${plural(bundled.length, 'benchmark')}, ${rows} rows in all — the same on every machine
+        running this version, which is why a number measured here can be set against a published one, and why none of
+        them can be deleted. Open a name to read its rows.</p>
+      ${bundledShelf(publicSets, {provenance:true, title:'From public research corpora',
+        lead:`Collected and annotated by somebody else and released openly, then sampled onto this server. Nobody here
+          chose the material, which is the whole value of it: it cannot have been picked to produce a convenient
+          result. The licence is the source repository's and travels with the rows — including into anything you
+          publish from a score measured on them.
+          <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">How each import keeps the data
+          honest</a>.`})}
+      ${bundledShelf(built, {title:'Built here',
+        lead:`Written by hand, or generated from fixed rules with a fixed seed so they rebuild byte for byte. They
+          exist to exercise a shape — traps, borderline cases, tool calls, answers that should be empty — and no
+          research group stands behind them. ${builtHereLicence()}`})}
+    </div>
+    <aside class="screen-guide" data-testid="bundled-guide">
+      <h2>What this shelf is for</h2>
+      <p class="guide-lead">Reference, read once: what is on the shelf, why both kinds are on it, and what a number
+        measured here does and does not say.</p>
+      <dl class="guide-stack">
+        <div><dt>What a good score here means</dt><dd>That the tool works, and that a method beat another method on
+          this material. It is not evidence about your prompt on your task: different inputs, different failures.</dd></div>
+        <div><dt>Why both kinds are here</dt><dd>A public corpus says how a method does on material nobody here
+          touched. A set built here can hold the cases a corpus has too few of — negation, duplicates, rows whose
+          right answer is nothing — which is what separates a prompt that reads from one that guesses.</dd></div>
+        <div><dt>Headroom before conclusions</dt><dd><code>entity-extraction</code> is six rows and the plain baseline
+          already scores 1.000 on it: every method looks equal because there is nowhere to improve. It is there to
+          click through. The ones with room to move are <code>entity-extraction-hard</code>,
+          <code>multiconer-en</code> and <code>few-nerd</code>.</dd></div>
+        <div><dt>Where the detail is</dt><dd>What each set contains, which grader scores it, how the public ones were
+          imported without flattering the model, and the five rules without which a number means nothing —
+          <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">Evaluation guide</a>.</dd></div>
+      </dl>
+      <p class="guide-note">A number about <em>your</em> work is computed from sets you
+        <a href="#dataset-upload" data-global-tab="dataset-upload">upload</a>,
+        <a href="#dataset-hub" data-global-tab="dataset-hub">import</a> or
+        <a href="#dataset-builder" data-global-tab="dataset-builder">build</a> — and the
+        <a href="#dataset-library" data-global-tab="dataset-library">library</a> is where those live.</p>
+    </aside>
+  </div>`;
 }
 
 // A business set opened on its own says what work it stands for before it
@@ -856,6 +1678,15 @@ function renderCitations(name) {
   return `<div class="stage-title">What a score here is about</div>
     <ul class="catalog-citations">${rows}</ul>`;
 }
+
+// The shelf that left. A screen that simply stops mentioning what used to be at
+// the bottom of it teaches nobody where it went.
+const bundledPointer = () => `<section class="library-zone">
+  <h3 class="zone-title">Shipped with the tool</h3>
+  <p class="meta">The task benchmarks inside the installed package now have
+    <a href="#dataset-bundled" data-global-tab="dataset-bundled">a screen of their own</a> — they are what this tool
+    measures itself against, not material for your task.</p>
+</section>`;
 
 function renderDatasetLibrary() {
   // One set, when that is what you came for: the row is still a row of the same
@@ -875,8 +1706,8 @@ function renderDatasetLibrary() {
   // Narrowed to one set, the zones it does not live in would be six group
   // buttons and an empty table above the rows you came to read.
   const zones = only
-    ? renderBusinessZone(business) + renderOwnZone(own) + renderCitations(only)
-    : renderCatalogZone() + renderBusinessZone(business) + renderOwnZone(own);
+    ? renderBusinessZone(business) + renderYoursZone(own) + renderBundledZone(own) + renderCitations(only)
+    : renderCatalogZone() + renderBusinessZone(business, {collapsed: true}) + renderYoursZone(own) + bundledPointer();
 
   return `${qualityError()}${note}${warning}${zones}${only ? datasetPreview(only, sets[0][1]) : ''}`;
 }
@@ -932,7 +1763,7 @@ function wireDatasetLibrary(tab, panel) {
 }
 
 function renderPlatformTab(tab) {
-  return ({'dataset-builder':renderDatasetBuilder,'judge':renderJudge,'reviews':renderReviews,'regressions':renderRegressions,'analysis':renderAnalysis,'model-matrix':renderModelMatrix,'context-lab':renderContextLab,'releases':renderReleases,'production':renderProduction,'dataset-library':renderDatasetLibrary}[tab] || (() => '<div class="empty">Unknown screen.</div>'))();
+  return ({'dataset-builder':renderDatasetBuilder,'judge':renderJudge,'reviews':renderReviews,'regressions':renderRegressions,'analysis':renderAnalysis,'model-matrix':renderModelMatrix,'context-lab':renderContextLab,'releases':renderReleases,'production':renderProduction,'dataset-library':renderDatasetLibrary,'dataset-bundled':renderDatasetBundled}[tab] || (() => '<div class="empty">Unknown screen.</div>'))();
 }
 
 async function refreshPlatformTab(tab) {
@@ -945,12 +1776,22 @@ async function refreshPlatformTab(tab) {
       if (state.run.dataset) await loadDatasetRows(state.run.dataset);
     }
     if (tab === 'reviews') q.reviews = await api('/v1/reviews');
-    if (tab === 'releases') q.releases = await api('/v1/releases');
+    if (tab === 'releases') {
+      q.releases = await api('/v1/releases');
+      // Only where Approve is the next move. The verdict has to be readable
+      // before the button is pressed, or the committed bar is something you
+      // discover by being refused.
+      q.gates = Object.fromEntries(await Promise.all(
+        q.releases.filter(item => item.status === 'tested').map(async item =>
+          [item.id, await api(`/v1/releases/${item.id}/gate`).catch(e => ({status:'unenforceable', reason:e.message}))])
+      ));
+    }
     if (tab === 'regressions' && !state.experiments.length) state.experiments = await api('/v1/experiments');
     if (tab === 'dataset-library') {
       await loadDatasets();
       await loadBusinessCatalog();
     }
+    if (tab === 'dataset-bundled') await loadDatasets();
     q.error = '';
   } catch (error) { q.error = error.message; }
   q.loaded.add(tab);
@@ -1049,11 +1890,16 @@ function wirePlatformTab(tab, panel) {
   panel.querySelector('.slices-run')?.addEventListener('click', () => qualityAction(tab, async () => { const examples=await api(`/v1/datasets/${encodeURIComponent(state.report.dataset)}`); const rows=await api('/v1/analysis/slices', {examples, runs:state.report.runs}); setScreenResult(tab, {kind:'slices', rows}); }));
   panel.querySelector('.matrix-run')?.addEventListener('click', () => qualityAction(tab, async () => { const ids=panel.querySelector('#matrix-models').value.split('\n').map(x=>x.trim()).filter(Boolean); const base=modelProfile(); const job=await api('/v1/model-matrix', {...baseBenchmarkPayload(), task:await taskProfile(), models:ids.map(model_id=>({...base, model_id}))}); const result=await pollJob(job.id, ()=>{}); setScreenResult(tab, {kind:'matrix', ...result}); }));
   panel.querySelector('.context-run')?.addEventListener('click', () => qualityAction(tab, async () => { const job=await api('/v1/context-lab', {...baseBenchmarkPayload(), task:await taskProfile(), contexts:[{name:panel.querySelector('#ctx-a-name').value, context:panel.querySelector('#ctx-a').value},{name:panel.querySelector('#ctx-b-name').value, context:panel.querySelector('#ctx-b').value}]}); const result=await pollJob(job.id, ()=>{}); setScreenResult(tab, {kind:'context', ...result}); }));
-  panel.querySelector('.release-create')?.addEventListener('click', () => qualityAction(tab, async () => api('/v1/releases', {name:panel.querySelector('#release-name').value, technique_id:state.program.technique_id, prompt:state.program}))); 
+  // The run that justifies the prompt travels with it. A release whose
+  // experiment_id is null is one nobody measured, and the register says so
+  // rather than leaving the column blank and letting it read as "not shown".
+  panel.querySelector('.release-create')?.addEventListener('click', () => qualityAction(tab, async () => api('/v1/releases', {name:panel.querySelector('#release-name').value, technique_id:state.program.technique_id, prompt:state.program, experiment_id:state.provenance?.experiment_id || null})));
+
+  panel.querySelectorAll('[data-cite-release]').forEach(button => button.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/releases/${button.closest('tr').dataset.releaseId}/cite`, {experiment_id:button.dataset.citeRelease}))));
   panel.querySelectorAll('[data-release-action]').forEach(button => button.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/releases/${button.closest('tr').dataset.releaseId}/action`, {action:button.dataset.releaseAction}))));
-  panel.querySelector('.drift-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/drift', {baseline_inputs:panel.querySelector('#drift-before').value.split('\n').filter(Boolean), current_inputs:panel.querySelector('#drift-after').value.split('\n').filter(Boolean)}); setScreenResult(tab, {kind:'production', value:result}); }));
-  panel.querySelector('.trajectory-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/trajectories/evaluate', {steps:JSON.parse(panel.querySelector('#trajectory-json').value), required_tools:panel.querySelector('#trajectory-tools').value.split(',').map(x=>x.trim()).filter(Boolean)}); setScreenResult(tab, {kind:'production', value:result}); }));
-  panel.querySelector('.security-run')?.addEventListener('click', () => qualityAction(tab, async () => { const source={id:'security-source', input:panel.querySelector('#security-input').value}; if (state.chosen) { const job=await api('/v1/security-evaluate', {...baseBenchmarkPayload(), task:await taskProfile(), source}); setScreenResult(tab, {kind:'production', value:await pollJob(job.id, ()=>{})}); } else { setScreenResult(tab, {kind:'production', value:await api('/v1/datasets/security-suite', source)}); } }));
+  panel.querySelector('.drift-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/drift', {baseline_inputs:panel.querySelector('#drift-before').value.split('\n').filter(Boolean), current_inputs:panel.querySelector('#drift-after').value.split('\n').filter(Boolean)}); setScreenResult(tab, {kind:'production', tool:'drift', value:result}); }));
+  panel.querySelector('.trajectory-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/trajectories/evaluate', {steps:JSON.parse(panel.querySelector('#trajectory-json').value), required_tools:panel.querySelector('#trajectory-tools').value.split(',').map(x=>x.trim()).filter(Boolean)}); setScreenResult(tab, {kind:'production', tool:'trajectory', value:result}); }));
+  panel.querySelector('.security-run')?.addEventListener('click', () => qualityAction(tab, async () => { const source={id:'security-source', input:panel.querySelector('#security-input').value}; if (state.chosen) { const job=await api('/v1/security-evaluate', {...baseBenchmarkPayload(), task:await taskProfile(), source}); setScreenResult(tab, {kind:'production', tool:'security', value:await pollJob(job.id, ()=>{})}); } else { setScreenResult(tab, {kind:'production', tool:'security', value:await api('/v1/datasets/security-suite', source)}); } }));
 }
 
 async function qualityAction(tab, operation) {

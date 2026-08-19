@@ -17,6 +17,7 @@
     if (location.search.indexOf('embed') !== -1) document.documentElement.classList.add('embed');
   </script>
   <link rel="stylesheet" href="/assets/docs.css">
+  <script src="/assets/docs.js" defer></script>
 </head>
 <body>
 <main>
@@ -39,9 +40,46 @@
     <div class="card"><b>The graders</b><p>Small pieces of code that compare the model's answer to the correct one and score it from 0 to 1. Each task type has its own — arithmetic and translation cannot be checked the same way.</p></div>
     <div class="card"><b>The run</b><p>Which model, how many runs per example, which settings. This is what decides whether the number is repeatable or accidental.</p></div>
   </div>
+  <p>The model in the third part is the <b>evaluation model</b>, set under <b>Reference → Models &amp; keys</b>. Every number anywhere in the app came out of that one — the prompt engine only writes text, and the judge only compares two answers. A number carries its model with it: change the model and it is a different exam.</p>
 
-  <h2>The sets that ship here</h2>
-  <p>Eleven, listed under <b>Datasets → Dataset library</b>. Four come from public research corpora; the rest were built here — partly hand-written, partly generated from fixed rules with a fixed random seed, so they rebuild byte for byte.</p>
+  <h2>The examples on this server</h2>
+  <p>Twenty-eight sets ship with the tool, and <b>Datasets → Dataset library</b> shows them in three zones: the catalogue of business cases, the business sets those cases point at, and the task benchmarks plus anything you brought yourself. Only the last zone lets a set be deleted.</p>
+
+  <h3>The business catalogue</h3>
+  <p>Fifty jobs businesses pay a model to do, in ten categories, each mapped to the public dataset closest to its input → output shape. It exists because "0.71 on summarization" is a fact about a corpus, while "0.71 on transcript → minutes" is a fact about work.</p>
+
+  <div class="table-scroll">
+  <table class="count">
+    <tr><th>Category</th><th>Cases</th><th>The work it stands for</th></tr>
+    <tr><td><b>Email</b></td><td>7</td><td>Sort, classify and draft email.</td></tr>
+    <tr><td><b>Customer support</b></td><td>10</td><td>Answer, route and summarise support conversations.</td></tr>
+    <tr><td><b>Meetings</b></td><td>6</td><td>Turn a transcript into minutes, actions or a translation.</td></tr>
+    <tr><td><b>Document routing</b></td><td>2</td><td>Send a document to the workflow that handles it.</td></tr>
+    <tr><td><b>Invoices and receipts</b></td><td>3</td><td>Pull structured financial fields out of a scan.</td></tr>
+    <tr><td><b>Legal and contracts</b></td><td>8</td><td>Classify clauses, flag risk, answer from a contract.</td></tr>
+    <tr><td><b>Finance</b></td><td>3</td><td>Answer a question from a filing or a table of figures.</td></tr>
+    <tr><td><b>Privacy and compliance</b></td><td>3</td><td>Find what should not have been sent.</td></tr>
+    <tr><td><b>HR and recruiting</b></td><td>1</td><td>Match a résumé against a role.</td></tr>
+    <tr><td><b>Marketing and e-commerce</b></td><td>7</td><td>Generate and enrich product content.</td></tr>
+  </table>
+  </div>
+
+  <p>Seventeen of the fifty get a set that matches the work directly, twenty-three get a near neighbour, and ten are recorded as having no public set at all — a benchmark that does not match the job is worse than no benchmark, so those cases say so on the card instead of borrowing a number.</p>
+
+  <div class="note">
+    <p><b>The published figures on those cards are claims, not measurements.</b> Each case names the company, what they pointed a model at, and the vendor customer story it comes from — four hours to one on contract review, eight weeks to eight hours on product content. Nothing here has checked one of them. What this tool can measure is the row underneath: whether <em>your</em> prompt does that job on data of that shape.</p>
+  </div>
+
+  <h3>The business sets</h3>
+  <p>Seventeen sets named <code>business:*</code>, one per shape of work: email thread → reply, email → subject, subject → marketing email, transcript → minutes, live translation, support question → answer and → intent, retail and banking intent, invoice OCR → JSON fields, contract clause → type, clause → obligation, legal reasoning, filing → figure, brief → product description, review → rating, résumé → fit.</p>
+  <p>Each is a 50–60 row sample of a public Hugging Face repository, bundled so a first run needs no network, and each carries its source repository and licence on the screen that lists it. <code>scripts/fetch_business_datasets.py</code> re-downloads them.</p>
+
+  <div class="note warn">
+    <p><b>Most of them are graded on word overlap, and that is a blunt instrument.</b> A reply, a subject line or a set of minutes has no single correct wording, so <code>token_f1</code> compares the answer against the one human answer the corpus happens to record. A good answer phrased differently scores low. Read these as a shape check — the model is doing the right job on the right material — and settle open prose with <b>Check → Pairwise judging</b> or with examples of your own.</p>
+  </div>
+
+  <h3>The task benchmarks</h3>
+  <p>Eleven sets under <b>Datasets → Shipped with the tool</b>. Four come from public research corpora; the rest were built here — partly hand-written, partly generated from fixed rules with a fixed random seed, so they rebuild byte for byte. This is the tool's own test stand: its CI checks are written against the shape of these rows, so a good score here describes the tool rather than your task.</p>
 
   <div class="table-scroll">
   <table class="count">
@@ -65,7 +103,7 @@
   </div>
 
   <h2>What the public corpora are</h2>
-  <p>A public corpus is a set of tasks that somebody else's research group collected and annotated, then released openly. The value is that nobody here tuned the data to produce a convenient result.</p>
+  <p>A public corpus is a set of tasks that somebody else's research group collected and annotated, then released openly. The value is that nobody here tuned the data to produce a convenient result. Every business set is a sample of one; the four below sit behind the task benchmarks.</p>
 
   <div class="table-scroll">
   <table>
@@ -77,7 +115,7 @@
   </table>
   </div>
 
-  <p>Importing is done from <b>Datasets → Import from Hugging Face</b>, or with <code>prompt-playoff import-hf</code>; the licence and the paper citation are printed on every import.</p>
+  <p>Importing more is done from <b>Datasets → Import from Hugging Face</b>, or with <code>prompt-playoff import-hf</code>; the licence and the paper citation are printed on every import.</p>
 
   <h3>How the import keeps the data honest</h3>
   <ul>
@@ -88,49 +126,51 @@
   </ul>
 
   <h2>How an answer gets checked</h2>
-  <p>A grader takes the model's answer and the correct one and returns a number from 0 to 1. They come in two families, and both appear in the <b>Graders</b> table under every measurement.</p>
+  <p>A grader takes the model's answer and the correct one and returns a number from 0 to 1. They come in two families, and both appear in the <b>Graders</b> table under every measurement. The split is not cosmetic: the second family is what <code>reliability</code> is computed from, and the first is where <code>quality</code> comes from.</p>
 
   <h3>Meaning — is the answer right</h3>
   <div class="table-scroll">
   <table class="terms">
     <tr><td><code>field_f1</code></td><td>Partial credit over a list. Three entities out of four is roughly 0.86, not zero. Extras that were not in the gold answer are penalised too. This is the headline score for extraction.</td></tr>
-    <tr><td><code>exact_match</code></td><td>Did the whole thing match, with no leniency. Almost always far below <code>field_f1</code>, which is normal.</td></tr>
+    <tr><td><code>token_f1</code></td><td>Word overlap with the reference answer. The headline for prose that has no single right wording — a reply, a subject line, minutes — and blunt for exactly that reason.</td></tr>
+    <tr><td><code>exact_match</code></td><td>Did the whole thing match, character for character, with no leniency. Almost always far below <code>field_f1</code>, which is normal.</td></tr>
     <tr><td><code>label_accuracy</code></td><td>Was the category right. For classification.</td></tr>
     <tr><td><code>numeric_close</code></td><td>Did the number match. Formatting is ignored — only the value counts.</td></tr>
     <tr><td><code>unit_tests</code></td><td>The code from the answer is actually run against the task's own tests. The score is the share that pass. Execution happens in a sandbox with a restricted set of modules.</td></tr>
-    <tr><td><code>glossary_consistency</code></td><td>The share of required terms translated the way the glossary demanded.</td></tr>
     <tr><td><code>grounding_overlap</code></td><td>How much of the answer's wording actually occurs in the supplied sources. A blunt but working check against invention.</td></tr>
     <tr><td><code>contains_all</code></td><td>Did every required fact make it into the answer.</td></tr>
     <tr><td><code>coverage</code></td><td>Recall only: how much of what was wanted showed up. Extras are not penalised.</td></tr>
-    <tr><td><code>tool_success</code></td><td>Did every tool call return a result rather than an error.</td></tr>
+    <tr><td><code>schema_shape</code></td><td>The share of required keys that are present. Partial credit on structure, where <code>json_schema</code> is all or nothing.</td></tr>
+    <tr><td><code>regex_match</code></td><td>Did the answer match the required pattern.</td></tr>
+    <tr><td><code>injection_resistance</code></td><td>Did instructions planted in the input fail to make the model give up the canary secret. This is the grader behind <b>Production → Spot checks → Injection attempts</b>.</td></tr>
     <tr><td><code>agreement</code></td><td>How much several answers agree with each other, when the method generates a batch.</td></tr>
   </table>
   </div>
 
-  <h3>Form — is the answer shaped right</h3>
+  <h3>Contract — is the answer shaped right</h3>
   <div class="table-scroll">
   <table class="terms">
     <tr><td><code>json_validity</code></td><td>Did the answer parse as JSON.</td></tr>
     <tr><td><code>json_schema</code></td><td>Did it match the schema completely.</td></tr>
-    <tr><td><code>schema_shape</code></td><td>The share of required fields that are present. Partial credit on form.</td></tr>
     <tr><td><code>no_prose</code></td><td>Is there chatter wrapped around the answer.</td></tr>
     <tr><td><code>allowed_labels</code></td><td>Is the label from the allowed list rather than invented.</td></tr>
     <tr><td><code>length_limit</code></td><td>Did the answer fit the character limit.</td></tr>
     <tr><td><code>omission_check</code></td><td>Is the answer truncated or bloated — its length is compared against the source.</td></tr>
     <tr><td><code>deduplication</code></td><td>Are there repeats inside the lists.</td></tr>
+    <tr><td><code>glossary_consistency</code></td><td>The share of required terms translated the way the glossary demanded. A binding glossary is part of the contract, not a matter of taste.</td></tr>
+    <tr><td><code>tool_success</code></td><td>Did every tool call return a result rather than an error.</td></tr>
     <tr><td><code>python_syntax</code></td><td>Does the code the model produced parse.</td></tr>
-    <tr><td><code>regex_match</code></td><td>Did the answer match the required pattern.</td></tr>
   </table>
   </div>
 
   <div class="note">
     <p><b>Graders are deterministic by default.</b> The same answer always gets the same score, checking costs nothing and takes no time, and you can read the rule yourself.</p>
-    <p>For open-ended prose, where no rule fits, use <b>Check → Pairwise judging</b>: two answers, one rubric, and the order hidden from the judge. Every verdict lands in <b>Production → Reviews</b> and waits for a person. A model's opinion is never silently promoted to a measured result.</p>
+    <p>For open-ended prose, use <b>Check → Pairwise judging</b>: two answers, one rubric, the order hidden from the judge. The judge is a third model and must not be the one being marked — left blank, the prompt engine stands in, never the evaluation model. Every verdict waits for a person in <b>Production → Reviews</b>; a model's opinion is never promoted to a measured result on its own.</p>
   </div>
 
   <h2>How the graders become the two headline numbers</h2>
-  <p><code>quality</code> is one chosen meaning-grader, whichever fits the task: <code>field_f1</code> for extraction, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic, <code>unit_tests</code> for code. In the <b>Graders</b> table it is marked headline; the others are shown beside it for reference.</p>
-  <p><code>reliability</code> is the share of correctly shaped answers multiplied by stability — whether the model gives the same answer to the same input.</p>
+  <p><code>quality</code> is one chosen meaning-grader, whichever fits the task, in a fixed order of preference: <code>unit_tests</code> for code, then <code>field_f1</code> for extraction, <code>token_f1</code> for prose, <code>exact_match</code>, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic, and so on down to the contract graders if nothing else applies. In the <b>Graders</b> table it is marked headline; the others are shown beside it for reference.</p>
+  <p><code>reliability</code> is the share of answers that satisfied the contract graders, multiplied by stability — whether the model gives the same answer to the same input.</p>
   <p>What to do with those two numbers is on the <a href="/help">Help</a> page.</p>
 
   <h2>Five rules, without which the number means nothing</h2>
@@ -151,6 +191,10 @@
     <p><b>5. A number belongs to one model-plus-examples pair.</b> Carry it to another model and it is a guess again. The app says <span class="pill measured">measured</span> where it measured and <span class="pill prior">prior only</span> where it is assuming; <b>Check → Model matrix</b> is how the transfer gets measured instead of assumed.</p>
   </div>
 
+  <h2>From a number to a release</h2>
+  <p>A measurement is evidence about one exact text. A run records a fingerprint of the prompt it measured, and <b>Production → Releases</b> checks it against the text being frozen: <span class="pill measured">measured</span> when they match, <b>indirect</b> when the cited run measured something else — the optimization behind the wording, say — and <b>unverified</b> when nothing is cited. Registering any of the three is recorded; approving anything but <span class="pill measured">measured</span> is not. A release registered before its run can attach one afterwards, verified the same way.</p>
+  <p>Approval is then gated on the thresholds in <code>prompt-playoff.yaml</code> — the same bars CI enforces — applied to the cited run, with no new model calls. A bar that cannot be applied refuses too: a run missing the field the bar names is not a pass, and neither is a run whose examples have changed since. Where the project set no bar, the person is the gate, as before.</p>
+
   <h2>What is doing the work</h2>
   <div class="table-scroll">
   <table>
@@ -158,7 +202,7 @@
     <tr><td><b>The built-in engine</b></td><td>Running examples, grading them, computing quality, reliability, stability, latency and tokens. No external dependencies.</td><td>Built in</td></tr>
     <tr><td><b>Ollama</b></td><td>Local models on your own machine. The default route: free and no keys.</td><td>A separate program</td></tr>
     <tr><td><b>OpenAI-compatible APIs</b></td><td>Cloud models: OpenAI, Anthropic, DeepSeek, Together, OpenRouter, Groq, Fireworks. Useful when the local model is too weak.</td><td>Needs a key in an environment variable</td></tr>
-    <tr><td><b>Hugging Face datasets</b></td><td>Importing public corpora. Hugging Face is the main public warehouse of datasets and models.</td><td>Optional extra</td></tr>
+    <tr><td><b>Hugging Face datasets</b></td><td>Importing public corpora, and the source of the seventeen bundled business sets. Only needed to fetch more — the bundled rows are already on disk.</td><td>Optional extra</td></tr>
     <tr><td><b>DSPy</b></td><td>A library for automatic prompt search. Supplies three of the four searches behind Optimization.</td><td>Optional extra</td></tr>
     <tr><td><b>promptfoo</b></td><td>Exports the prompt into another test runner, if your team already uses one. Only a method's first stage is exported.</td><td>Optional extra</td></tr>
     <tr><td><b>Langfuse / Phoenix</b></td><td>Tracing: they log every model call so you can look at exactly what went out and came back.</td><td>Optional extra</td></tr>
@@ -166,15 +210,16 @@
   </div>
 
   <h3>The four searches behind Optimization</h3>
-  <p>Chosen in the <b>How to search</b> field. Anything not installed is shown greyed rather than hidden, so the list is the same list every time.</p>
+  <p>Chosen in the <b>How to search</b> field. Anything not installed is shown greyed rather than hidden, so the list is the same list every time. They do not search the same thing, and the screen says which: the built-in loop rewrites the prompt you are holding, word for word, while a DSPy backend searches the instruction block of the recipe behind it.</p>
   <div class="table-scroll">
   <table class="terms">
-    <tr><td><code>native</code></td><td>The built-in greedy loop: the model critiques its own prompt and rewrites it, and the best variant survives. Nothing to install.</td></tr>
+    <tr><td><code>native</code></td><td>The built-in greedy loop: the model critiques your prompt and rewrites it, and the best variant survives. A rewrite that loses the place an example's input goes is refused before it is measured. Nothing to install.</td></tr>
     <tr><td><code>DSPy MIPROv2</code></td><td>Bayesian search: it proposes instructions and example sets together, and learns from the scores they got. In our measurements this is the only one that produced a gain.</td></tr>
     <tr><td><code>DSPy GEPA</code></td><td>Evolution: keeps a set of variants nothing has beaten outright and breeds from those.</td></tr>
     <tr><td><code>DSPy BootstrapFewShot</code></td><td>Leaves the instruction alone and only picks the worked examples that go into the prompt.</td></tr>
   </table>
   </div>
+  <p>Whatever wins stays text until you take it. <b>Adopt optimized prompt</b> puts the winner on the prompt screen: copied verbatim when the search rewrote your words, recompiled against your own task when it searched the recipe — the preview under the metrics was compiled against one row of the benchmark. The winner can also be exported as a technique file and kept on this server, which makes it runnable by id instead of a document in your downloads.</p>
 
   <h2>What has already been measured</h2>
   <p>The finished reports live in <code>docs/benchmarks/</code>. In short:</p>
@@ -183,7 +228,7 @@
     <li><b>The built-in search against MIPROv2</b> on <code>entity-extraction-hard</code>, same split for both: the greedy loop delivered exactly +0.000, MIPROv2 delivered +0.090 while using half as many model calls.</li>
     <li><b>A large cloud model</b> behaved the same way on reading: a separate reasoning stage cost 0.028 quality at 2.9× the tokens and 4.4× the time. On arithmetic both methods hit the 1.000 ceiling, where no difference can show.</li>
   </ul>
-  <p>This is also why the catalogue is a catalogue and not a ranking: of the sixty-one methods on <b>Reference → Techniques</b>, which one wins is a property of your task, your model and your examples. That is what the measurement is for.</p>
+  <p>This is also why the catalogue is a catalogue and not a ranking: of the sixty-one methods on <b>Prompt → Techniques</b>, which one wins is a property of your task, your model and your examples. That is what the measurement is for.</p>
 
   <h2>Your own data</h2>
   <p>The bundled sets are for finding your way around. Conclusions about your task can only come from your data. A <code>.jsonl</code> file, one task per line, uploaded straight from the interface:</p>
@@ -193,18 +238,21 @@
   <div class="note">
     <p><b>The one rule.</b> The correct answer has to appear in the text <em>word for word</em>. If the text says "Captain Orin" and your gold says "Orin, captain", the model is marked wrong for not guessing your way of writing it. And keep the examples where the right answer is empty.</p>
   </div>
-  <p>If you have no examples at all, <b>Datasets → Build datasets</b> generates rows along every axis of a fixed taxonomy — a typo, debris around the input, reordered fields, missing data, an instruction that argues with the prompt, an injection attempt, an answer buried in filler — and shows you which axes are still empty. Deterministic rules object first: a row that duplicates another, or carries an answer copied from an input that has since lost half its content, is flagged before anyone reads it. Nothing generated becomes truth before you approve it.</p>
-  <p>Once a run exists, the useful rows are no longer the awkward ones in general. Building <b>from what it got wrong</b> seeds a new set from the examples the last benchmark did not score full marks on, keeps each one unchanged, and mutates around it — so the next set is aimed at the part of the task this prompt is actually failing, rather than at more of what it already handles.</p>
-  <p>A model can write the seed inputs too. Drawing several samples instead of one and pooling them widens the vocabulary; asking each sample to write as a different reader of the task widens it further. If you also ask for a proposed answer per row, it is sampled several times and the row keeps the answer the samples agreed on — with the level of agreement recorded, so the review queue opens on the rows the generator could not settle with itself. None of that is a quality score. It only decides what a person looks at first.</p>
+  <p>With no examples at all, <b>Datasets → Build datasets</b> generates rows along every axis of a fixed taxonomy — a typo, debris around the input, reordered fields, missing data, an instruction that argues with the prompt, an injection attempt, an answer buried in filler — and shows which axes are still empty. Deterministic rules object first: a duplicate row, or one whose answer was copied from an input that has since lost half its content, is flagged before anyone reads it. Nothing generated becomes truth before you approve it.</p>
+  <p>Once a run exists, the rows worth having are not the awkward ones in general. Building <b>from what it got wrong</b> seeds a set from the examples the last benchmark missed, keeps each unchanged and mutates around it — aimed at the part of the task this prompt is failing, not at more of what it handles.</p>
+  <p>A model can write the seed inputs too. Several samples pooled instead of one widen the vocabulary; asking each sample to write as a different reader of the task widens it further. Ask for a proposed answer per row and it is sampled several times: the row keeps what the samples agreed on, and how much they agreed is recorded, so the review queue opens on the rows the generator could not settle with itself. None of that is a quality score — it decides what a person reads first.</p>
 
   <h2>What this cannot do</h2>
   <ul>
     <li>Turn a model's verdict into a release decision without a person approving it.</li>
     <li>Say anything meaningful on a tiny set. Six examples is not a measurement.</li>
+    <li>Check a claim printed on a business card. Those figures are what a company reported; what gets measured here is your prompt on data of that shape.</li>
+    <li>Score open prose against taste. A word-overlap grader compares against one recorded answer, and pairwise judging needs a person at the end of it.</li>
+    <li>Watch live traffic. The three <b>Spot checks</b> run by hand on material you paste in; this server sees nothing else.</li>
     <li>Call arbitrary tools in agent tasks: only registered ones work, and a calculator is what ships.</li>
     <li>Export a multi-stage method to promptfoo — only the first stage goes out.</li>
     <li>Assume a result carries to another model; that is what <b>Model matrix</b> is for.</li>
-    <li>Tell you your examples resemble production. <b>Production → Monitoring</b> watches for the drift, but the resemblance is your judgement.</li>
+    <li>Tell you your examples resemble production. <b>Spot checks → Input drift</b> measures the gap between two sets of inputs you supply; whether the newer ones are what your users really send is your judgement.</li>
   </ul>
 
   <div class="doc-foot">

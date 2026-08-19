@@ -21,6 +21,14 @@ function renderProgram(p) {
       ${messages.map((message, messageIndex) => {
         const role = String(message.role || 'message').toUpperCase();
         const key = registerCopy(`compiled:stage:${stageIndex}:message:${messageIndex}`, message.content || '');
+        // A worked example is not part of the instruction, and a reader who
+        // cannot tell them apart cannot judge either.
+        if (message.demo) {
+          return `<div class="prompt-msg demo">
+            <div class="prompt-msg-head"><span class="prompt-role">${esc(role)}</span><span class="demo-tag">worked example</span>${copyButton(key, 'Copy', `Copy the ${role} side of a worked example`)}</div>
+            <pre>${esc(message.content || '')}</pre>
+          </div>`;
+        }
         // A prompt is one thing made of parts, so the part you came for is
         // marked where it stands rather than lifted out of its own prompt.
         const picked = showingOn('prompt') === promptPartName(p, stageIndex, message);
@@ -36,6 +44,8 @@ function renderProgram(p) {
     ? `<section class="prompt-notes"><h3>Notes</h3>
         <ul>${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></section>`
     : '';
+  const demos = p.stages.reduce((total, stage) =>
+    total + (stage.messages || []).filter(message => message.demo).length, 0) / 2;
   const readyForTask = state.inputSource === 'task';
   const lead = readyForTask
     ? 'Your task is already inside it — copy and paste into your model.'
@@ -48,17 +58,63 @@ function renderProgram(p) {
         <h2 class="ready-heading" id="ready-title" tabindex="-1">${readyForTask ? 'Your prompt' : 'Your prompt template'}</h2>
         <p class="prompt-lead">${lead}${esc(callLine)}</p>
       </div>
-      <div class="export-actions"><button type="button" class="copy-btn" data-runtime-export="python">Export Python</button><button type="button" class="copy-btn" data-runtime-export="typescript">Export TypeScript</button><button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button></div>
+      <div class="export-actions">${demos ? `<button type="button" class="copy-btn" data-action="drop-demos">Remove ${plural(demos, 'example')}</button>` : ''}<button type="button" class="copy-btn" data-runtime-export="python">Export Python</button><button type="button" class="copy-btn" data-runtime-export="typescript">Export TypeScript</button><button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button></div>
     </div>
     <div class="copy-status" data-copy-status="compiled" role="status" aria-live="polite"></div>
+    ${demos ? `<p class="prompt-lead">${plural(demos, 'worked example')} sit ahead of your request — the search
+      found ${demos > 1 ? 'them' : 'it'} helped and kept ${demos > 1 ? 'them' : 'it'}. Your own text is untouched
+      underneath, and removing ${demos > 1 ? 'them' : 'it'} leaves exactly what you wrote.</p>` : ''}
     ${stages}
     <footer class="prompt-foot">
-      <span>Method <strong>${esc(p.technique_title)}</strong> · written by ${esc(p.authored_by_model || 'engine')}</span>
+      <span>Method <strong>${esc(p.technique_title)}</strong> · ${p.artifact_source === 'optimizer'
+        ? `optimized wording, proposed by ${esc(p.authored_by_model || 'the engine')}`
+        : `written by ${esc(p.authored_by_model || 'engine')}`}${provenanceLine()}</span>
       <details class="prompt-spec"><summary>Technical detail</summary>
         <div>${esc(p.technique_id)} v${esc(p.technique_version)} · strategy ${esc(p.strategy)} · ${p.expected_calls} model call(s) · validators: ${esc(p.validators.join(', ') || 'none')}</div>
       </details>
     </footer>
-    ${notes}`;
+    ${notes}
+    ${nextStep()}`;
+}
+
+/* --------------------------------------------------------------------------
+ * What to do with the prompt that has just appeared.
+ *
+ * The screen ended at a copy button, and the whole argument of the tool — that
+ * a prompt nobody measured is a prompt nobody can defend — was left to whoever
+ * thought to open the rail. It is stated here instead, at the foot of the thing
+ * it is about, and it names the state the prompt is actually in: unmeasured,
+ * measured, or measured and improved. Only the step that has not been taken is
+ * offered, so the block disappears rather than turning into a row of buttons.
+ * -------------------------------------------------------------------------- */
+function nextStep() {
+  const step = (tab, title, lead, label) => `<aside class="next-step" data-testid="next-step">
+      <div><strong>${esc(title)}</strong><small>${esc(lead)}</small></div>
+      <a class="next-go" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">${esc(label)}</a>
+    </aside>`;
+  if (!state.provenance) {
+    return step('report', 'Nothing has been measured yet',
+      'This wording is a proposal until it has been run over examples. That takes one screen.',
+      'Measure it');
+  }
+  if (!state.optimization) {
+    return step('optimization', `Measured — quality ${state.provenance.quality.toFixed(3)}`,
+      'The search rewrites this prompt, scores every version against the same examples and keeps the best one.',
+      'Try to improve it');
+  }
+  return step('regressions', 'Measured and improved',
+    'Before it goes anywhere near real users, compare it against the run it is meant to replace.',
+    'Check for regressions');
+}
+
+// The run this prompt has a number from, named where the prompt is read. A
+// prompt with nothing here is one no measurement stands behind, whatever is on
+// the neighbouring screens.
+function provenanceLine() {
+  const from = state.provenance;
+  if (!from) return '';
+  const word = from.kind === 'optimization' ? 'optimization' : 'measurement';
+  return ` · backed by the ${word} on ${esc(from.dataset)}, quality ${from.quality.toFixed(3)}`;
 }
 
 /* --------------------------------------------------------------------------
@@ -92,11 +148,13 @@ const RUN_SUBJECT = {
     'This exact text is what runs — only the input changes, one example at a time.'],
   comparison: ['The prompt in the running',
     'Yours runs as written. The other recommended methods have no written text of their own, so each is compiled from your task, and all of them are scored on the same examples.'],
-  // The search works from the method in the registry, not from this wording. It
-  // is said here because the other two screens now promise the opposite, and a
-  // screen that borrows a neighbour's promise is how a number gets misread.
-  optimization: ['The prompt being improved',
-    'The search starts from the method itself rather than from this wording, writes several versions of it, and keeps whichever scores best.']
+  // Two backends, two different things, and the difference is exactly what the
+  // reader needs. The native search rewrites this text; a DSPy backend searches
+  // the recipe's own instruction block, so its candidates are not rewrites of
+  // these words even though they are still measured against them.
+  optimization: ['The prompt being improved', () => state.run.backend?.startsWith('dspy:')
+    ? `This exact text is the one to beat: it runs as written, and every number is measured against it. ${state.run.backend} searches the method's own instructions, though, so the versions challenging it are not rewrites of these words.`
+    : 'This exact text is what the search starts from and what every number is measured against. Each version it tries is a rewrite of these words.']
 };
 
 // The first thing the model is actually sent, which is what "the prompt" means
@@ -109,10 +167,23 @@ function promptOpening() {
 
 // The third zone of the workspace: the rail, the screen, and — on every screen
 // of the Prompt section — the prompt itself, in the left column where the
-// composer that wrote it stands.
+// composer that wrote it stands. Under it, on the screen that measures, how
+// the measurement is taken.
 function renderRunSubject(tab) {
   if (!RUN_SUBJECT[tab]) return '';
-  return `<div class="run-subject" id="run-subject" data-subject-for="${tab}">${runSubject(tab)}</div>`;
+  return `<div class="run-subject" id="run-subject" data-subject-for="${tab}">${subjectBody(tab)}</div>`;
+}
+
+function subjectBody(tab) {
+  return runSubject(tab) + measurementNote(tab);
+}
+
+// The column is redrawn from state, so anything it reads that arrives later —
+// the grader wording, the rows of a set, the business catalogue — comes back
+// through here rather than through a second copy of the markup.
+function refreshRunSubject() {
+  const subject = $('run-subject');
+  if (subject) subject.innerHTML = subjectBody(subject.dataset.subjectFor || state.tab);
 }
 
 function runSubject(tab) {
@@ -132,18 +203,251 @@ function runSubject(tab) {
     <p class="subject-name"><strong>${esc(techniqueTitle(state.chosen))}</strong>${alternatives}</p>
     ${task ? `<p class="subject-task">Your task: ${esc(task.slice(0, 220))}${task.length > 220 ? '…' : ''}</p>` : ''}
     ${opening ? `<pre class="subject-opening">${esc(opening.slice(0, 260))}${opening.length > 260 ? '…' : ''}</pre>` : ''}
-    <p class="subject-note">${esc(note)}</p>`;
+    <p class="subject-note">${esc(typeof note === 'function' ? note() : note)}</p>`;
+}
+
+/* --------------------------------------------------------------------------
+ * What "measured" means, beside the button that measures.
+ *
+ * The screen held the prompt, a set of examples and a button, and then handed
+ * back a scorecard of eleven numbers — with nothing in between saying how the
+ * second came out of the first. So the run is written out as the three things
+ * it actually is: the same prompt sent once per example, each answer scored by
+ * code rather than by a model, and those scores folded into the two headline
+ * numbers.
+ *
+ * It is written from the run about to happen, not from measurement in general:
+ * the set named in the field above, the graders those rows actually carry, and
+ * the order the server picks the headline grader by — so what it says will
+ * happen is what the scorecard will have done.
+ * -------------------------------------------------------------------------- */
+
+// Where the rows came from. It is the first thing a score depends on and the
+// one thing the score itself cannot show, so the kind of set is named before
+// any number is taken on it.
+function setOrigin(name) {
+  if (!name) return null;
+  if (name.startsWith('uploaded:')) {
+    return {label:'Your own file',
+      note:'Rows you brought here. A score on these is the only kind that speaks about your own work directly.'};
+  }
+  if (name.startsWith('hf:')) {
+    return {label:'Imported from Hugging Face',
+      note:'A public set someone else collected and annotated, sampled onto this server. Nobody here tuned it to produce a convenient result.'};
+  }
+  if (name.startsWith('builder:')) {
+    return {label:'Generated here',
+      note:'Rows written from your task rather than observed. A score over written rows describes written rows — keep real ones in the set.'};
+  }
+  if (name.startsWith('business:')) {
+    const spec = typeof catalogSets === 'function' ? catalogSets().get(name) : null;
+    if (!spec) return {label:'From the business catalogue', note:'The public set that catalogue maps this job to.'};
+    return {label:`Sampled from ${spec.source}`, url:spec.url,
+      note:`${spec.shape} Licence: ${spec.license}.`};
+  }
+  return {label:'Shipped with the tool',
+    note:'One of the benchmarks inside the installed package: this tool\u2019s own test stand, useful for trying the workflow out and for comparing a method against a published result. A good score here describes the tool, not your task.'};
+}
+
+/* Which graders will run, read off the rows themselves.
+ *
+ * A dataset names its graders per row, because arithmetic and translation
+ * cannot be checked the same way; a row that names none is scored by graders
+ * inferred from the shape of its expected answer. Both are said, since "no
+ * graders listed" and "no graders" are not the same sentence.
+ */
+function setGraders(name) {
+  const held = state.datasetRows.get(name);
+  if (!held || held.status === 'loading') return {status:'loading'};
+  if (held.status === 'error') return {status:'error', error:held.error};
+  const named = [];
+  let inferred = 0;
+  held.rows.forEach(row => {
+    const listed = row.graders || [];
+    if (!listed.length) inferred += 1;
+    listed.forEach(grader => { if (!named.includes(grader)) named.push(grader); });
+  });
+  return {status:'ready', named, inferred, rows:held.rows.length};
+}
+
+// The rows of the chosen set, and the catalogue a business set is described
+// by, are both fetched on demand — asked for once, and the column redrawn when
+// they land.
+function ensureMeasurementFacts() {
+  const name = state.run.dataset;
+  if (name && !state.datasetRows.has(name)) loadDatasetRows(name).then(refreshRunSubject);
+  if (name && name.startsWith('business:') && !state.catalog) loadBusinessCatalog().then(refreshRunSubject);
+}
+
+function graderChip(name, headline) {
+  const role = headline === name ? 'headline' : state.contractGraders.has(name) ? 'contract' : '';
+  return `<li class="grader-line${role ? ` ${role}` : ''}">
+    <code>${esc(name)}</code>${role ? `<span class="grader-role">${role === 'headline' ? 'quality' : 'reliability'}</span>` : ''}
+    <span>${esc(graderMeaning(name))}</span></li>`;
+}
+
+function measurementGraders(name) {
+  const found = setGraders(name);
+  if (found.status === 'loading') return '<p class="how-note">Reading which graders these rows carry…</p>';
+  if (found.status === 'error') return `<p class="how-note">Could not read the rows of ${esc(name)}: ${esc(found.error)}</p>`;
+  // Inputs and nothing else. Naming the graders that would have run is no use
+  // here; what the reader needs is which half of the scorecard will be blank.
+  const facts = state.datasetFacts.get(name);
+  if (facts && facts.examples && !facts.has_expected && !found.named.length) {
+    return `<p class="how-note">No row here carries a right answer, so <strong>nothing will score
+      correctness</strong>. The run measures repeatability, time and cost — and the shape of the answer, if the task
+      says it must be JSON. Write the right answer into some rows and the same run returns a quality number.</p>`;
+  }
+  const validators = state.program?.validators || [];
+  const all = [...found.named, ...validators.filter(item => !found.named.includes(item))];
+  if (!all.length) {
+    return `<p class="how-note">No row here names a grader, so each answer is scored by graders inferred from the
+      shape of its expected answer — word overlap for prose, per-item overlap for a list, the label for a category.</p>`;
+  }
+  const headline = state.qualityPreference.find(item => all.includes(item)) || null;
+  const inferred = found.inferred
+    ? `<p class="how-note">${found.inferred} of ${plural(found.rows, 'row')} name no grader of their own; those are scored
+      by graders inferred from the shape of the expected answer.</p>`
+    : '';
+  const added = validators.length
+    ? `<p class="how-note">${validators.length === 1 ? 'The last one comes' : `The last ${validators.length} come`}
+      from the method itself — its own contract checks, which score nothing when they do not apply.</p>`
+    : '';
+  return `<ul class="grader-list">${all.map(item => graderChip(item, headline)).join('')}</ul>
+    ${headline ? `<p class="how-note">Quality will be <code>${esc(headline)}</code>: the first of these in the order the
+      scorecard prefers for a headline number. The rest are shown beside it on the report.</p>` : ''}
+    ${inferred}${added}`;
+}
+
+function measurementNote(tab) {
+  if (tab !== 'report') return '';
+  ensureMeasurementFacts();
+  const name = state.run.dataset;
+  if (!name) {
+    return `<section class="how-measured"><div class="stage-title">How this is measured</div>
+      <p class="how-note">Choose a set of examples above and this will say what will run over them, what will score
+        the answers, and where those rows came from.</p></section>`;
+  }
+  const examples = state.datasetSizes.get(name);
+  const repeats = Math.max(1, Number(state.run.repeats) || 1);
+  const model = state.settings.evaluation.model_id.trim() || 'the evaluation model';
+  const origin = setOrigin(name);
+  const source = origin.url
+    ? `<a href="${esc(origin.url)}" target="_blank" rel="noreferrer noopener">${esc(origin.label)} ↗</a>`
+    : esc(origin.label);
+  return `<section class="how-measured">
+    <div class="stage-title">How this is measured</div>
+    <ol class="how-steps">
+      <li><b>Run.</b> The prompt above goes to <strong>${esc(model)}</strong> once for every example in
+        <code>${esc(name)}</code>${Number.isFinite(examples) ? ` — ${plural(examples, 'example')}` : ''},
+        ${repeats === 1 ? 'once' : `${repeats} times`} each. Only the input changes between runs; the wording is
+        sent as it stands.</li>
+      <li><b>Grade.</b> Every answer is scored from 0 to 1 by code — a rule you can read, not a model marking a model.
+        The same answer always gets the same score. Open prose is judged separately, on
+        <a href="#judge" data-global-tab="judge" data-screen="judge">Pairwise judging</a>, and never enters a
+        benchmark number without a human saying so.</li>
+      <li><b>Fold.</b> <strong>Quality</strong> is the mean of the one grader that stands for a right answer.
+        <strong>Reliability</strong> is the share of correctly shaped answers times stability — how often repeats of
+        the same input came back the same, which is 1.000 by definition at one run each. Time, tokens and cost are
+        read off the calls themselves.</li>
+    </ol>
+    <div class="how-block">
+      <div class="how-label">The examples it is measured on</div>
+      <p class="how-note"><strong>${source}</strong> — ${esc(origin.note)}</p>
+    </div>
+    <div class="how-block">
+      <div class="how-label">What will score the answers</div>
+      ${measurementGraders(name)}
+    </div>
+    <p class="how-note">A number belongs to one prompt, one model and one set: change any of the three and it is a
+      guess again. The <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">Evaluation guide</a>
+      has every grader, where each bundled set comes from, and the five rules a number depends on.</p>
+  </section>`;
 }
 
 function runField(name) {
   const options = [...state.datasetSizes.entries()]
     .map(([label, size]) => `<option value="${esc(label)}"${label === state.run.dataset ? ' selected' : ''}>${esc(label)} — ${size} examples</option>`).join('');
+  // The empty row is the opening state and stays in the list afterwards: a set
+  // can be un-chosen the same way it was chosen, and nothing runs until one is.
+  const placeholder = `<option value=""${state.run.dataset ? '' : ' selected'}>Choose a set of examples…</option>`;
   switch (name) {
-    case 'dataset': return `<label for="run-dataset">Measure against<select id="run-dataset" data-run-field="dataset">${options}</select></label>`;
+    case 'dataset': return `<label for="run-dataset">Measure against<select id="run-dataset" data-run-field="dataset">${placeholder}${options}</select></label>`;
     case 'repeats': return `<label for="run-repeats">Runs per example<input id="run-repeats" type="number" min="1" max="10" value="${esc(state.run.repeats)}" data-run-field="repeats"></label>`;
     case 'rounds': return `<label for="run-rounds">Rounds<input id="run-rounds" type="number" min="1" max="6" value="${esc(state.run.rounds)}" data-run-field="rounds"></label>`;
     case 'backend': return `<label for="run-backend">How to search<select id="run-backend" data-run-field="backend">${state.backendOptions}</select></label>`;
     default: return '';
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Twenty of your own inputs, no right answers.
+ *
+ * Everything on this screen is worth more when the rows are yours, and the
+ * screen used to open pointed at a set that ships with the tool — one click
+ * from a number that describes this tool rather than the reader's work. The
+ * gap it was leaving unsaid is that a useful measurement does not need an
+ * answer key: whether the shape holds, whether the same input comes back the
+ * same, how long it takes and what it costs are all answered by inputs alone.
+ *
+ * So it is offered here, where the meaningless click was, and only while the
+ * selected set is not the reader's own. The rows go in through the same upload
+ * the file screen uses, so they are validated and named the same way.
+ * -------------------------------------------------------------------------- */
+function ownRowsInvitation(tab) {
+  if (tab !== 'report') return '';
+  const name = state.run.dataset;
+  if (name && typeof datasetIsMine === 'function' && datasetIsMine(name)) return '';
+  return `<details class="own-rows" data-testid="own-rows">
+    <summary><strong>Start with your own inputs — no right answers needed</strong>
+      <small>Twenty real lines are enough to measure everything that does not need an answer key.</small></summary>
+    <div class="own-rows-body">
+      <p class="field-hint">Paste inputs you have actually seen — tickets, emails, documents — one per line. The run
+        reports shape, repeatability, time and cost. It cannot report whether an answer is <em>right</em>: that needs
+        rows with the right answer in them, which is what
+        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload">Upload your own</a> takes.</p>
+      <label for="own-rows-input" class="sr-only">Your inputs, one per line</label>
+      <textarea id="own-rows-input" rows="6" placeholder="Card payment failed twice this morning, third attempt went through&#10;Where do I change the billing address on my account?"></textarea>
+      <div class="own-rows-actions">
+        <button type="button" class="primary" data-action="use-own-rows">Use these as my examples</button>
+        <span class="own-rows-status" role="status" aria-live="polite"></span>
+      </div>
+      <p class="field-hint">They become a set of your own, selected straight away, with runs per example at 3 so
+        repeatability has something to compare. Held for this session only — the
+        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload">upload screen</a> can
+        keep a set on this machine.</p>
+    </div>
+  </details>`;
+}
+
+// Through the same endpoint a dropped file takes: one JSON object per line,
+// validated server-side, named after the "file" it arrived as.
+async function useOwnRows(panel) {
+  const box = panel.querySelector('#own-rows-input');
+  const status = panel.querySelector('.own-rows-status');
+  const lines = box.value.split('\n').map(line => line.trim()).filter(Boolean);
+  if (!lines.length) {
+    status.textContent = 'Nothing to use yet — paste a few inputs first.';
+    return;
+  }
+  const jsonl = lines.map((input, index) => JSON.stringify({id:`row-${index + 1}`, input})).join('\n');
+  const form = new FormData();
+  form.append('file', new Blob([jsonl], {type:'application/x-ndjson'}), 'my-inputs.jsonl');
+  status.textContent = `Registering ${plural(lines.length, 'row')}…`;
+  try {
+    const response = await fetch('/v1/datasets/upload', {method:'POST', body:form});
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || 'Upload failed');
+    state.run.repeats = 3;
+    // Registering the rows hides the block that asked for them — the set is the
+    // reader's own now — so what just happened is said on the screen rather than
+    // inside the thing that disappeared.
+    state.ownRowsNote = `${plural(body.examples, 'row')} of your own are now what this measures, as `
+      + `${body.name}, three runs each. Held for this server session only.`;
+    await loadDatasets(body.name);
+    renderDetailPanel('report');
+  } catch (error) {
+    status.textContent = error.message;
   }
 }
 
@@ -156,8 +460,11 @@ function renderRunSetup(tab) {
   // No heading of its own: the screen is already named one line above, and the
   // setup is the first thing on it. A second title there only asked the reader
   // to tell two names apart that stand for the same screen.
+  const note = tab === 'report' && state.ownRowsNote
+    ? `<div class="upload-status success">${esc(state.ownRowsNote)}</div>` : '';
   return `<section class="run-setup" data-run-setup="${tab}">
     <p class="run-lead">${esc(setup.lead)}</p>
+    ${ownRowsInvitation(tab)}${note}
     <div class="quality-form">${setup.fields.map(runField).join('')}</div>
     <div class="meta estimate" id="${setup.estimate}"></div>
     <div class="form-actions"><button id="${setup.button.id}" class="primary" type="button" data-action="${setup.button.action}" disabled>${esc(setup.button.label)}</button></div>
@@ -168,9 +475,20 @@ function renderRunSetup(tab) {
 const RUN_ACTIONS = {'bench-btn':() => runBenchmark(), 'compare-btn':() => runComparison(), 'optimize-btn':() => runOptimization()};
 
 function wireRunSetup(panel) {
+  panel.querySelector('[data-action="adopt-optimized"]')
+    ?.addEventListener('click', event => adoptOptimized(event.currentTarget));
+  panel.querySelector('[data-action="download-technique"]')
+    ?.addEventListener('click', event => exportTechnique(event.currentTarget, false));
+  panel.querySelector('[data-action="save-technique"]')
+    ?.addEventListener('click', event => exportTechnique(event.currentTarget, true));
+  panel.querySelector('[data-action="use-own-rows"]')?.addEventListener('click', () => useOwnRows(panel));
   panel.querySelectorAll('[data-run-field]').forEach(field => field.addEventListener('change', () => {
+    if (field.dataset.runField === 'dataset') state.ownRowsNote = '';
     state.run[field.dataset.runField] = field.value;
     updateEstimates();
+    // The bar names the set every number is computed from, so it is rewritten
+    // by the control that changes it rather than on the next navigation.
+    updateWorkspaceContext();
     refreshActions();
   }));
   const button = panel.querySelector('.form-actions button[id]');
@@ -229,16 +547,20 @@ function refreshActions(running = false) {
   // for the same reason a missing prompt does — and says so in the same place.
   const noModel = typeof modelIsSet === 'function' && !modelIsSet();
   const missing = 'Set an evaluation model first — see Models & keys.';
+  // Nothing is measured against a set nobody picked, so the three runs are held
+  // until one is — for the same reason and in the same place as a missing model.
+  const noSet = !state.run.dataset;
+  const pickSet = 'Choose a set of examples first — the field above this button.';
+  const why = noModel ? missing : noSet ? pickSet : noMethod;
   setAction('select-btn', running || noModel, running ? inFlight : missing);
-  setAction('bench-btn', running || noModel || !state.chosen, running ? inFlight : noModel ? missing : noMethod);
-  setAction('optimize-btn', running || noModel || !state.chosen, running ? inFlight : noModel ? missing : noMethod);
-  setAction('compare-btn', running || noModel || state.recs.length < 2,
-    running ? inFlight : noModel ? missing : 'Comparing needs at least two recommended methods.');
+  setAction('bench-btn', running || noModel || noSet || !state.chosen, running ? inFlight : why);
+  setAction('optimize-btn', running || noModel || noSet || !state.chosen, running ? inFlight : why);
+  setAction('compare-btn', running || noModel || noSet || state.recs.length < 2,
+    running ? inFlight : noModel ? missing : noSet ? pickSet : 'Comparing needs at least two recommended methods.');
   // The prompt can be written, or rewritten, while one of these screens is
   // open, so what the screen says it is working on is redrawn with the buttons
   // that would run it.
-  const subject = $('run-subject');
-  if (subject) subject.innerHTML = runSubject(subject.dataset.subjectFor || state.tab);
+  refreshRunSubject();
   refreshHomeIfVisible();
   updateEstimates();
 }
@@ -261,6 +583,13 @@ async function runBenchmark() {
       dataset: state.run.dataset, repeats: Number(state.run.repeats)
     });
     state.report = await pollJob(job.id, showProgress);
+    // This run was of the prompt currently held, so it is the number a release
+    // of that prompt can point at — a stronger claim than the optimization that
+    // may have produced the wording, because it measured this exact text.
+    if (state.report.experiment_id) {
+      state.provenance = {experiment_id:state.report.experiment_id, kind:'measurement',
+        dataset:state.report.dataset, quality:state.report.scorecard.quality};
+    }
     state.tab = 'report'; renderDetail();
   } catch (e) { showDetailMessage('report', `<div class="error">${esc(e.message)}</div>`); }
   finally { busy(false); }
@@ -285,16 +614,105 @@ async function runComparison() {
 async function runOptimization() {
   busy(true);
   try {
+    // The prompt goes with the request, as it does on the other two screens: it
+    // is the baseline, so "improved by 0.09" is a statement about the text on
+    // this screen rather than about a compile of the method nobody has seen.
     const job = await api('/v1/optimize', {
-      task: await taskProfile(), technique_id: state.chosen,
+      task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
       dataset: state.run.dataset, repeats: Number(state.run.repeats),
-      rounds: Number($('rounds').value), backend: $('backend').value,
+      rounds: Number(state.run.rounds), backend: state.run.backend,
       engine_model: engineProfile()
     });
     state.optimization = await pollJob(job.id, showProgress);
     state.tab = 'optimization'; renderDetail();
   } catch (e) { showDetailMessage('optimization', `<div class="error">${esc(e.message)}</div>`); }
   finally { busy(false); }
+}
+
+// The exporter's own default collides with the next winner from the same recipe,
+// so the round is in the name a person is offered before they keep it.
+function defaultTechniqueId(o) {
+  return `${o.winner.technique_id}.optimized`;
+}
+
+async function exportTechnique(button, save) {
+  const optimization = state.optimization;
+  if (!optimization) return;
+  const name = document.getElementById('technique-name')?.value.trim();
+  const status = document.querySelector('[data-technique-status]');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = save ? 'Keeping…' : 'Building…';
+  try {
+    const result = await api('/v1/export/technique', {
+      technique: optimization.exported_technique, technique_id: name || null, save
+    });
+    if (save) {
+      state.techniqueNote = `${result.id} is saved and now resolves. ${result.next}`;
+      // The catalogue and every method list read from the server, so what was
+      // just added has to be re-read rather than assumed.
+      await loadTechniqueCatalog();
+    } else {
+      downloadText(result.filename, result.yaml, 'text/yaml');
+      state.techniqueNote = `${result.filename} downloaded. ${result.next}`;
+    }
+    if (status) { status.className = 'copy-status success'; status.textContent = state.techniqueNote; }
+  } catch (e) {
+    state.techniqueNote = e.message;
+    if (status) { status.className = 'copy-status error-text'; status.textContent = e.message; }
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Adopting the winner. The search never saw the authored prompt — it works from
+ * the method in the registry — and its preview was compiled against one dataset
+ * row. So the winning instructions are recompiled here against this task, on the
+ * server, rather than the preview being copied onto the screen with a benchmark
+ * example baked into it.
+ * -------------------------------------------------------------------------- */
+async function adoptOptimized(button) {
+  const optimization = state.optimization;
+  if (!optimization) return;
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Adopting…';
+  state.adoptError = '';
+  try {
+    const program = await api('/v1/optimize/adopt', {
+      task: await taskProfile(),
+      technique_id: optimization.winner.technique_id,
+      // A prompt search already measured this exact text for this task, so it is
+      // copied. A recipe search measured a compile against a benchmark row, so
+      // its winner has to be rebuilt against the real material instead.
+      technique: optimization.winner_program ? {} : optimization.exported_technique,
+      program: optimization.winner_program || null,
+      description: $('description').value,
+      reusable: state.inputSource === 'reusable',
+      engine_model_id: optimization.engine_model_id || optimization.model_id
+    });
+    state.program = program;
+    // The held-out numbers belong to the search, not to this text as compiled
+    // for this task — but they are the run that justifies adopting it, and a
+    // release registered now should say so rather than say nothing.
+    state.provenance = optimization.experiment_id
+      ? {experiment_id:optimization.experiment_id, kind:'optimization',
+         dataset:optimization.dataset, quality:optimization.winner_validation.quality}
+      : null;
+    state.tab = 'prompt';
+    updateEstimates();
+    updateWorkspaceContext();
+    renderDetail();
+  } catch (e) {
+    // Not `showDetailMessage`: that replaces the screen with the error, and the
+    // screen is the search — a failed click would cost the reader the table,
+    // the history and the winner's text. The error belongs next to the button
+    // that produced it.
+    state.adoptError = e.message;
+    renderDetailPanel('optimization');
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -306,7 +724,9 @@ async function runOptimization() {
 async function smartRun(report) {
   const dataset = state.run.dataset;
   const repeats = Number(state.run.repeats);
-  if (!dataset) throw new Error('Choose a set of examples first — Datasets › Dataset library.');
+  // The set is picked in the run setup on this screen, not in the library, which
+  // only shows what exists. The caller has already walked the reader there.
+  if (!dataset) throw new Error('Choose a set of examples first — the "Measure against" field on the Measurement screen.');
 
   report('step', 'Writing the prompt…');
   if (!await createPrompt()) throw new Error('Describe the task first, then start again.');
@@ -318,7 +738,7 @@ async function smartRun(report) {
 
   report('step', `Improving it over ${plural(Number(state.run.rounds), 'round')}…`);
   const optimize = await api('/v1/optimize', {
-    task: await taskProfile(), technique_id: state.chosen, dataset, repeats,
+    task: await taskProfile(), technique_id: state.chosen, prompt: state.program, dataset, repeats,
     rounds: Number(state.run.rounds), backend: state.run.backend, engine_model: engineProfile()
   });
   state.optimization = await pollJob(optimize.id, showProgress);
@@ -389,29 +809,49 @@ function renderVerdict(report) {
     : points === 0 ? `Unchanged against v${previous.version} on the same examples.`
     : delta > 0 ? `${plural(points, 'point')} better than v${previous.version} on the same examples.`
     : `${plural(points, 'point')} worse than v${previous.version} on the same examples.`;
-  const tone = delta == null ? '' : delta > 0 ? ' up' : delta < 0 ? ' down' : '';
+  // Nothing could grade correctness: the rows carry no right answer and the task
+  // asks for no shape to check against. The run still measured real things —
+  // form, repeatability, time, cost — so it is those that stand in the head.
+  // A 0.00 in the ring would say every answer was wrong, which is a different
+  // and much worse claim than "there was nothing here to be right about".
+  const unscored = !c.quality_grader;
+  const tone = unscored ? '' : delta == null ? '' : delta > 0 ? ' up' : delta < 0 ? ' down' : '';
   const cautions = verdictCautions(report);
   // 2πr for the ring below; the arc is the score and nothing else.
   const circumference = 273.3;
   const stat = (label, value, note) => `<div class="stat"><dt>${esc(label)}</dt><dd>${esc(value)}<small>${esc(note)}</small></dd></div>`;
-  return `<section class="verdict${tone}">
-    <div class="verdict-head">
-      <div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1">
+  const ring = unscored
+    ? `<div class="ring unscored" role="img" aria-label="No grader could score these answers">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><circle class="ring-track" cx="48" cy="48" r="43.5"></circle></svg>
+        <b>—</b><span>unscored</span>
+      </div>`
+    : `<div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1">
         <svg viewBox="0 0 96 96" aria-hidden="true">
           <circle class="ring-track" cx="48" cy="48" r="43.5"></circle>
           <circle class="ring-fill" cx="48" cy="48" r="43.5" stroke-dasharray="${circumference}" stroke-dashoffset="${(circumference * (1 - Math.max(0, Math.min(1, c.quality)))).toFixed(1)}"></circle>
         </svg>
         <b>${c.quality.toFixed(2)}</b><span>quality</span>
-      </div>
+      </div>`;
+  const line = unscored
+    ? `<p class="verdict-line"><strong>Nothing here could score correctness.</strong> These rows carry no right
+        answer and the task sets no shape to check against, so what was measured is repeatability, time and cost.</p>
+      <p class="verdict-move">Add the right answer to some rows and the same run returns a quality number.</p>`
+    : `<p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.</p>
+      <p class="verdict-move">${esc(movement)}</p>`;
+  const headline = unscored
+    ? stat('Same answer twice', c.stability.toFixed(3), report.repeats > 1 ? `over ${plural(report.repeats, 'run')}` : 'raise runs per example')
+    : stat('Quality', c.quality.toFixed(3), previous ? `was ${previous.quality.toFixed(3)}` : 'first run');
+  return `<section class="verdict${tone}">
+    <div class="verdict-head">
+      ${ring}
       <div class="verdict-words">
         <span class="section-eyebrow">Result</span>
-        <p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.</p>
-        <p class="verdict-move">${esc(movement)}</p>
+        ${line}
         <p class="verdict-sub">${esc(techniqueTitle(report.technique_id))} on ${esc(report.model_id)} · ${esc(report.dataset)}</p>
       </div>
     </div>
     <dl class="stats">
-      ${stat('Quality', c.quality.toFixed(3), previous ? `was ${previous.quality.toFixed(3)}` : 'first run')}
+      ${headline}
       ${stat('Answer time', `${c.mean_latency_seconds.toFixed(2)} s`, 'median per example')}
       ${stat('Examples', String(report.examples), `${plural(report.repeats, 'run')} each`)}
       ${stat('Cost', c.mean_cost_usd == null ? 'unknown' : `$${c.mean_cost_usd.toFixed(6)}`, 'per answer')}
@@ -482,9 +922,10 @@ function datasetRow(report, id) {
   return held.rows.find(row => row.id === id) || null;
 }
 
-function renderExampleCard(report, entry, full) {
+function renderExampleCard(report, entry, full, unscored = false) {
   const source = datasetRow(report, entry.id);
-  const tone = scoreTone(entry.score);
+  // Nothing graded this run, so a red card would be a verdict nobody reached.
+  const tone = unscored ? 'plain' : scoreTone(entry.score);
   const grader = report.scorecard.quality_grader;
   const cut = (value, limit) => esc(String(value ?? '').slice(0, limit));
   const answers = (full ? entry.runs : entry.runs.slice(0, 1)).map(run => {
@@ -499,13 +940,18 @@ function renderExampleCard(report, entry, full) {
     </div>`;
   }).join('');
   const asked = source ? `<div class="example-field"><dt>Asked</dt><dd><pre>${cut(source.input, full ? 4000 : 300)}</pre></dd></div>` : '';
+  const noAnswer = unscored
+    ? 'none — and with nothing to compare against, nothing scored this'
+    : 'none — the graders judge the answer on its own';
   const wanted = source
-    ? `<div class="example-field"><dt>Right answer</dt><dd><pre>${source.expected == null || source.expected === '' ? 'none — the graders judge the answer on its own' : cut(source.expected, 1200)}</pre></dd></div>`
+    ? `<div class="example-field"><dt>Right answer</dt><dd><pre>${source.expected == null || source.expected === '' ? noAnswer : cut(source.expected, 1200)}</pre></dd></div>`
     : '';
   return `<article class="example-card ${tone}">
     <div class="example-head">
       <strong>${esc(entry.id)}</strong>
-      <span class="state ${tone === 'good' ? 'ok' : tone === 'part' ? 'wait' : 'bad-chip'}">${entry.score.toFixed(2)}${grader ? ` ${esc(grader)}` : ''}</span>
+      ${unscored
+        ? '<span class="state idle">not scored</span>'
+        : `<span class="state ${tone === 'good' ? 'ok' : tone === 'part' ? 'wait' : 'bad-chip'}">${entry.score.toFixed(2)}${grader ? ` ${esc(grader)}` : ''}</span>`}
       ${full ? '' : `<a class="example-open" href="#report/${encodeURIComponent(entry.id)}" data-global-tab="report" data-showing="${esc(entry.id)}">Open</a>`}
     </div>
     <dl class="example-fields">${asked}${wanted}
@@ -538,6 +984,10 @@ function renderReport(r) {
       ${entry ? renderExampleCard(r, entry, true) : `<div class="empty">This run has no example called ${esc(only)}.</div>`}
       ${renderRunStrip(r, only)}`;
   }
+  // With nothing grading correctness the strip would paint every example red and
+  // "where it went wrong" would list rows nothing found wrong. What helps then is
+  // reading a few answers as they came back.
+  const unscored = !c.quality_grader;
   const rows = [
     ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality, 'ratio'],
     ['reliability', c.reliability, r.declared.reliability, 'ratio'],
@@ -558,15 +1008,26 @@ function renderReport(r) {
     .filter(entry => scoreTone(entry.score) !== 'good')
     .slice(0, 3)
     .map(entry => renderExampleCard(r, entry, false)).join('');
+  const sample = exampleScores(r).slice(0, 3).map(entry => renderExampleCard(r, entry, false, true)).join('');
+  const answers = unscored
+    ? `<div class="stage-title">What came back</div>
+      <p class="meta">Nothing graded these, so they are a sample to read rather than a list of failures — the fastest
+        way to tell whether the shape is right is to look at three of them.</p>
+      ${sample}`
+    : `<div class="stage-title">Where it went wrong</div>
+      ${worst || '<div class="empty">Nothing scored below the top — every example came back right.</div>'}`;
   return `${renderVerdict(r)}
-    ${renderRunStrip(r)}
-    <div class="stage-title">Where it went wrong</div>
-    ${worst || '<div class="empty">Nothing scored below the top — every example came back right.</div>'}
+    ${unscored ? '' : renderRunStrip(r)}
+    ${answers}
     <div class="stage-title">Every measurement</div>
     <p class="meta">Measured is what just happened on your examples; declared is what the registry claims for ${esc(r.technique_title || r.technique_id)}. Run with the ${esc(r.strategy)} strategy.</p>
     <table><thead><tr><th>Metric</th><th>Measured</th><th>Declared</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="stage-title">Graders</div>
-    <table><thead><tr><th>Grader</th><th class="what">What it measures</th><th>Mean</th></tr></thead><tbody>${graders}</tbody></table>
+    ${graders
+      ? `<table><thead><tr><th>Grader</th><th class="what">What it measures</th><th>Mean</th></tr></thead><tbody>${graders}</tbody></table>`
+      : `<div class="empty">No grader could produce a number for these rows: none of them carries a right answer, and
+        the task asks for no shape to check. Add <code>expected</code> to some rows, or say in the task that the answer
+        must be JSON, and the same run comes back with a score.</div>`}
     ${r.prior != null ? `<div class="warning">Registry prior was ${r.prior.toFixed(2)}; measured quality is ${c.quality.toFixed(2)}. Ranking now uses the measured value.</div>` : ''}`;
 }
 
@@ -583,6 +1044,62 @@ function renderComparison(c) {
     <div class="meta">${esc(c.dataset)} on ${esc(c.model_id)} · priorities q${c.priorities.quality.toFixed(2)} r${c.priorities.reliability.toFixed(2)} l${c.priorities.latency.toFixed(2)} t${c.priorities.token_cost.toFixed(2)}</div>
     <table><thead><tr><th>Technique</th><th>Weighted</th><th>Quality</th><th>Reliability</th><th>Latency s</th><th>Tokens</th><th>Cost</th><th>Calls</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="warning">${esc(c.note)}</div>`;
+}
+
+/* The winner has to be able to leave this screen. Until it can, the only thing
+ * downstream of a search is a wall of text: Releases registers the prompt on
+ * Prompt text, which the search never touched, so a run could be optimized and
+ * shipped and the two would have nothing to do with each other.
+ *
+ * Two cases are refused rather than offered. The baseline winning means the
+ * search found nothing better, and "adopting" it would overwrite whatever the
+ * engine wrote with a plain compile of the registry method — a downgrade wearing
+ * the word improvement. A gain of zero or less on held-out quality is the same
+ * answer arrived at by arithmetic.
+ */
+function renderAdopt(o) {
+  const gain = o.winner_validation.quality - o.baseline_validation.quality;
+  if (o.winner.id === o.baseline_id) {
+    return `<div class="warning">The baseline won: no version the search wrote scored better on the
+      held-out split, so there is nothing here to adopt. Your prompt stays as it is.</div>`;
+  }
+  const adopted = state.program && state.program.artifact_source === 'optimizer';
+  const rewrote = Boolean(o.winner_program);
+  const numbers = gain > 0
+    ? `Held-out quality ${o.baseline_validation.quality.toFixed(3)} → ${o.winner_validation.quality.toFixed(3)}.`
+    : 'Held-out quality did not improve, so this is a trade — read the table above before taking it.';
+  return `<section class="adopt-winner">
+    <h3>Take this wording</h3>
+    <p class="prompt-lead">${rewrote
+      ? `Puts <strong>${esc(o.winner.id)}</strong> on <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a>, replacing what is there. ${esc(numbers)} The search rewrote your own words, so the text above is what was measured and adopting copies it verbatim.`
+      : `Recompiles <strong>${esc(o.winner.id)}</strong> against your task and puts it on <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a>, replacing what is there. ${esc(numbers)} The prompt above ran on one row of ${esc(o.dataset)}; what lands on your screen is the same instructions with your material in its place.`}</p>
+    <div class="form-actions">
+      <button type="button" class="primary" data-action="adopt-optimized">Adopt optimized prompt</button>
+      ${adopted ? '<span class="meta">An optimized prompt is already on the Prompt text screen.</span>' : ''}
+    </div>
+    ${state.adoptError ? `<div class="error">${esc(state.adoptError)}</div>` : ''}
+    ${rewrote ? `<p class="prompt-lead">No technique file to keep here: the winner is a prompt, not a recipe, and a
+      file of the untouched recipe would reproduce none of it. Export a runnable client from
+      <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> once you have adopted it.</p>`
+      : `${renderTechniqueKeep(o)}`}
+  </section>`;
+}
+
+function renderTechniqueKeep(o) {
+  return `<h3>Or keep it as a method of its own</h3>
+    <p class="prompt-lead">The same winner as a technique file. Downloaded, it goes in your own registry; kept here,
+      its name resolves, so <code>/v1/run</code> and an exported client execute it instead of the recipe it was tuned
+      from. It is never recommended to anyone — a method tuned on ${esc(o.dataset)} says nothing about another
+      task.</p>
+    <div class="quality-form">
+      <label>Name<input id="technique-name" value="${esc(defaultTechniqueId(o))}"></label>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="ghost" data-action="download-technique">Download the file</button>
+      <button type="button" class="ghost" data-action="save-technique">Keep it on this server</button>
+    </div>
+    <div class="copy-status" data-technique-status role="status" aria-live="polite">${state.techniqueNote
+      ? esc(state.techniqueNote) : ''}</div>`;
 }
 
 function renderOptimization(o) {
@@ -602,5 +1119,6 @@ function renderOptimization(o) {
     <table><thead><tr><th>Metric (held-out)</th><th>Baseline</th><th>Optimized</th><th>Delta</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="stage-title">search history</div>${rounds}
     <div class="meta">Pareto front: ${o.pareto_front.map(c => esc(c.id)).join(', ')}</div>
-    ${stages}`;
+    ${stages}
+    ${renderAdopt(o)}`;
 }

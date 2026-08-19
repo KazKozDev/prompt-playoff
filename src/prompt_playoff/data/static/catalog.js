@@ -28,10 +28,18 @@ async function loadGraderHelp() {
   try {
     const capabilities = await api('/v1/capabilities');
     state.graderHelp = capabilities.grader_help || {};
+    // How the grades become the two headline numbers. Served rather than
+    // copied, so the Measurement screen can say which grader its quality will
+    // come from before the run, and be saying what the scorecard will do.
+    state.qualityPreference = capabilities.quality_preference || [];
+    state.contractGraders = new Set(capabilities.reliability_graders || []);
   } catch (e) {
     state.graderHelp = {};
+    state.qualityPreference = [];
+    state.contractGraders = new Set();
   }
   if (state.report) renderDetail();
+  if (typeof refreshRunSubject === 'function') refreshRunSubject();
 }
 
 function graderMeaning(name) {
@@ -202,10 +210,20 @@ function renderTechniqueCatalog() {
     if (!grouped.has(family)) grouped.set(family, []);
     grouped.get(family).push(technique);
   });
+  // The year is the source paper's, taken from the registry entry — the seven
+  // methods with no paper behind them are the registry's own, and say so
+  // instead of borrowing a year they do not have.
+  const indexYear = technique => {
+    const year = technique.source?.year;
+    return year
+      ? `<span class="technique-index-year">${esc(year)}</span>`
+      : '<span class="technique-index-year none" title="No published source — an engineering pattern built for this registry.">—</span>';
+  };
   const index = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([family, items]) => `
     <div class="technique-index-group">
       <div class="technique-index-family">${esc(family)}</div>
-      <div class="technique-index-links">${items.map(item => `<a href="#${esc(anchorFor(item.id))}">${esc(item.title)}</a>`).join('')}</div>
+      <div class="technique-index-links">${items.map(item =>
+        `<a href="#${esc(anchorFor(item.id))}">${esc(item.title)}</a>${indexYear(item)}`).join('')}</div>
     </div>`).join('');
   const articles = techniques.map(technique => {
     const example = state.techniqueExamples.get(technique.id);
@@ -225,16 +243,49 @@ function renderTechniqueCatalog() {
       <a class="technique-index-return" href="#technique-index">Back to technique index</a>
     </article>`;
   }).join('');
-  return `<div class="techniques-shell">
-    <div class="techniques-intro"><div class="meta">${only
-      ? `${plural(techniques.length, 'technique')} strong at ${esc(only)}, of ${state.techniqueCatalog.size} in the live registry`
-      : `${techniques.length} techniques in the live registry`}</div></div>
-    <nav class="technique-index" id="technique-index" aria-labelledby="technique-index-title">
-      <h3 id="technique-index-title">Technique index</h3>
-      ${index}
-    </nav>
-    <div class="technique-catalog">${articles}</div>
+  // The same three zones as every other screen that is mostly reading: the
+  // catalogue itself on the wide half, and beside it the few things you have to
+  // know to read a card without being misled by it.
+  return `<div class="screen-split work-wide">
+    <div class="build-work">
+      <section class="screen-body">
+        <nav class="technique-index" id="technique-index" aria-label="Technique index">
+          <p class="meta">${only
+            ? `${plural(techniques.length, 'technique')} strong at ${esc(only)}, of ${state.techniqueCatalog.size} in the live registry.`
+            : `${techniques.length} techniques in the live registry, by family.`}</p>
+          ${index}
+        </nav>
+      </section>
+      <section class="screen-body technique-catalog">
+        <h3 class="zone-title">${only ? `Strong at ${esc(only)}` : 'The catalogue'}</h3>
+        ${articles}
+      </section>
+    </div>
+    <aside class="screen-guide" data-testid="technique-guide">${techniqueGuide(only)}</aside>
   </div>`;
+}
+
+/* Zone three. Four things that change how a card is read, and nothing that
+ * repeats what the card already says. */
+function techniqueGuide(only) {
+  const narrowed = only
+    ? `<p class="guide-note"><b>You arrived with a task in hand.</b> The catalogue is showing only the methods the registry marks as strong at <code>${esc(only)}</code>.
+      <a href="#techniques" data-global-tab="techniques">Show all ${state.techniqueCatalog.size}</a>.</p>`
+    : '';
+  return `<h2>How to read a card</h2>
+    <p class="guide-lead">Nothing here changes your prompt. This is the shelf the selector picks from — reading it is
+      how you disagree with its choice, not how you make one.</p>
+    ${narrowed}
+    <dl class="guide-stack">
+      <div><dt>The example is real</dt><dd>Each card's prompt was compiled from the live registry when this page loaded, for a task that suits the method. It is output, not documentation, so it cannot drift from what the tool would send.</dd></div>
+      <div><dt>Best for</dt><dd>The tasks the registry marks this method as strong at — the same labels the selector ranks by, so the list is the reason it was or was not suggested to you.</dd></div>
+      <div><dt>Strategy and minimum calls</dt><dd>What one run costs before any repeats. A method that samples several answers and votes cannot be had for the price of one call.</dd></div>
+      <div><dt>Blueprint</dt><dd>The reusable source blocks, placeholders unresolved. They are filled when the method is compiled for a real input.</dd></div>
+    </dl>
+    <h3>Choosing without reading</h3>
+    <p class="guide-note">You are not meant to pick from sixty-one. Describe the task on the
+      <a href="#prompt" data-global-tab="prompt">Prompt screen</a> and the ranked shortlist comes back with a reason
+      beside each one; this catalogue is where you overrule it.</p>`;
 }
 
 // ---- step 1: recommend -----------------------------------------------------

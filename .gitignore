@@ -19,7 +19,13 @@ benchmark-results/*.json
 benchmark-results/*.lock
 benchmark-results/*.corrupt-*
 benchmark-results/datasets/
+benchmark-results/techniques/
 !benchmark-results/.gitkeep
 
 # Third-party papers: indexed in references/README.md, fetched with `make papers`
 references/papers/
+
+# Local working material: design drafts and the source document behind the
+# business catalogue. Kept on disk, out of the history.
+design-preview/
+llm_business_50_cases_datasets.pdf

@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import httpx
 import pytest
 import yaml
 from conftest import FakeProvider
 
-from prompt_playoff.checks import CheckConfigError, load_check_file, run_checks
+from prompt_playoff.checks import (
+    CheckConfigError,
+    load_check_file,
+    release_gate,
+    run_checks,
+)
 from prompt_playoff.providers import ProviderError
 
 
@@ -172,3 +178,74 @@ def test_failed_check_sends_redacted_webhook(tmp_path):
     assert result.notifications[0].status == "sent"
     assert "token" not in result.notifications[0].destination
     assert "secret" not in result.notifications[0].destination
+
+
+def _gate_config(tmp_path: Path, technique: str = "structured.schema-first") -> Path:
+    path = tmp_path / "prompt-playoff.yaml"
+    path.write_text(
+        f"""
+version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+checks:
+  - name: shipping-bar
+    technique: {technique}
+    task: structured_extraction
+    dataset: entity-extraction
+    require:
+      quality_min: 0.85
+      mean_total_tokens_max: 300
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_the_release_gate_applies_the_committed_bar_to_a_recorded_run(tmp_path: Path):
+    path = _gate_config(tmp_path)
+    passed = release_gate(
+        "structured.schema-first", {"quality": 0.91, "mean_total_tokens": 250.0}, path
+    )
+    assert passed.status == "passed"
+    assert not passed.blocks_approval
+    assert [item.field for item in passed.thresholds] == ["mean_total_tokens", "quality"]
+
+    failed = release_gate(
+        "structured.schema-first", {"quality": 0.62, "mean_total_tokens": 250.0}, path
+    )
+    assert failed.status == "failed"
+    assert failed.blocks_approval
+    assert "quality 0.62 vs min 0.85" in (failed.reason or "")
+
+
+def test_a_gate_that_cannot_be_evaluated_is_not_a_gate_that_passed(tmp_path: Path):
+    """Three ways to not know, and none of them may read as approval."""
+    path = _gate_config(tmp_path)
+
+    unmeasured = release_gate("structured.schema-first", None, path)
+    assert unmeasured.status == "unmeasured"
+    assert unmeasured.blocks_approval
+
+    # The run is there but carries none of the fields the bar names.
+    partial = release_gate("structured.schema-first", {"reliability": 1.0}, path)
+    assert partial.status == "unenforceable"
+    assert partial.blocks_approval
+    assert "mean_total_tokens, quality" in (partial.reason or "")
+
+    broken = tmp_path / "broken.yaml"
+    broken.write_text("version: 1\nchecks: []\n", encoding="utf-8")
+    assert release_gate("structured.schema-first", {"quality": 1.0}, broken).status == (
+        "unenforceable"
+    )
+
+
+def test_no_committed_bar_is_not_a_failure(tmp_path: Path):
+    """A gate nobody configured must not block every release in the project."""
+    absent = release_gate("direct", {"quality": 0.1}, tmp_path / "missing.yaml")
+    assert absent.status == "not_configured"
+    assert not absent.blocks_approval
+
+    other = release_gate("direct", {"quality": 0.1}, _gate_config(tmp_path))
+    assert other.status == "not_configured"
+    assert "commits no thresholds for direct" in (other.reason or "")

@@ -52,6 +52,10 @@ class ExperimentRecord(BaseModel):
     metrics: dict[str, MetricSnapshot]
     config_hash: str
     prompt_hash: str | None = None
+    #: Fingerprint of the authored prompt this run measured, when one was
+    #: supplied. It is what makes a release's citation checkable instead of
+    #: taken on trust — see `prompt_fingerprint`.
+    authored_hash: str | None = None
     label: str | None = None
     task: dict[str, Any] | None = None
     dataset_revision: str | None = None
@@ -199,6 +203,7 @@ class ExperimentStore:
                 "grader_version": report.grader_version,
                 "seed_policy": report.seed_policy,
             },
+            authored_hash=report.authored_hash,
         )
 
     def add_comparison(
@@ -215,6 +220,12 @@ class ExperimentStore:
                 for item in comparison.entries
             },
             prompt=[report.prompt_preview for report in reports],
+            # One arm of a comparison is the prompt the caller supplied. Dropping
+            # its fingerprint made every release citing a comparison read as
+            # "measured something else", which was stricter than the truth.
+            authored_hash=next(
+                (item.authored_hash for item in reports if item.authored_hash), None
+            ),
             reproducibility={
                 "dataset_revision": reports[0].dataset_revision if reports else None,
                 "grader_version": reports[0].grader_version if reports else None,
@@ -283,6 +294,7 @@ class ExperimentStore:
         metrics: dict[str, MetricSnapshot],
         prompt: Any,
         reproducibility: dict[str, str | None],
+        authored_hash: str | None = None,
     ) -> ExperimentRecord:
         clean_task = task.model_dump(mode="json", exclude={"model": {"api_key"}})
         signature = {
@@ -308,6 +320,7 @@ class ExperimentStore:
                 metrics=metrics,
                 config_hash=_hash(clean_task),
                 prompt_hash=_hash(prompt) if prompt else None,
+                authored_hash=authored_hash,
                 task=clean_task,
                 dataset_revision=reproducibility.get("dataset_revision"),
                 grader_version=reproducibility.get("grader_version"),

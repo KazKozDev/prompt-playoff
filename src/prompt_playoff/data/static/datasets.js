@@ -2,9 +2,19 @@ async function loadDatasets(selectedName) {
   try {
     const list = await api('/v1/datasets');
     state.datasetSizes = new Map(list.map(d => [d.name, d.examples]));
+    // What the listing knows about a set beyond how many rows it has. The
+    // shelf of bundled benchmarks reads the tags from here to say which of them
+    // came out of somebody else's corpus, rather than being told in prose that
+    // can drift away from the rows.
+    state.datasetFacts = new Map(list.map(d => [d.name, d]));
     const names = list.map(d => d.name);
+    // Nothing is chosen for you. The set decides what every number on every
+    // screen is worth, so falling back to whichever set happened to sort first
+    // meant the bar reported a choice nobody made — and a measurement taken on
+    // it looked exactly like one that had been aimed. A set that has gone away
+    // is dropped for the same reason: better an empty field than a stale name.
     if (selectedName && names.includes(selectedName)) state.run.dataset = selectedName;
-    if (!names.includes(state.run.dataset)) state.run.dataset = names[0] || '';
+    if (state.run.dataset && !names.includes(state.run.dataset)) state.run.dataset = '';
     refreshRunSetup();
     updateEstimates();
     updateWorkspaceContext();
@@ -13,6 +23,7 @@ async function loadDatasets(selectedName) {
     return list;
   } catch (e) {
     state.datasetSizes = new Map();
+    state.datasetFacts = new Map();
     state.run.dataset = '';
     refreshRunSetup();
     updateEstimates();
@@ -124,10 +135,17 @@ function renderDatasetUpload() {
       </div>
       <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
       <p class="field-hint">One example per line, up to 10 MiB. The count you get back is the number of rows every later score is an average over.</p>
+      <!-- Off by default, and asked rather than assumed: these rows came off the
+           reader's own machine, and writing them to disk is a promise to make on
+           purpose. Off, the set behaves as it always has — usable now, gone when
+           the server restarts. -->
+      <label class="keep-rows"><input type="checkbox" id="upload-keep">
+        <span><strong>Keep on this machine</strong><small>Writes the rows next to your measurements, so the set is
+          still here after a restart. Leave it off and they live in this server's memory only.</small></span></label>
     </section>
     <aside class="screen-guide" data-testid="upload-guide">
       <h2>What the file has to be</h2>
-      <p class="guide-lead">JSONL: one JSON object per line, not one array of objects. Blank lines are skipped, and the first line that will not parse fails the whole upload by its line number — nothing is kept from a file that has one.</p>
+      <p class="guide-lead">JSONL: one JSON object per line, not one array. Blank lines are skipped; the first line that will not parse fails the whole upload by its line number, and nothing from that file is kept.</p>
       <pre class="guide-sample">{"id":"1","input":"Ada Lovelace worked in London.","expected":{"people":["Ada Lovelace"],"places":["London"]}}
 {"id":"2","input":"Nobody is named here.","expected":{"people":[],"places":[]}}</pre>
       <dl class="guide-fields">
@@ -141,7 +159,7 @@ function renderDatasetUpload() {
         </div>
         <div>
           <dt>expected</dt>
-          <dd>The answer it should have produced — a string, or an object when the task returns JSON. This is what a score is measured against; leave it out and the graders that compare an answer have nothing to compare.</dd>
+          <dd>The answer it should have produced — a string, or an object when the task returns JSON. Leave it out and the graders that compare an answer have nothing to compare.</dd>
         </div>
         <div>
           <dt>response_schema<br>graders<br>tags</dt>
@@ -154,7 +172,8 @@ function renderDatasetUpload() {
         <li>The set is selected for measurement straight away — the score you get next is computed against your rows, not the demo ones.</li>
         <li>It appears in the <a href="#dataset-library" data-global-tab="dataset-library">dataset library</a>, named <code>uploaded:</code> plus your file name.</li>
       </ol>
-      <p class="guide-note">Up to 10 MiB, UTF-8. The rows are held in this server's memory and are gone when it restarts: your own material is never written to disk here.</p>
+      <p class="guide-note">UTF-8. A kept set is written as a JSONL file next to your measurements, where ordinary
+        tools can read, copy or delete it.</p>
       <p class="guide-note">No file of your own yet? <a href="#dataset-hub" data-global-tab="dataset-hub">Import one from Hugging Face</a> or <a href="#dataset-builder" data-global-tab="dataset-builder">build one from your task</a>.</p>
     </aside>
   </div>`;
@@ -175,6 +194,7 @@ async function runUpload() {
   try {
     const form = new FormData();
     form.append('file', file);
+    form.append('keep', $('upload-keep')?.checked ? 'true' : 'false');
     const res = await fetch('/v1/datasets/upload', { method:'POST', body:form });
     if (!res.ok) throw new Error(await apiError(res));
     const uploaded = await res.json();
@@ -182,7 +202,10 @@ async function runUpload() {
     const datasets = await loadDatasets(uploaded.name);
     if (!datasets.some(dataset => dataset.name === uploaded.name)) throw new Error(`Uploaded ${uploaded.name}, but it is not available in the dataset list.`);
     status.className = 'upload-status success';
-    status.textContent = `${uploaded.name} uploaded — ${uploaded.examples} examples. Selected for measurement.`;
+    // Which of the two promises was made is said back, because the difference
+    // only shows up on the day the server restarts.
+    status.textContent = `${uploaded.name} uploaded — ${uploaded.examples} examples. Selected for measurement.`
+      + (uploaded.kept ? ' Kept on this machine.' : ' Held for this server session only.');
   } catch (e) {
     status.className = 'upload-status error-text';
     status.textContent = e.message;
@@ -269,18 +292,18 @@ function renderDatasetHub() {
       <h2>Search</h2>
       <label for="hub-task">What your prompt has to do</label>
       <textarea id="hub-task" rows="3">${esc($('description')?.value || '')}</textarea>
-      <p class="field-hint">The query is built from these words — edit them here if the search comes back off-target. This is the same task the prompt uses.</p>
+      <p class="field-hint">The same task the prompt uses. The query is built from these words — edit them if the search comes back off-target.</p>
       <button id="hub-btn" class="primary" type="button" data-testid="hub-search">Search Hugging Face</button>
       <div id="hub-status" class="upload-status" role="status" aria-live="polite"></div>
       <div id="hub-results" class="hub-results"></div>
     </section>
     <aside class="screen-guide" data-testid="hub-guide">
       <h2>What an import gets you</h2>
-      <p class="guide-lead">Public material, not your traffic. Rows from the Hub tell you whether a prompt holds up on text that resembles your inputs — a score still speaks loudest about examples from your own.</p>
+      <p class="guide-lead">Public material, not your traffic. Hub rows say whether a prompt holds up on text that resembles your inputs; your own examples still say it best.</p>
       <h3>Three clicks, none of them automatic</h3>
       <ol class="guide-steps">
-        <li><b>Search.</b> The queries are written from your task by the prompt engine, or taken from your own wording when it cannot. The line above the results says which, and exactly what was searched for.</li>
-        <li><b>Look at the columns.</b> A candidate opens on its real config, split and first rows. Nothing is chosen for you: the Hub's answer to a short query is often wrong, and only you can tell whether the material looks like your inputs.</li>
+        <li><b>Search.</b> The prompt engine writes the queries from your task, or your own wording is used when it cannot. The line above the results says which, and what was searched for.</li>
+        <li><b>Look at the columns.</b> A candidate opens on its real config, split and first rows. Nothing is chosen for you — only you can tell whether the material looks like your inputs.</li>
         <li><b>Import.</b> You pick the column to send and the column holding the right answer — up to 500 rows, 60 by default.</li>
       </ol>
       <h3>What happens after you import</h3>
@@ -435,7 +458,7 @@ function wireHubDetail() {
 
 const datasetCache = {};
 async function firstExample() {
-  const name = $('dataset').value;
+  const name = state.run.dataset;
   if (!name) return null;
   if (!datasetCache[name]) {
     try { datasetCache[name] = await api(`/v1/datasets/${encodeURIComponent(name)}`); }

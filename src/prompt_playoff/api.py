@@ -7,18 +7,23 @@ import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, metadata
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import HTMLResponse
+import yaml
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from prompt_playoff import __version__
 from prompt_playoff.business_catalog import CatalogError, catalog
+from prompt_playoff.checks import ReleaseGate, release_gate
 from prompt_playoff.deployment import DeploymentBundle, export_runtime
 from prompt_playoff.domain import (
+    AdoptOptimizedRequest,
     AuthorRequest,
     CompiledProgram,
     CompiledPrompt,
@@ -36,10 +41,24 @@ from prompt_playoff.domain import (
     TechniqueSpec,
 )
 from prompt_playoff.engine import PromptAuthoringError
-from prompt_playoff.evals import BenchmarkExample, ExampleRun, load_jsonl_text
+from prompt_playoff.evals import (
+    BenchmarkExample,
+    ExampleRun,
+    dataset_revision,
+    load_jsonl_text,
+    prompt_fingerprint,
+)
 from prompt_playoff.experiments import ExperimentComparison, ExperimentRecord, experiments_csv
-from prompt_playoff.graders import GRADER_HELP, grader_names
+from prompt_playoff.graders import (
+    GRADER_HELP,
+    QUALITY_PREFERENCE,
+    RELIABILITY_GRADERS,
+    grader_names,
+)
 from prompt_playoff.integrations import hub
+from prompt_playoff.integrations.huggingface import CODE_PRESETS as HF_CODE_PRESETS
+from prompt_playoff.integrations.huggingface import PRESETS as HF_PRESETS
+from prompt_playoff.integrations.huggingface import QA_PRESETS as HF_QA_PRESETS
 from prompt_playoff.integrations.tracing import import_langfuse_dataset
 from prompt_playoff.jobs import Job, JobStore
 from prompt_playoff.lint import lint_registry, registry_summary
@@ -64,6 +83,7 @@ from prompt_playoff.quality import (
     QualityStore,
     ReleaseActionRequest,
     ReleaseCreateRequest,
+    ReleaseEvidence,
     ReleaseRecord,
     ReviewDecision,
     ReviewItem,
@@ -81,9 +101,10 @@ from prompt_playoff.quality import (
     slice_analysis,
 )
 from prompt_playoff.registry import Registry, RegistryError
-from prompt_playoff.service import PromptSelectorService
+from prompt_playoff.service import PromptSelectorService, TechniqueNameConflict
 from prompt_playoff.strategies import aggregator_names, strategy_names
 from prompt_playoff.technique_examples import compiled_examples
+from prompt_playoff.technique_store import to_yaml
 
 
 @asynccontextmanager
@@ -133,7 +154,9 @@ class BenchmarkRequest(BaseModel):
     #: The prompt as it was authored, when the caller is holding one. Sent so a
     #: measurement is of that prompt rather than of a fresh compile of the same
     #: technique, which drops whatever an engine model wrote into it. Omitted,
-    #: the technique is compiled per example exactly as before.
+    #: the technique is compiled per example exactly as before. On `/v1/optimize`
+    #: it is the baseline the search has to beat, for the same reason: a gain
+    #: over a compile nobody has seen is not a gain over the prompt you have.
     prompt: CompiledProgram | None = None
 
 
@@ -208,6 +231,25 @@ class ExperimentCompareRequest(BaseModel):
     before_id: str
     after_id: str
     technique_id: str | None = None
+
+
+class TechniqueExportRequest(BaseModel):
+    """`OptimizationResult.exported_technique`, on its way to a file or a store."""
+
+    technique: dict[str, Any]
+    #: A name of its own. The exporter defaults to `<recipe>.optimized`, which
+    #: collides with the next winner from the same recipe; supply one when you
+    #: intend to keep more than one.
+    technique_id: str | None = Field(default=None, min_length=1, max_length=120)
+    #: Keep it on this server, so its id resolves for runs and runtime exports.
+    save: bool = False
+
+
+class TechniqueImportRequest(BaseModel):
+    """A technique file from another server, on its way into this one's store."""
+
+    yaml: str = Field(min_length=1, max_length=200_000)
+    technique_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class DeploymentExportRequest(BaseModel):
@@ -334,20 +376,33 @@ def help_page_ru() -> str:
     return files("prompt_playoff").joinpath("data/static/help.ru.html").read_text(encoding="utf-8")
 
 
-@app.get("/benchmarks", response_class=HTMLResponse, include_in_schema=False)
-def benchmarks_page() -> str:
+@app.get("/evaluation", response_class=HTMLResponse, include_in_schema=False)
+def evaluation_page() -> str:
     return (
-        files("prompt_playoff").joinpath("data/static/benchmarks.html").read_text(encoding="utf-8")
+        files("prompt_playoff").joinpath("data/static/evaluation.html").read_text(encoding="utf-8")
     )
 
 
-@app.get("/benchmarks/ru", response_class=HTMLResponse, include_in_schema=False)
-def benchmarks_page_ru() -> str:
+@app.get("/evaluation/ru", response_class=HTMLResponse, include_in_schema=False)
+def evaluation_page_ru() -> str:
     return (
         files("prompt_playoff")
-        .joinpath("data/static/benchmarks.ru.html")
+        .joinpath("data/static/evaluation.ru.html")
         .read_text(encoding="utf-8")
     )
+
+
+# The guide used to be called Benchmarks and lived at these two paths. It is one
+# document either way, so the old paths point at the new ones rather than
+# serving a second copy that would drift from it.
+@app.get("/benchmarks", include_in_schema=False)
+def benchmarks_page() -> RedirectResponse:
+    return RedirectResponse("/evaluation", status_code=301)
+
+
+@app.get("/benchmarks/ru", include_in_schema=False)
+def benchmarks_page_ru() -> RedirectResponse:
+    return RedirectResponse("/evaluation/ru", status_code=301)
 
 
 @app.get("/health")
@@ -366,6 +421,12 @@ def capabilities(request: Request) -> dict[str, Any]:
         #: What each grader measures, so a report can label its numbers in words
         #: instead of leaving the reader to look up a grader name.
         "grader_help": GRADER_HELP,
+        #: How the graders become the two headline numbers. The Measurement
+        #: screen names, before a run, which grader its quality will come from
+        #: and which ones feed reliability — so both orderings are served from
+        #: the module that applies them rather than copied into the page.
+        "quality_preference": list(QUALITY_PREFERENCE),
+        "reliability_graders": sorted(RELIABILITY_GRADERS),
         "strategies": strategy_names(),
     }
 
@@ -381,7 +442,12 @@ def lint(request: Request) -> dict[str, Any]:
 
 @app.get("/v1/techniques", response_model=list[TechniqueSpec])
 def techniques(request: Request) -> list[TechniqueSpec]:
-    return sorted(_service(request).registry.techniques.values(), key=lambda item: item.id)
+    """Everything resolvable by id, saved optimization winners included.
+
+    They are listed but never ranked: `/v1/recommend` sees the registry only,
+    because a recipe tuned on one dataset is not evidence about anyone else's.
+    """
+    return sorted(_service(request).all_techniques.values(), key=lambda item: item.id)
 
 
 @app.get("/v1/techniques/examples")
@@ -435,6 +501,44 @@ def delete_model_profile(profile_id: str, request: Request) -> dict[str, bool]:
     return {"deleted": _service(request).profiles.delete(profile_id)}
 
 
+@lru_cache(maxsize=1)
+def _package_licence() -> str:
+    """The licence the bundled rows ship under, read from the package itself.
+
+    The sets built here are files inside this distribution and carry its
+    licence; naming it in the page would be a second copy of pyproject that
+    nothing keeps honest.
+    """
+    try:
+        meta = metadata("prompt-playoff")
+    except PackageNotFoundError:
+        return ""
+    return meta.get("License-Expression") or meta.get("License") or ""
+
+
+def _provenance(name: str) -> dict[str, str] | None:
+    """Whose rows a bundled set holds, and under what licence.
+
+    The four sets sampled from public corpora are described by the import
+    presets that fetched them, so the repository, the licence and the paper
+    cannot drift from the code that did the fetching. Everything else that
+    ships inside the package was built here and carries the package's licence.
+    Sets a person brought — uploaded, imported, generated — are theirs, and this
+    says nothing about them.
+    """
+    spec = HF_PRESETS.get(name) or HF_QA_PRESETS.get(name) or HF_CODE_PRESETS.get(name)
+    if spec is not None:
+        return {
+            "source": spec.repo_id,
+            "url": f"https://huggingface.co/datasets/{spec.repo_id}",
+            "licence": spec.licence,
+            "citation": spec.citation,
+        }
+    if name.startswith(("uploaded:", "hf:", "builder:", "business:")):
+        return None
+    return {"source": "built here", "licence": _package_licence()}
+
+
 @app.get("/v1/datasets")
 def datasets(request: Request) -> list[dict[str, Any]]:
     service = _service(request)
@@ -452,6 +556,11 @@ def datasets(request: Request) -> list[dict[str, Any]]:
                 "has_expected": sum(1 for item in examples if item.expected is not None),
                 "has_schema": sum(1 for item in examples if item.response_schema is not None),
                 "tags": sorted({tag for item in examples for tag in item.tags}),
+                "provenance": _provenance(name),
+                # Whether this set survives a restart. Only a set the user
+                # brought can fail to, and the library says which it is looking
+                # at rather than leaving it to be discovered on the day.
+                "kept": service.dataset_store.path_for(name).exists(),
             }
         )
     return entries
@@ -483,8 +592,18 @@ def dataset_catalog(request: Request) -> dict[str, Any]:
 
 
 @app.post("/v1/datasets/upload", status_code=status.HTTP_201_CREATED)
-async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
-    """Validate a JSONL file and keep it available for this server session."""
+async def upload_dataset(
+    request: Request,
+    file: Annotated[UploadFile, File()],
+    keep: Annotated[bool, Form()] = False,
+) -> dict[str, Any]:
+    """Validate a JSONL file and register it, optionally past this server's life.
+
+    ``keep`` is off by default and asked for in the interface rather than
+    assumed: these rows came off someone's own machine, and writing them next to
+    the measurements is a promise to make on purpose. Off, the set behaves as it
+    always has — usable now, gone on restart.
+    """
     content = await file.read(MAX_DATASET_UPLOAD_BYTES + 1)
     if len(content) > MAX_DATASET_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Dataset exceeds the 10 MiB upload limit")
@@ -502,15 +621,14 @@ async def upload_dataset(request: Request, file: Annotated[UploadFile, File()]) 
     stem = Path(file.filename or "dataset").stem
     slug = re.sub(r"[^a-z0-9._-]+", "-", stem.lower()).strip("-._") or "dataset"
     name = f"uploaded:{slug}"
-    # Not persisted: this is the user's own material, arriving from their
-    # machine, and writing it out is a promise they have not been asked for.
-    _service(request).add_user_dataset(name, examples)
+    _service(request).add_user_dataset(name, examples, persist=keep)
     return {
         "name": name,
         "filename": file.filename,
         "examples": len(examples),
         "has_expected": sum(1 for item in examples if item.expected is not None),
         "has_schema": sum(1 for item in examples if item.response_schema is not None),
+        "kept": keep,
     }
 
 
@@ -824,9 +942,7 @@ async def _generated_seeds(
                 tags=[*tags, "model-generated"],
             )
         )
-        notes[seed_id] = SeedNote(
-            generator=model.model_id, persona=persona, agreement=agreement
-        )
+        notes[seed_id] = SeedNote(generator=model.model_id, persona=persona, agreement=agreement)
     return examples, notes
 
 
@@ -986,6 +1102,15 @@ async def author_prompt(payload: AuthorRequest, request: Request) -> CompiledPro
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.post("/v1/optimize/adopt", response_model=CompiledProgram)
+def adopt_optimized(payload: AdoptOptimizedRequest, request: Request) -> CompiledProgram:
+    """Turn an optimization winner into the prompt the workspace is holding."""
+    try:
+        return _service(request).adopt_optimized(payload)
+    except (ValueError, RegistryError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/v1/run", response_model=ExecutionTrace)
 async def run_prompt(payload: RunRequest, request: Request) -> ExecutionTrace:
     try:
@@ -1077,6 +1202,7 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
             auto=payload.auto,
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
+            prompt=payload.prompt,
         )
         return result.model_dump(mode="json")
 
@@ -1172,10 +1298,14 @@ async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dic
         generation_options={"temperature": 0},
     )
     try:
-        result = await _service(request).provider(
-            TaskProfile(task_type=TaskType.summarization, model=payload.judge_model),
-            phase="judge",
-        ).generate(prompt, payload.judge_model, payload.timeout_seconds)
+        result = (
+            await _service(request)
+            .provider(
+                TaskProfile(task_type=TaskType.summarization, model=payload.judge_model),
+                phase="judge",
+            )
+            .generate(prompt, payload.judge_model, payload.timeout_seconds)
+        )
         judged = PairwiseJudgeOutput.model_validate_json(result.content)
     except (ProviderError, ValidationError, TypeError, KeyError) as exc:
         raise HTTPException(
@@ -1339,9 +1469,7 @@ async def start_model_matrix(payload: ModelMatrixRequest, request: Request) -> J
 
 
 @app.post("/v1/security-evaluate", response_model=Job)
-async def start_security_evaluation(
-    payload: SecurityEvaluationRequest, request: Request
-) -> Job:
+async def start_security_evaluation(payload: SecurityEvaluationRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
     job = store.create("security-evaluation")
 
@@ -1412,9 +1540,25 @@ def list_releases(request: Request) -> list[ReleaseRecord]:
     return _quality(request).releases()
 
 
+def _release_evidence(payload: ReleaseCreateRequest, request: Request) -> ReleaseEvidence:
+    """Whether the cited run actually measured the prompt being frozen.
+
+    The citation used to be taken on trust: any experiment id was accepted
+    beside any prompt, and a release that measured one text and shipped another
+    was indistinguishable from an honest one. The run records the fingerprint of
+    what it measured, so the claim is now checked rather than believed.
+    """
+    if not payload.experiment_id:
+        return "unverified"
+    record = _service(request).experiments.get(payload.experiment_id)
+    if record is None or record.authored_hash is None:
+        return "indirect"
+    return "measured" if record.authored_hash == prompt_fingerprint(payload.prompt) else "indirect"
+
+
 @app.post("/v1/releases", response_model=ReleaseRecord, status_code=status.HTTP_201_CREATED)
 def create_release(payload: ReleaseCreateRequest, request: Request) -> ReleaseRecord:
-    record = _quality(request).create_release(payload)
+    record = _quality(request).create_release(payload, _release_evidence(payload, request))
     _quality(request).add_review(
         ReviewItem(
             id=f"review_{record.id}",
@@ -1427,11 +1571,96 @@ def create_release(payload: ReleaseCreateRequest, request: Request) -> ReleaseRe
     return record
 
 
+def _release_gate(release: ReleaseRecord, request: Request) -> ReleaseGate:
+    """The committed thresholds, applied to the run this release cites."""
+    record = (
+        _service(request).experiments.get(release.experiment_id) if release.experiment_id else None
+    )
+    metrics = None
+    if record is not None:
+        snapshot = record.metrics.get(record.winner or "") or next(
+            iter(record.metrics.values()), None
+        )
+        if snapshot is not None:
+            metrics = {
+                name: float(value)
+                for name, value in snapshot.model_dump().items()
+                if isinstance(value, int | float)
+            }
+    return release_gate(
+        release.technique_id,
+        metrics,
+        evidence=release.evidence,
+        dataset_changed=_dataset_moved(record, request),
+    )
+
+
+def _dataset_moved(record: ExperimentRecord | None, request: Request) -> bool:
+    """Have the rows this run was measured on changed since?
+
+    Only answerable when the run recorded a revision and the set is still one
+    this server can read; a set that has since been deleted is not evidence that
+    it changed, so an unanswerable question is not treated as a yes.
+    """
+    if record is None or not record.dataset_revision:
+        return False
+    try:
+        examples = _service(request).dataset(record.dataset)
+    except (KeyError, RegistryError, OSError, ValueError):
+        return False
+    return dataset_revision(examples) != record.dataset_revision
+
+
+@app.get("/v1/releases/{release_id}/gate", response_model=ReleaseGate)
+def read_release_gate(release_id: str, request: Request) -> ReleaseGate:
+    """What approving this release would be measured against, before you click."""
+    release = next((item for item in _quality(request).releases() if item.id == release_id), None)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Unknown release")
+    return _release_gate(release, request)
+
+
+class ReleaseCiteRequest(BaseModel):
+    experiment_id: str = Field(min_length=1, max_length=64)
+
+
+@app.post("/v1/releases/{release_id}/cite", response_model=ReleaseRecord)
+def cite_release(release_id: str, payload: ReleaseCiteRequest, request: Request) -> ReleaseRecord:
+    """Name the run behind a release that was registered without one."""
+    quality = _quality(request)
+    release = next((item for item in quality.releases() if item.id == release_id), None)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Unknown release")
+    record = _service(request).experiments.get(payload.experiment_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+    evidence: ReleaseEvidence = (
+        "measured"
+        if record.authored_hash and record.authored_hash == prompt_fingerprint(release.prompt)
+        else "indirect"
+    )
+    try:
+        return quality.cite_release(release_id, payload.experiment_id, evidence)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.post("/v1/releases/{release_id}/action", response_model=ReleaseRecord)
 def act_on_release(
     release_id: str, payload: ReleaseActionRequest, request: Request
 ) -> ReleaseRecord:
     if payload.action == "approve":
+        release = next(
+            (item for item in _quality(request).releases() if item.id == release_id), None
+        )
+        if release is None:
+            raise HTTPException(status_code=404, detail="Unknown release")
+        # The numbers first: it is the objective half, and refusing on it before
+        # a person is asked to sign off saves them signing off on something the
+        # bar will reject anyway.
+        threshold_gate = _release_gate(release, request)
+        if threshold_gate.blocks_approval:
+            raise HTTPException(status_code=409, detail=threshold_gate.reason)
         gate = next(
             (
                 item
@@ -1485,10 +1714,90 @@ def export_promptfoo(payload: PromptfooExportRequest, request: Request) -> dict[
     }
 
 
+@app.post("/v1/export/technique")
+def export_technique_file(payload: TechniqueExportRequest, request: Request) -> dict[str, Any]:
+    """Turn an optimization winner into a technique file, and optionally keep it.
+
+    Without `save` this is `optimize --export` over HTTP: the YAML comes back and
+    the caller writes it wherever their registry lives. With `save`, the server
+    also keeps it, which is what makes the winner resolvable by id — and so what
+    makes `/v1/run` and the runtime export able to execute it at all.
+    """
+    service = _service(request)
+    try:
+        spec = TechniqueSpec.model_validate(
+            {**payload.technique, **({"id": payload.technique_id} if payload.technique_id else {})}
+        )
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"This is not a technique the optimizer produced: {exc}"
+        ) from exc
+    saved_to = None
+    if payload.save:
+        try:
+            saved_to = str(service.save_technique(payload.technique, payload.technique_id))
+        except TechniqueNameConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "id": spec.id,
+        "filename": f"{spec.id.replace('.', '-')}.yaml",
+        "yaml": to_yaml(spec.model_dump(mode="json")),
+        "saved_to": saved_to,
+        "resolvable": saved_to is not None,
+        "next": (
+            f"This id now runs: send technique_id {spec.id!r} to /v1/run, or export a client "
+            "for it from Prompt text."
+            if saved_to
+            else "Nothing was saved. Put this file in your registry's techniques/ directory, "
+            "or send save=true to keep it on this server."
+        ),
+    }
+
+
+@app.delete("/v1/techniques/{technique_id:path}")
+def delete_saved_technique(technique_id: str, request: Request) -> dict[str, Any]:
+    """Only a saved winner can go. The packaged recipes are not this endpoint's to delete."""
+    try:
+        removed = _service(request).remove_technique(technique_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{technique_id} was not saved here, so there is nothing to remove.",
+        ) from exc
+    return {"removed": technique_id, "file": str(removed) if removed else None}
+
+
+@app.post("/v1/techniques/import")
+def import_technique(payload: TechniqueImportRequest, request: Request) -> dict[str, Any]:
+    """Take a technique file written by another server, so an export can travel.
+
+    A saved winner used to live on one machine: the exported client names a
+    technique by id, and no other server resolved it. This is the other end of
+    that journey.
+    """
+    try:
+        spec = yaml.safe_load(payload.yaml)
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=422, detail=f"This is not readable YAML: {exc}") from exc
+    try:
+        saved = _service(request).save_technique(spec, payload.technique_id)
+    except TechniqueNameConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": payload.technique_id or spec.get("id"), "saved_to": str(saved)}
+
+
 @app.post("/v1/export/runtime", response_model=DeploymentBundle)
 def export_deployment(payload: DeploymentExportRequest, request: Request) -> DeploymentBundle:
+    service = _service(request)
     try:
-        _service(request).resolve_technique(payload.task, payload.technique_id)
+        service.resolve_technique(payload.task, payload.technique_id)
+        # A packaged recipe is on every server; one saved here is on this one.
+        # The export has to carry it, or it only runs where it was made.
+        saved = service.user_techniques.get(payload.technique_id)
         return export_runtime(
             task=payload.task,
             technique_id=payload.technique_id,
@@ -1496,6 +1805,7 @@ def export_deployment(payload: DeploymentExportRequest, request: Request) -> Dep
             response_schema=payload.response_schema,
             variables=payload.variables,
             exemplars=payload.exemplars,
+            technique_yaml=to_yaml(saved.model_dump(mode="json")) if saved else None,
         )
     except (ValueError, RegistryError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

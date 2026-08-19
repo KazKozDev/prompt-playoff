@@ -14,9 +14,55 @@
       if (choice !== 'auto') document.documentElement.setAttribute('data-theme', choice);
     } catch (error) { document.documentElement.setAttribute('data-theme', 'dark'); }
   </script>
+  <script>
+    // The opening screen is shown once per browser, so the decision has to be
+    // made before the stylesheet paints: a poster that appears for one frame
+    // on every load would be worse than no poster at all. "#welcome" asks for
+    // it back.
+    try {
+      var seen = localStorage.getItem('pp-splash-seen') === '1';
+      if (seen && location.hash !== '#welcome') document.documentElement.setAttribute('data-splash', 'done');
+    } catch (error) { document.documentElement.setAttribute('data-splash', 'done'); }
+  </script>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
+<!-- The first screen: the mark, what the tool is for, and one way in. It owns
+     nothing else on the page — the app behind it boots as it always does, and
+     this layer simply stops covering it. -->
+<div class="splash" id="splash" role="dialog" aria-modal="true" aria-labelledby="splash-word" data-testid="splash">
+  <div class="splash-inner">
+    <img class="splash-mark" src="/assets/logo-mark.webp" width="132" height="132" alt="" decoding="async">
+    <h1 class="splash-word" id="splash-word">Prompt Playoff</h1>
+    <p class="splash-slogan">Finds the free AI model your business needs — and makes it fly.</p>
+    <p class="splash-sub">Benchmarks open-weight models on your task, picks the winner, and tunes the prompt until it hits your quality bar.</p>
+    <button type="button" class="primary splash-enter" id="splash-enter" data-testid="splash-enter">Enter the workbench</button>
+    <p class="splash-hint">or press <kbd>Enter</kbd></p>
+  </div>
+</div>
+<script>
+  // Wired here rather than in boot.js: this layer covers the whole page, so a
+  // script further down that fails to load must never be what keeps it there.
+  (function () {
+    var root = document.documentElement;
+    var button = document.getElementById('splash-enter');
+    if (!button || root.getAttribute('data-splash') === 'done') return;
+    function enter() {
+      root.setAttribute('data-splash', 'done');
+      // Private browsing refuses the write; the screen then simply returns on
+      // the next load, which is the harmless failure of the two.
+      try { localStorage.setItem('pp-splash-seen', '1'); } catch (error) {}
+      document.removeEventListener('keydown', onKey);
+      document.getElementById('main-content')?.focus();
+    }
+    function onKey(event) {
+      if (event.key === 'Enter' || event.key === 'Escape') enter();
+    }
+    button.addEventListener('click', enter);
+    document.addEventListener('keydown', onKey);
+    button.focus();
+  })();
+</script>
 <div class="app-shell">
   <aside class="sidebar" id="app-sidebar" data-testid="app-sidebar" aria-label="Application navigation">
     <div class="product-lockup">
@@ -65,10 +111,7 @@
       <div><strong>Prompt Playoff</strong><span>Prompt delivery workbench</span></div>
     </div>
     <div class="rail-smart">
-      <div class="rail-smart-top">
-        <span class="rail-smart-mark" aria-hidden="true"></span>
-        <div><strong>Smart run</strong><small>Write, measure, improve — one pass</small></div>
-      </div>
+      <strong>Smart run</strong><small>Write, measure, improve — one pass</small>
       <button type="button" class="primary block rail-smart-start" data-testid="smart-run">Start</button>
       <p class="rail-smart-status" role="status" aria-live="polite"></p>
     </div>
@@ -80,15 +123,21 @@
         <a href="#report" data-global-tab="report" data-screen="report" data-testid="nav-report">Measurement</a>
         <a href="#comparison" data-global-tab="comparison" data-screen="comparison" data-testid="nav-comparison">Method comparison</a>
         <a href="#optimization" data-global-tab="optimization" data-screen="optimization" data-testid="nav-optimization">Optimization</a>
+        <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="examples">
         <button class="sidebar-section" type="button" data-section-toggle="examples" aria-expanded="false" aria-controls="section-examples"><span class="section-name">Datasets</span><span class="section-count" data-section-count="examples"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-examples">
+        <!-- The order is the doctrine: what is already here, then the three ways
+             to get rows of your own in descending order of how much a score on
+             them says about your work, and last the tool's own benchmarks, which
+             say nothing about it at all. -->
         <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="nav-dataset-library">Dataset library</a>
         <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload" data-testid="nav-dataset-upload">Upload your own</a>
         <a href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub" data-testid="nav-dataset-hub">Import from Hugging Face</a>
         <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder" data-testid="nav-dataset-builder">Build datasets</a>
+        <a href="#dataset-bundled" data-global-tab="dataset-bundled" data-screen="dataset-bundled" data-testid="nav-dataset-bundled">Shipped with the tool</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="check">
@@ -107,13 +156,13 @@
         <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="nav-regressions">Regressions</a>
         <a href="#reviews" data-global-tab="reviews" data-screen="reviews" data-testid="nav-reviews">Reviews</a>
         <a href="#releases" data-global-tab="releases" data-screen="releases" data-testid="nav-releases">Releases</a>
-        <a href="#production" data-global-tab="production" data-screen="production" data-testid="nav-production">Monitoring</a>
+        <a href="#production" data-global-tab="production" data-screen="production" data-testid="nav-production">Spot checks</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="reference">
         <button class="sidebar-section" type="button" data-section-toggle="reference" aria-expanded="false" aria-controls="section-reference"><span class="section-name">Reference</span><span class="section-count" data-section-count="reference"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-reference">
-        <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
+        <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="nav-settings">Models &amp; keys</a>
         <a href="#logs" data-global-tab="logs" data-screen="logs" data-testid="nav-logs">Jobs &amp; logs</a>
         <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation" data-testid="nav-evaluation-guide">Evaluation guide</a>
         <a href="#help" data-global-tab="help" data-screen="help" data-testid="nav-help">Help</a>
@@ -197,11 +246,16 @@
       </div>
     </main>
 
+    <!-- One entry per section, in the order the rail lists them, so a screen is
+         never in a section the bar cannot show. Reference had no entry, which
+         left Jobs & logs, the guide, Help and Models & keys with nothing lit
+         on a phone; it opens the section screen, which is where its four live. -->
     <nav class="bottom-nav" aria-label="Primary mobile destinations">
       <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="bottom-prompt">Prompt</a>
       <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="bottom-data">Datasets</a>
       <a href="#history" data-global-tab="history" data-screen="history" data-testid="bottom-evaluate">Check</a>
       <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="bottom-ship">Production</a>
+      <a href="#s-reference" data-global-tab="s-reference" data-screen="settings" data-testid="bottom-reference">Reference</a>
     </nav>
   </div>
 </div>

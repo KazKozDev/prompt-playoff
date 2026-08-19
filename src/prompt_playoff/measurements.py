@@ -6,6 +6,7 @@ on the YAML prior for that combination. This store is that feedback loop.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -107,6 +108,26 @@ class MeasurementStore:
             return None
         return max(matched, key=lambda item: (item.recorded_at, item.examples * item.repeats))
 
+    def blind_to(self, task_type: TaskType, provider: str, model_id: str) -> MeasurementStore:
+        """This store with one (task, model) cell hidden, for grading the ranking.
+
+        A selector that can read the measurements for the very cell it is being
+        graded on is not predicting anything, it is copying. Hiding the whole cell
+        rather than one technique is deliberate: knowing what the rivals scored
+        gives the answer away just as thoroughly as knowing the winner did.
+        """
+        clone = copy.copy(self)
+        clone._records = [
+            item
+            for item in self._records
+            if not (
+                item.task_type == task_type
+                and item.provider == provider
+                and item.model_id == model_id
+            )
+        ]
+        return clone
+
     def coverage(self) -> dict[str, int]:
         return {
             "records": len(self._records),
@@ -115,14 +136,26 @@ class MeasurementStore:
         }
 
 
-def _key(evidence: MeasuredEvidence) -> tuple[str, str, str, str, str]:
+def _key(evidence: MeasuredEvidence) -> tuple[str, str, str, str, str, str]:
+    """What makes two records the same measurement, so the newer replaces the older.
+
+    The request belongs here: the same technique on the same rows, asked once with
+    tools and once without, produced two numbers, and one used to silently erase
+    the other.
+    """
     return (
         evidence.technique_id,
         evidence.task_type.value,
         evidence.provider,
         evidence.model_id,
         evidence.dataset,
+        request_fingerprint(evidence),
     )
+
+
+def request_fingerprint(evidence: MeasuredEvidence) -> str:
+    """Identity of the question a run answered; `unrecorded` before runs kept it."""
+    return "unrecorded" if evidence.request is None else evidence.request.fingerprint()
 
 
 def _default_path() -> Path:

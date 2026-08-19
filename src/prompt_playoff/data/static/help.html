@@ -17,6 +17,7 @@
     if (location.search.indexOf('embed') !== -1) document.documentElement.classList.add('embed');
   </script>
   <link rel="stylesheet" href="/assets/docs.css">
+  <script src="/assets/docs.js" defer></script>
 </head>
 <body>
 <main>
@@ -39,11 +40,11 @@
   <h2>Five sections</h2>
   <p>The rail has five, and they are the life of a prompt in order. Each opens to name its screens; the home screen shows the same five as tiles, each carrying the one fact that decides whether you need to go there.</p>
   <div class="cards">
-    <div class="card"><b>Prompt</b><p>The prompt itself, and the three measurements taken on it as it stands: one run over your examples, the methods that were in the running scored side by side, and the search for a better wording.</p></div>
+    <div class="card"><b>Prompt</b><p>The prompt itself, the three measurements taken on it as it stands — one run over your examples, the methods that were in the running scored side by side, and the search for a better wording — and the catalogue of sixty-one methods it was written from.</p></div>
     <div class="card"><b>Datasets</b><p>The rows every score is computed against. Bring your own, import a public set, or generate them here — and the library opens on a catalogue of fifty jobs businesses pay a model to do, each mapped to the set closest to it. A number only means something when these look like your real inputs.</p></div>
     <div class="card"><b>Check</b><p>Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves.</p></div>
-    <div class="card"><b>Production</b><p>The gate between a prompt that scores well here and a prompt running in front of real users: regressions, reviews, releases, and monitoring.</p></div>
-    <div class="card"><b>Reference</b><p>The catalogue of methods, the job log, and the reading. Nothing here changes your prompt.</p></div>
+    <div class="card"><b>Production</b><p>The gate between a prompt that scores well here and a prompt running in front of real users: regressions, reviews, releases, and the spot checks you run by hand.</p></div>
+    <div class="card"><b>Reference</b><p>The three models and their keys, the job log, and the reading. Nothing here changes your prompt.</p></div>
   </div>
 
   <h2>Three models, three jobs</h2>
@@ -59,12 +60,12 @@
   <div class="cards">
     <div class="card"><b><span class="step-no">1.</span> Describe the task</b><p>In the left column, in plain words: what the model should do, what comes out, and the constraints that matter. Choose whether you want a prompt ready for this one task or a reusable template with a placeholder, then press <b>Create my prompt</b>.</p></div>
     <div class="card"><b><span class="step-no">2.</span> Read what was written</b><p><b>Prompt → Prompt text</b> shows the finished text — exactly what will be sent to the model — with the ranked methods and the reason each was suggested beside it. Any of them can be compiled instead.</p></div>
-    <div class="card"><b><span class="step-no">3.</span> Choose the examples</b><p><b>Datasets</b>. Eleven task sets ship with the app, and 17 more covering work businesses pay a model to do — email, meetings, support, invoices, contracts, marketing. Your own are one JSONL file away, and public sets can be imported. This is the choice that decides whether the number means anything.</p></div>
+    <div class="card"><b><span class="step-no">3.</span> Choose the examples</b><p><b>Datasets</b>. Twenty-eight sets ship with the app: eleven task benchmarks, and seventeen covering work businesses pay a model to do — email, meetings, support, invoices, contracts, marketing. Your own are one JSONL file away, public sets can be imported, and <b>Build datasets</b> generates rows when you have none. This is the choice that decides whether the number means anything.</p></div>
     <div class="card"><b><span class="step-no">4.</span> Measure</b><p><b>Prompt → Measurement</b>. Set what to measure against and how many runs per example, then <b>Measure now</b>. This is the step that turns an opinion into a number.</p></div>
     <div class="card"><b><span class="step-no">5.</span> Compare the methods</b><p><b>Prompt → Method comparison</b> scores every recommended method on the same examples, so the ranking is measured rather than assumed.</p></div>
-    <div class="card"><b><span class="step-no">6.</span> Push further</b><p><b>Prompt → Optimization</b> rewrites the prompt over several rounds, scores every version, and keeps the best. Read the held-out numbers only — see below.</p></div>
+    <div class="card"><b><span class="step-no">6.</span> Push further</b><p><b>Prompt → Optimization</b> rewrites the prompt over several rounds, scores every version, and keeps the best. Read the held-out numbers only — see below. A winner stays on that screen until <b>Adopt optimized prompt</b> puts it on <b>Prompt text</b>.</p></div>
     <div class="card"><b><span class="step-no">7.</span> Question the result</b><p><b>Check → Significance</b> puts an interval around the difference. <b>Model matrix</b> and <b>Context lab</b> ask whether it survives a different model or a different amount of context.</p></div>
-    <div class="card"><b><span class="step-no">8.</span> Ship it</b><p><b>Production → Regressions</b> compares two recorded runs against the quality and speed you are willing to lose; <b>Reviews</b> collects everything waiting for a yes or no; <b>Releases</b> carries the prompt from draft to production, with a rollback.</p></div>
+    <div class="card"><b><span class="step-no">8.</span> Ship it</b><p><b>Production → Regressions</b> compares two recorded runs against the quality and speed you are willing to lose; <b>Reviews</b> collects everything waiting for a yes or no; <b>Releases</b> carries the prompt from draft to production, with a rollback. A release can only be approved on a run that measured this exact text, against the bars in <code>prompt-playoff.yaml</code>.</p></div>
   </div>
 
   <h2>The two numbers that matter</h2>
@@ -99,12 +100,12 @@
   <div class="table-scroll">
   <table>
     <tr><th>What you see</th><th>What to do</th></tr>
-    <tr><td>Low quality, high reliability</td><td>The shape is fine, the meaning is not. Look at <b>Weakest examples</b> at the bottom of the measurement — the three worst cases. Low quality usually hides one repeated mistake.</td></tr>
+    <tr><td>Low quality, high reliability</td><td>The shape is fine, the meaning is not. Look at <b>Where it went wrong</b> under the measurement — the three worst cases, with what the model actually answered. Low quality usually hides one repeated mistake.</td></tr>
     <tr><td>Low reliability</td><td>The model is padding the answer with chatter. Tick <b>Structured output</b> in Models &amp; keys — then the format is enforced by the runtime instead of politely requested.</td></tr>
     <tr><td><code>failures</code> above zero</td><td>The model is too slow to answer in time. Use a faster one — a thinking model can spend forty seconds on one example.</td></tr>
     <tr><td>Good but expensive</td><td>Compare against a simpler method. Three model calls often do not pay for themselves in quality.</td></tr>
     <tr><td>Numbers jump between runs</td><td>Too few examples, or one run per example. Raise both.</td></tr>
-    <tr><td>Good here, wrong in production</td><td>Your examples do not look like your real inputs. <b>Production → Monitoring</b> watches for exactly that drift.</td></tr>
+    <tr><td>Good here, wrong in production</td><td>Your examples do not look like your real inputs. <b>Production → Spot checks</b> measures exactly that gap: paste the inputs you have seen since against the ones you tested on.</td></tr>
   </table>
   </div>
 
@@ -152,7 +153,7 @@
     <tr><td><b>System messages</b></td><td>on</td><td>It understands a system instruction. Almost everything does.</td></tr>
     <tr><td><b>Tool calling</b></td><td>off</td><td>Only for agent tasks that call tools.</td></tr>
     <tr><td><b>Reasoning control</b></td><td>off</td><td>Only if the model is a thinking one and you want to speed it up by turning that off.</td></tr>
-    <tr><td><b>Input / output $ per 1M</b></td><td>your rate</td><td>Left empty, cost is reported as unknown rather than guessed.</td></tr>
+    <tr><td><b>Input / Output $ / 1M tokens</b></td><td>your rate</td><td>Left empty, cost is reported as unknown rather than guessed.</td></tr>
     <tr><td><b>Measure against</b></td><td><code>multiconer-en</code></td><td>Which set of examples to score on. A hundred or more, or the numbers mean nothing.</td></tr>
     <tr><td><b>Runs per example</b></td><td><code>3</code></td><td>How many times each example runs. At 1, stability reports a meaningless 1.000.</td></tr>
     <tr><td><b>Rounds</b></td><td><code>2</code></td><td>Optimization only. How many rewriting passes to make.</td></tr>
@@ -165,6 +166,7 @@
 
     <h3>Where quality comes from</h3>
     <p>For extraction it is the <code>field_f1</code> grader: it counts both what the model missed and what it invented. In the <b>Graders</b> table it is marked headline. Next to it sits <code>exact_match</code> — did everything match outright, with no allowances. It is almost always far lower, and that is expected.</p>
+    <p>For prose — a reply, a subject line, minutes — it is <code>token_f1</code>, word overlap with the one answer the set records. Read it as a rough check, and settle wording with <b>Check → Pairwise judging</b>.</p>
     <p>The format checks live there too: <code>json_validity</code> (did it parse), <code>json_schema</code> (did it match the schema fully), <code>no_prose</code> (no chatter around it). If <code>json_validity</code> is 1.00 while <code>field_f1</code> is low, the problem is comprehension, not format.</p>
 
     <h3>Where reliability comes from</h3>
