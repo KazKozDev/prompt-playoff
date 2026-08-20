@@ -1,408 +1,261 @@
-# YouTube Analytics — AI-Powered Video Analysis Application
+# Prompt Playoff — Prompt Optimization and Benchmarking for Local LLMs
 
-Modular YouTube analytics application for extracting and analyzing comprehensive data from YouTube videos through their URL. Independent service blocks with well-defined interfaces, local LLM integration via Ollama, and persistent storage.
+Prompt Playoff picks the prompting technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one. Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25 more — ranked on your data, not on a blog post's opinion.
 
 ```bash
-# Clone and setup
-git clone https://github.com/yourusername/youtube-analytics.git && cd youtube-analytics
-pip install -r requirements.txt
-python main.py
+# macOS
+git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && ./start.command
+
+# Windows
+git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && start.bat
+
+# Linux — or any machine with Python 3.11+
+pip install 'prompt-playoff[all]' && prompt-playoff serve
 ```
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python" height="20"></a>
-  <a href="#"><img src="https://img.shields.io/badge/ollama-gemma3-green.svg" alt="Ollama" height="20"></a>
-  <a href="#"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License" height="20"></a>
+  <a href="start.command"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/macos.png" alt="macOS" height="36"></a>
+  <a href="start.bat"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/windows.png" alt="Windows" height="36"></a>
+  <a href="#quick-start"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/linux.png" alt="Linux" height="36"></a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model, then showing how it ranked the techniques" width="100%">
 </p>
 
 ---
 
 ## Quick start
 
-1. **Clone the repository** and install dependencies:
-   ```bash
-   git clone https://github.com/yourusername/youtube-analytics.git
-   cd youtube-analytics
-   pip install -r requirements.txt
+1. Run the commands above. The launchers prepare everything themselves — Python 3.11+, `.venv`, every optional extra, Ollama and `llama3.2:3b`, a free port, the browser.
+
+2. Keep Ollama running with at least one local model. Selection and compilation work without one; only measurement needs it.
+
+3. Describe the task, read the ranking, then measure the winner instead of trusting it:
+
+   ```text
+   describe → ranked techniques with reasons → compiled prompt → measured result → optimized prompt
    ```
 
-2. **Configure API keys** in `config.py`:
-   ```python
-   YOUTUBE_API_KEY = "your_api_key"
-   OLLAMA_MODEL = "gemma3:12b"
-   ```
+   The same four steps are `recommend`, `compile`, `benchmark` and `optimize` on the command line.
 
-3. **Install Ollama** with Gemma 3:12b model:
-   ```bash
-   ollama pull gemma3:12b
-   ```
+## Prompt builder UI for local models
 
-4. **Run tests** (optional):
-   ```bash
-   pytest
-   ```
+`prompt-playoff serve`, or either launcher, opens the same four steps in a browser.
 
-5. **Start the application**:
-   ```bash
-   python main.py
-   ```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-ui.gif" alt="The Prompt Playoff web interface producing a schema-first prompt from a plain-language task, with the ranked alternatives below it" width="100%">
+</p>
 
-6. **Open your browser** at `http://localhost:8000`
+## Which prompting technique to use for your task
 
-## Analyze YouTube videos with AI
+Selection runs in two passes. Hard constraints come first — declared capabilities, tool access, call budget, model class, and whether the evidence is supplied or still has to be fetched. Whatever survives is ranked on what the request looks like: dependent steps, a checkable answer, a fixed output shape, a long input, real cost of error. Not on its task type alone.
 
-Paste a YouTube video URL and get comprehensive analysis:
+Every recommendation and every rejection carries its reasons, and says whether the number behind it was declared or measured:
 
 ```text
-→ Video metadata (title, description, tags, statistics)
-→ Channel information (subscribers, total views, video count)
-→ Comments analysis (sentiment, topics, engagement patterns)
-→ Transcript extraction and summarization
-→ Related content recommendations
-→ AI-powered insights via local LLM
+Schema-first output (structured.schema-first)
+  • Strong declared fit for structured_extraction.
+  • Built for this request being exact format, verifiable.
+  • Unmeasured prior 0.91 from: task:structured_extraction, provider:ollama, default.
+  • Executes as single (1 call minimum).
 ```
 
-All data is stored locally in SQLite database for offline access and historical analysis.
+The registry ships **29 techniques** across 7 execution strategies — 13 `single`, 11 `multi_stage`, and one each of `self_consistency`, `map_reduce`, `tool_loop`, `program_of_thought` and `tree_search`. 22 of them carry the paper they come from, and the catalog links it.
 
-## Eight independent modules
+Compilation then turns the task into the prompt *that technique implies* — its own blocks, stages and call count. Schema-first and map-reduce do not produce the same prompt with a different label on it:
 
-The application is built as independent, testable blocks:
+```bash
+prompt-playoff compile --task structured_extraction \
+  --input-file examples/book_excerpt.txt --schema-file examples/entity_schema.json \
+  --technique structured.schema-first --capabilities structured_output,system_messages
+```
 
-<table>
-  <tr>
-    <td align="center"><strong>Video Metadata</strong><br>Extract title, description, tags, duration, view count, likes, comments</td>
-    <td align="center"><strong>Channel Info</strong><br>Subscriber count, total views, video count, channel description</td>
-    <td align="center"><strong>Comments Analysis</strong><br>Sentiment analysis, topic extraction, engagement patterns</td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Transcript</strong><br>Automatic transcript extraction, timestamp alignment, summarization</td>
-    <td align="center"><strong>Related Content</strong><br>Similar videos, recommendations, trend analysis</td>
-    <td align="center"><strong>LLM Integration</strong><br>Local Gemma 3:12b via Ollama for insights and summaries</td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Data Storage</strong><br>SQLite database, persistent storage, query interface</td>
-    <td align="center"><strong>Web Interface</strong><br>FastAPI backend, responsive frontend, real-time updates</td>
-  </tr>
-</table>
+## Benchmark and compare prompt techniques on your own model
 
-## Use with local LLM for privacy
+`benchmark` runs the compiled prompt on a dataset and prints what the model actually did next to what the registry claimed:
 
-All AI processing runs locally on your machine via Ollama:
+```bash
+prompt-playoff benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
+```
 
 ```text
-YouTube API → Data Extraction → Local Storage → Ollama (Gemma 3:12b) → AI Insights
+                Measured: Schema-first output on llama3.2:3b
+  Metric                      Measured   Declared
+  quality                        0.867      0.840
+  reliability                    1.000      0.960
+  contract pass rate             1.000          —
+  stability across repeats       1.000          —
+  mean latency (s)               0.936          —
+  mean tokens                    204.3          —
 ```
 
-No cloud dependencies for LLM processing. Your data stays private.
+**quality** is the headline grader for that data — `field_f1` here, so 3 of 4 entities scores 0.86 rather than 0. **reliability** is contract pass rate × stability, because a technique that emits valid JSON every time but a different answer each time is not reliable. **stability** needs `--repeats > 1` and reports the share that produced the modal answer. Latency, tokens and calls are summed across every call the technique makes, so a three-sample technique reports three calls' worth of cost.
 
-Configure the model in `config.py`:
-```python
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "gemma3:12b"
+`compare` ranks several techniques on one dataset, weighted by your priorities:
+
+```bash
+prompt-playoff compare --model llama3.2:3b --model-class small --dataset entity-extraction \
+  --techniques structured.schema-first,structured.few-shot-repair,reasoning.self-consistency,direct.explicit-constraints
 ```
+
+```text
+  Technique                       Weighted  Quality  Reliability  Latency s  Tokens  Calls
+  direct.explicit-constraints        0.962    0.891        1.000       0.64     127    1.0
+  structured.schema-first            0.833    0.867        1.000       1.11     204    1.0
+  structured.few-shot-repair         0.711    0.700        1.000       1.51     366    2.0
+  reasoning.self-consistency         0.706    0.775        1.000       2.08     499    3.0
+```
+
+That contradicts the registry, which priors `structured.schema-first` at 0.95 for this task: on a 3B model the plainer technique wins. Results are recorded to `benchmark-results/measurements.json` and reused for later ranking, labelled `measured` instead of `prior only`.
+
+Eleven datasets ship with the package, from a 6-example smoke set to `entity-extraction-hard`, `multiconer-en` and `few-nerd` at 200 each. `prompt-playoff list-datasets` prints their sizes and how many carry gold answers.
+
+## Automatic prompt optimization, natively or with DSPy
+
+```bash
+prompt-playoff optimize --model llama3.2:3b --model-class small \
+  --dataset entity-extraction --technique structured.schema-first \
+  --rounds 3 --token-cost 0.3 --export my-technique.yaml
+```
+
+The loop: seed candidates (baseline, plus few-shot demos bootstrapped from the train examples the baseline already gets right) → benchmark each on the train split → score with your priorities over measured quality, reliability, latency and tokens → feed the worst failures back to the model and ask for better instructions → repeat → verify the winner on data it never optimized against.
+
+```text
+  Metric (held-out)   Baseline   Optimized     Delta
+  quality                1.000       1.000    +0.000
+  reliability            1.000       1.000    +0.000
+  mean tokens          211.500     201.000   -10.500
+  mean latency s         0.826       0.741    -0.086
+```
+
+Only instruction blocks are mutable — a candidate cannot win by dropping the output contract. The Pareto front over quality, reliability, tokens and latency is reported next to the scalarized winner, so a cheaper-but-slightly-worse prompt stays visible instead of being averaged away.
+
+`--backend` swaps the search algorithm and nothing else — `native`, or three DSPy optimizers ([which to pick](docs/integrations.md)). The prompt is still built by this project's compiler, executed by the technique's own strategy and graded by its graders.
+
+```bash
+prompt-playoff optimize --model llama3.2:3b --model-class small \
+  --dataset entity-extraction --backend dspy:gepa --max-metric-calls 60
+```
+
+On `entity-extraction-hard` (40 examples, 26 train / 14 held out, `llama3.2:3b`), MIPROv2 beat the native loop by **+0.064 F1** over three repeats, using about half the model calls. Neither recovered the dataset's annotation rules, because the proposer was the same 3B model — [full write-up with the failure modes](docs/benchmarks/native-vs-mipro.md).
+
+That last point is why the proposer is a separate profile. `PROMPT_PLAYOFF_ENGINE_MODEL` puts a stronger model on the job of writing candidate prompts while the numbers still describe your target model, and a run where the two are the same says so in its notes:
+
+> Candidate prompts were written by llama3.2:3b, the same model the numbers describe. Part of the gain may be that model's own phrasing rather than a better prompt.
+
+Selection, compilation and grading stay LLM-free either way: the engine never chooses the technique and never scores anything.
+
+## Prompt regression testing in CI
+
+Commit `prompt-playoff.yaml` with the model and the thresholds your build promises:
+
+```yaml
+version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+  model_class: small
+  capabilities: [structured_output, system_messages]
+checks:
+  - name: entities-schema-first
+    technique: structured.schema-first
+    task: structured_extraction
+    dataset: entity-extraction
+    repeats: 3
+    require:
+      quality_min: 0.85
+      reliability_min: 0.95
+      mean_total_tokens_max: 300
+      p95_latency_seconds_max: 2.0
+```
+
+```bash
+prompt-playoff check
+```
+
+Exit code `0` means every bound passed, `1` means at least one regression, `2` means invalid configuration such as an unknown dataset or an unreachable provider. Requirement names are explicit fields ending in `_min` or `_max`, and an empty `require` block is an error — a check can never pass while enforcing nothing. `--json` prints machine-readable output; `--update` rewrites the committed bounds to the current measurements, preserving YAML comments and key order.
+
+For wider matrices, `export-promptfoo` writes a promptfoo project whose assertions call this project's graders, so both tools report the same `field_f1` rather than two metrics sharing a name — [docs/integrations.md](docs/integrations.md).
+
+## Build datasets from traces and public corpora
+
+```bash
+prompt-playoff import-traces --output datasets/from-prod.jsonl --limit 200
+prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
+```
+
+Tracing to Langfuse or Phoenix makes every call of every technique its own span, and `import-traces` turns observed traffic into a dataset — with `expected: null` and tagged `unreviewed`, because a trace has no gold answer and pretending otherwise would benchmark a model against its own past mistakes. Four presets convert Hugging Face corpora instead: MultiCoNER v2 and Few-NERD for extraction, GSM8K for reasoning, MBPP for code graded by running its own tests. Both paths are set up in [docs/integrations.md](docs/integrations.md).
+
+## How it differs from DSPy, promptfoo and PromptWizard
+
+**DSPy** optimizes the prompt inside a module you have already chosen — you write `dspy.ChainOfThought` or `dspy.ReAct` yourself. Prompt Playoff makes that choice for you, deterministically and with its reasons printed, then hands the winner to DSPy's search if you want it.
+
+**promptfoo** measures prompts you have already written: a test harness, not a designer, and it does not tell you which technique the task needs. Prompt Playoff produces the prompt to be measured, and `export-promptfoo` hands it over.
+
+**PromptWizard** and other agent-driven optimizers ask an LLM to critique and rewrite instructions. Prompt Playoff does that too, but only during optimization — never to choose the technique, never to score an answer.
+
+### When not to use it
+
+Do not use it for one prompt on one task that already works — selection needs something to rank against, and every number here comes from examples with expected answers. It pays for itself when several techniques are plausible, when you have a dataset with gold answers, when picking wrong is expensive, or when the choice has to be defended to somebody else.
+
+It is also the wrong tool for open-ended prose: quality here is field overlap, grounding overlap, contract compliance and constraint coverage, not whether the writing is good.
 
 ## How it works
 
-The application uses a modular architecture with independent service blocks:
+One Python package with a Typer CLI, a FastAPI service and a YAML registry.<br>
+The **normalizer** turns a description into a `TaskProfile`.<br>
+The **selector** filters on hard constraints, then ranks on the shape of the request, and prints a reason for every accept and reject.<br>
+The **compiler** builds the blocks and stages that technique implies, and a strategy executor issues its 1..n provider calls.<br>
+Deterministic **graders** score the result, and the measurement is stored where ranking, the optimizer and the CI gate all read it.
 
 ```text
-YouTube URL → Metadata Extractor → Channel Analyzer → Comments Processor
-                                      ↓
-                            Transcript Extractor → Related Content
-                                      ↓
-                              Local LLM (Ollama) → AI Summary & Insights
-                                      ↓
-                              SQLite Database → Web Interface
+Task → TaskProfile → Selector → Compiled prompt → Model calls → Graders → Measurement
 ```
 
-<details>
-<summary>Technical architecture</summary>
-
-### Module architecture
-
-1. **Video Metadata Module** (`modules/video_metadata.py`)
-   - YouTube Data API v3 integration
-   - Extracts: title, description, tags, duration, statistics
-   - Caching for repeated requests
-
-2. **Channel Information Module** (`modules/channel_info.py`)
-   - Channel statistics and metadata
-   - Historical data tracking
-   - Competitor analysis support
-
-3. **Comments Analysis Module** (`modules/comments_analysis.py`)
-   - Batch comment extraction
-   - Sentiment analysis via LLM
-   - Topic clustering and keyword extraction
-
-4. **Transcript Module** (`modules/transcript.py`)
-   - Automatic caption extraction
-   - Timestamp alignment
-   - Text summarization
-
-5. **Related Content Module** (`modules/related_content.py`)
-   - Similar video recommendations
-   - Trend analysis
-   - Content gap identification
-
-6. **LLM Integration Module** (`modules/llm_integration.py`)
-   - Ollama API client
-   - Prompt templates for analysis
-   - Streaming responses
-
-7. **Data Storage Module** (`modules/data_storage.py`)
-   - SQLite database schema
-   - CRUD operations
-   - Query optimization
-
-8. **Web Interface Module** (`modules/web_interface.py`)
-   - FastAPI REST API
-   - WebSocket for real-time updates
-   - Responsive HTML/CSS/JS frontend
-
-### Database schema
-
-```sql
-videos (id, url, title, description, tags, duration, view_count, like_count, comment_count, created_at)
-channels (id, video_id, channel_id, channel_title, subscriber_count, total_views, video_count)
-comments (id, video_id, author, text, like_count, sentiment, created_at)
-transcripts (id, video_id, text, language, timestamps)
-analysis (id, video_id, ai_summary, topics, keywords, created_at)
-```
-
-</details>
-
-## Installation
-
-### Requirements
-
-- Python 3.9 or higher
-- Ollama with Gemma 3:12b model
-- YouTube Data API v3 key
-- 8GB RAM minimum (16GB recommended for LLM)
-
-### Step-by-step
-
-1. **Clone repository**:
-   ```bash
-   git clone https://github.com/yourusername/youtube-analytics.git
-   cd youtube-analytics
-   ```
-
-2. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # macOS/Linux
-   venv\Scripts\activate     # Windows
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Install Ollama**:
-   ```bash
-   # macOS
-   brew install ollama
-   
-   # Windows/Linux
-   # Download from https://ollama.ai
-   
-   ollama pull gemma3:12b
-   ```
-
-5. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
-
-6. **Run application**:
-   ```bash
-   python main.py
-   ```
-
-## Configuration
-
-Edit `config.py` or `.env` file:
-
-```python
-# YouTube API
-YOUTUBE_API_KEY = "your_api_key_here"
-
-# Ollama settings
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "gemma3:12b"
-OLLAMA_TIMEOUT = 300
-
-# Database
-DATABASE_URL = "sqlite:///youtube_analytics.db"
-
-# Server
-HOST = "0.0.0.0"
-PORT = 8000
-DEBUG = False
-```
-
-## Usage examples
-
-### Analyze a single video
-
-```python
-from modules.integration import VideoAnalyzer
-
-analyzer = VideoAnalyzer()
-results = analyzer.analyze("https://youtube.com/watch?v=VIDEO_ID")
-
-print(results.metadata.title)
-print(results.channel.subscriber_count)
-print(results.analysis.ai_summary)
-```
-
-### Batch analysis
-
-```python
-video_urls = [
-    "https://youtube.com/watch?v=ID1",
-    "https://youtube.com/watch?v=ID2",
-    "https://youtube.com/watch?v=ID3"
-]
-
-for url in video_urls:
-    results = analyzer.analyze(url)
-    print(f"{results.metadata.title}: {results.analysis.sentiment}")
-```
-
-### Export data
-
-```python
-from modules.data_storage import DataExporter
-
-exporter = DataExporter()
-exporter.to_csv(video_id="VIDEO_ID", output_path="analysis.csv")
-exporter.to_json(video_id="VIDEO_ID", output_path="analysis.json")
-```
-
-## Development
-
-### Project structure
-
-```
-youtube-analytics/
-├── config.py                # Configuration management
-├── modules/
-│   ├── video_metadata.py    # Video metadata extraction
-│   ├── channel_info.py      # Channel information analysis
-│   ├── comments_analysis.py # Comments extraction and analysis
-│   ├── transcript.py        # Transcript extraction
-│   ├── related_content.py   # Related content analysis
-│   ├── llm_integration.py   # LLM processing via Ollama
-│   ├── data_storage.py      # Database operations
-│   └── web_interface.py     # User interface
-├── integration.py           # Module integration framework
-├── tests/                   # Test directory
-│   ├── test_video_metadata.py
-│   ├── test_channel_info.py
-│   ├── test_comments_analysis.py
-│   ├── test_transcript.py
-│   └── ...
-├── requirements.txt         # Python dependencies
-├── .env.example            # Environment variables template
-└── main.py                 # Application entry point
-```
-
-### Running tests
+One module per step, mapped in [docs/architecture.md](docs/architecture.md). Adding a technique is one YAML file and no Python — see [docs/extending.md](docs/extending.md).
 
 ```bash
-# Install test dependencies
-pip install -r requirements-dev.txt
-
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=modules
-
-# Run specific test file
-pytest tests/test_video_metadata.py
+prompt-playoff new-technique structured.my-technique
+prompt-playoff validate-registry     # placeholders, strategies, graders, render probe
 ```
 
-### Contributing
+The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a job id — [docs/architecture.md](docs/architecture.md). Everything configurable, including the provider list and the engine-model variables, is in [docs/configuration.md](docs/configuration.md).
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Commit changes: `git commit -am 'Add new feature'`
-4. Push to branch: `git push origin feature/new-feature`
-5. Submit a Pull Request
+## Limitations
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-### Code style
-
-```bash
-# Format code
-black modules/ tests/
-
-# Lint code
-ruff check modules/ tests/
-
-# Type checking
-mypy modules/
-```
-
-## API Reference
-
-### REST Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/analyze` | POST | Analyze a YouTube video |
-| `/api/video/{id}` | GET | Get video metadata |
-| `/api/channel/{id}` | GET | Get channel information |
-| `/api/comments/{id}` | GET | Get comments analysis |
-| `/api/transcript/{id}` | GET | Get video transcript |
-| `/api/export/{id}` | GET | Export analysis data |
-
-### WebSocket
-
-Connect to `ws://localhost:8000/ws/analyze` for real-time analysis updates.
-
-## Troubleshooting
-
-### Common issues
-
-**Ollama not responding**:
-```bash
-ollama serve  # Start Ollama server
-ollama list   # Verify model is installed
-```
-
-**YouTube API quota exceeded**:
-- Check quota at https://console.cloud.google.com
-- Reduce batch size or wait for quota reset
-
-**Database locked**:
-```bash
-# Close other applications using the database
-# Or delete the database file to reset
-rm youtube_analytics.db
-```
+- Ranking still uses declared priors for any (technique, task, model) triple you have not benchmarked. The UI and the CLI mark those `prior only`.
+- Of the 29 techniques, 6 carry `benchmarked` evidence, 16 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
+- `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
+- The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
+- `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.
+- Graders are deterministic by design. There is no LLM judge, so open-ended generation cannot be scored on prose quality at all.
+- The promptfoo export covers a technique's first stage only. Multi-call techniques must be measured here.
+- Trace import reads from Langfuse only. Phoenix is write-only in this direction — spans go out, datasets do not come back.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Prompt Playoff is free and open-source software licensed under the [MIT License](LICENSE).
 
-## Acknowledgments
-
-- YouTube Data API v3 by Google
-- Ollama for local LLM inference
-- Gemma models by Google
-- FastAPI framework
-- SQLite database
-
----
+<br><br>
 
 <p align="center">
-  <strong>YouTube Analytics</strong> — Local, private, AI-powered video analysis
+  <a href="https://pypi.org/project/prompt-playoff/"><img alt="PyPI" src="https://img.shields.io/pypi/v/prompt-playoff"></a>
+  <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB.svg?logo=python&amp;logoColor=white"></a>
+  <a href="https://ollama.com/"><img alt="Ollama" src="https://img.shields.io/badge/Ollama-local-000000.svg"></a>
+  <a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/Ruff-passing-D7FF64.svg"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/KazKozDev/prompt-playoff/issues">Issues</a> ·
+  <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/CONTRIBUTING.md">Contributing</a> ·
+  <a href="docs/configuration.md">Configuration</a> ·
+  <a href="docs/extending.md">Extending</a> ·
+  <a href="docs/integrations.md">Integrations</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="references/README.md">Papers</a> ·
+  <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE">LICENSE</a> ·
+  <a href="https://www.linkedin.com/in/kazkozdev/">LinkedIn</a>
 </p>
