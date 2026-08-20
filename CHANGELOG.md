@@ -41,6 +41,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Prompt vs Fine-Tuning no longer paints a grey sheet behind the article. The
+  page sits in a frame on a panel, and that grey `--bg` ignored the Light/Dark
+  switch — so the guide stayed grey after the rest of the app had moved. Embed
+  is now transparent, tokens follow the same light / dark / Auto rules as the
+  app, and the switcher updates the frame instead of leaving it on the colour
+  it loaded with. The screen plate no longer reprints the title above the
+  article's own large heading, and the language chip sits in the hero instead
+  of floating over it. Contents is its own plate on the page ground, the way
+  every other split screen in the app sets a guide down beside the work. The
+  guide now loads the same `docs.css` as Help: one token set, the app type
+  ladder, and the same plate chrome. The large title and the two-zone layout
+  stay; everything else is no longer a second copy of the theme. Inside the
+  app, Contents is a viewport-tall rail beside the article — the frame is as
+  tall as the document, so a sticky nav in there never stuck — and the current
+  section is marked the way the sidebar marks the screen you are on. The
+  standalone footer is hidden in the frame: it is not true, and it is not the
+  app's voice. Help uses the same two-plate format: a contents rail beside an
+  article with its own large title, no second heading from the screen chrome.
+
 - `confidence` is a probability now, and one that can be checked. It was a blend of three numbers
   that between them estimated nothing — a technique showing 0.71 was no likelier to be right than
   one showing 0.58. It is now P(this technique beats the next one the ranking liked), from a spread

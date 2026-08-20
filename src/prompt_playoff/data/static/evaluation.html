@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <title>Evaluation guide · Prompt Playoff</title>
+  <title>Evaluation Guide · Prompt Playoff</title>
   <script>
     // The same two decisions the app makes before its first paint, made here
     // too: the document is shown inside the app, so it follows the app's theme
@@ -20,243 +20,320 @@
   <script src="/assets/docs.js" defer></script>
 </head>
 <body>
-<main>
-  <div class="doc-head">
-    <div>
-      <h1>Evaluation guide</h1>
-      <p class="lede">Where the numbers come from — the examples, the graders, the run — and when a result is not worth believing.</p>
-    </div>
+<main class="page">
+  <nav class="toc" aria-label="On this page"><strong>Contents</strong></nav>
+  <div class="article">
+  <header class="hero">
     <a class="lang" href="/evaluation/ru">Русский</a>
+    <h1>Measure prompts, don’t guess</h1>
+    <p class="lede">Most prompt engineering is still done by intuition. Prompt Playoff turns that into an experiment — getting as much useful performance as possible out of the model you already have before reaching for a larger model, a more expensive API, or fine-tuning.</p>
+  </header>
+  <div class="content">
+
+  <p>Give it a real task, examples with known answers, a model, and a prompt. It runs the prompt across the dataset, grades every answer, measures quality and reliability, checks whether the difference is meaningful, and records exactly what was tested.</p>
+  <p>That makes prompt optimization a model-efficiency problem as much as a prompt-writing problem. If a smaller or local model can reach the required quality through the right prompt, examples, structure, and search strategy, there may be no reason to pay for a larger one.</p>
+  <p>The goal is not to find a universally “best” prompting technique. There is no best technique in the abstract. There is only the best technique for a particular task, model, and dataset — and that has to be measured.</p>
+
+  <h2>It is an exam for a prompt</h2>
+  <p>Take a pile of tasks whose correct answers are known. Run your prompt on a live model across all of them. Compare what the model said against the expected answer, count the hits, and out comes a number.</p>
+  <p>The point is to replace:</p>
+  <blockquote><em>“I think the prompt is better this way.”</em></blockquote>
+  <p>with:</p>
+  <blockquote><em>“0.83 against 0.71 on two hundred examples.”</em></blockquote>
+  <p>That is the basic unit of the application: a measured result attached to a specific prompt, model, dataset, and run configuration. A score without those things is not portable evidence.</p>
+
+  <h2>The whole system in one picture</h2>
+  <pre><code>Real business task
+        ↓
+Representative examples
+        ↓
+Prompt / technique
+        ↓
+Live evaluation model
+        ↓
+Task-specific graders
+        ↓
+Quality + reliability
+        ↓
+Held-out / significance checks
+        ↓
+Release</code></pre>
+  <p>Everything else in the application exists to make one of those steps less ambiguous.</p>
+
+  <h2>Why this matters</h2>
+  <ul>
+    <li>A technique that sounds sophisticated can make a task worse.</li>
+    <li>A longer prompt can reduce quality.</li>
+    <li>A reasoning stage can help arithmetic and hurt extraction.</li>
+    <li>A prompt that wins on one model may lose on another.</li>
+    <li>A benchmark result can disappear when you move from a toy dataset to your own production-like examples.</li>
+  </ul>
+  <p>Prompt Playoff is built around that fact. It does not assume that a published prompting method is good; it asks the method to prove itself on your task.</p>
+
+  <h2>What we have already measured</h2>
+  <p>The application ships with completed benchmark reports under <code>docs/benchmarks/</code>. The results are a useful demonstration of why measurement matters.</p>
+
+  <h3>Thirteen literature methods on few-nerd</h3>
+  <p>Eleven of twelve alternatives lost to the plain baseline prompt. The ranking tracked token spend almost exactly in the wrong direction: the more a method forced the model to reason, restate, or decompose, the worse it performed on entity extraction.</p>
+  <p>That task is mostly reading, not reasoning. An intermediate restatement can pull the model away from the exact surface form it is supposed to extract.</p>
+
+  <h3>Built-in optimization vs MIPROv2</h3>
+  <p>On <code>entity-extraction-hard</code>, with the same split for both methods:</p>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Method</th><th>Quality Gain</th><th>Notes</th></tr>
+    <tr><td><code>native greedy search</code></td><td><code>+0.000</code></td><td>Changed the prompt repeatedly and found nothing better</td></tr>
+    <tr><td><code>DSPy MIPROv2</code></td><td><code>+0.090</code></td><td>Searched instructions and examples together; used ~half the calls</td></tr>
+  </table>
   </div>
 
-  <h2>What a measurement here is</h2>
-  <p>It is an exam for a prompt.</p>
-  <p>Take a pile of tasks whose correct answers are known. Run your prompt on a live model across all of them. Compare what the model said against the correct answer, and count the hits. Out comes a number.</p>
-  <p>The point is to replace "I think the prompt is better this way" with "0.83 against 0.71 on two hundred examples".</p>
+  <h3>A large cloud model behaved the same way</h3>
+  <p>On a separate reading task, adding a reasoning stage resulted in:</p>
+  <ul>
+    <li><strong>Quality:</strong> -0.028</li>
+    <li><strong>Tokens:</strong> 2.9×</li>
+    <li><strong>Latency:</strong> 4.4×</li>
+  </ul>
+  <p>On arithmetic, both approaches hit the 1.000 ceiling, where no difference could show. That is why the application contains a catalogue of techniques rather than a ranking: the winner depends on the task.</p>
 
-  <h2>The three parts of the exam</h2>
+  <h2>The three parts of an exam</h2>
   <div class="cards">
-    <div class="card"><b>The examples</b><p>The tasks themselves and their correct answers. One task per line of a file. They decide what the number is about.</p></div>
-    <div class="card"><b>The graders</b><p>Small pieces of code that compare the model's answer to the correct one and score it from 0 to 1. Each task type has its own — arithmetic and translation cannot be checked the same way.</p></div>
-    <div class="card"><b>The run</b><p>Which model, how many runs per example, which settings. This is what decides whether the number is repeatable or accidental.</p></div>
+    <div class="card">
+      <b>1. The examples</b>
+      <p>These are the tasks and their correct answers. One task per row. They decide what the number is actually about. If the examples do not resemble the work you care about, a good score does not mean much.</p>
+    </div>
+    <div class="card">
+      <b>2. The graders</b>
+      <p>Graders are small deterministic checks that compare the model answer with the expected answer and return a score from 0 to 1. Different tasks need different graders: arithmetic, extraction, classification, translation, and open-ended prose cannot be evaluated the same way.</p>
+    </div>
+    <div class="card">
+      <b>3. The run</b>
+      <p>The run records the evaluation model, model settings, number of runs per example, prompt fingerprint, dataset, graders, latency, and token usage. The model is part of the measurement: change the model and you have changed the exam.</p>
+    </div>
   </div>
-  <p>The model in the third part is the <b>evaluation model</b>, set under <b>Reference → Models &amp; keys</b>. Every number anywhere in the app came out of that one — the prompt engine only writes text, and the judge only compares two answers. A number carries its model with it: change the model and it is a different exam.</p>
 
   <h2>The examples on this server</h2>
-  <p>Twenty-eight sets ship with the tool, and <b>Datasets → Dataset library</b> shows them in three zones: the catalogue of business cases, the business sets those cases point at, and the task benchmarks plus anything you brought yourself. Only the last zone lets a set be deleted.</p>
+  <p><b>Datasets → Dataset library</b> is split into three zones: the business catalogue, the business datasets behind those cases, and task benchmarks together with anything you import yourself. Only the last zone is user-managed.</p>
 
   <h3>The business catalogue</h3>
-  <p>Fifty jobs businesses pay a model to do, in ten categories, each mapped to the public dataset closest to its input → output shape. It exists because "0.71 on summarization" is a fact about a corpus, while "0.71 on transcript → minutes" is a fact about work.</p>
-
+  <p>The catalogue contains 50 jobs businesses pay a model to do, grouped into ten categories.</p>
   <div class="table-scroll">
   <table class="count">
     <tr><th>Category</th><th>Cases</th><th>The work it stands for</th></tr>
-    <tr><td><b>Email</b></td><td>7</td><td>Sort, classify and draft email.</td></tr>
-    <tr><td><b>Customer support</b></td><td>10</td><td>Answer, route and summarise support conversations.</td></tr>
-    <tr><td><b>Meetings</b></td><td>6</td><td>Turn a transcript into minutes, actions or a translation.</td></tr>
-    <tr><td><b>Document routing</b></td><td>2</td><td>Send a document to the workflow that handles it.</td></tr>
-    <tr><td><b>Invoices and receipts</b></td><td>3</td><td>Pull structured financial fields out of a scan.</td></tr>
-    <tr><td><b>Legal and contracts</b></td><td>8</td><td>Classify clauses, flag risk, answer from a contract.</td></tr>
-    <tr><td><b>Finance</b></td><td>3</td><td>Answer a question from a filing or a table of figures.</td></tr>
-    <tr><td><b>Privacy and compliance</b></td><td>3</td><td>Find what should not have been sent.</td></tr>
-    <tr><td><b>HR and recruiting</b></td><td>1</td><td>Match a résumé against a role.</td></tr>
-    <tr><td><b>Marketing and e-commerce</b></td><td>7</td><td>Generate and enrich product content.</td></tr>
+    <tr><td><b>Email</b></td><td>7</td><td>Sort, classify and draft email</td></tr>
+    <tr><td><b>Customer support</b></td><td>10</td><td>Answer, route and summarise support conversations</td></tr>
+    <tr><td><b>Meetings</b></td><td>6</td><td>Turn transcripts into minutes, actions or translations</td></tr>
+    <tr><td><b>Document routing</b></td><td>2</td><td>Send documents to the workflow that handles them</td></tr>
+    <tr><td><b>Invoices and receipts</b></td><td>3</td><td>Pull structured financial fields out of a scan</td></tr>
+    <tr><td><b>Legal and contracts</b></td><td>8</td><td>Classify clauses, flag risk, answer from a contract</td></tr>
+    <tr><td><b>Finance</b></td><td>3</td><td>Answer questions from filings or tables</td></tr>
+    <tr><td><b>Privacy and compliance</b></td><td>3</td><td>Find information that should not have been sent</td></tr>
+    <tr><td><b>HR and recruiting</b></td><td>1</td><td>Match a résumé against a role</td></tr>
+    <tr><td><b>Marketing and e-commerce</b></td><td>7</td><td>Generate and enrich product content</td></tr>
   </table>
   </div>
-
-  <p>Seventeen of the fifty get a set that matches the work directly, twenty-three get a near neighbour, and ten are recorded as having no public set at all — a benchmark that does not match the job is worse than no benchmark, so those cases say so on the card instead of borrowing a number.</p>
+  <p>The catalogue exists because <em>“0.71 on summarization”</em> is a fact about a corpus, while <em>“0.71 on transcript → minutes”</em> is a fact about work.</p>
+  <p>Seventeen of the fifty cases have a public dataset that matches the work directly. Twenty-three use the closest useful neighbour. Ten deliberately state that no suitable public dataset was found — a benchmark that does not match the job is worse than no benchmark.</p>
 
   <div class="note">
-    <p><b>The published figures on those cards are claims, not measurements.</b> Each case names the company, what they pointed a model at, and the vendor customer story it comes from — four hours to one on contract review, eight weeks to eight hours on product content. Nothing here has checked one of them. What this tool can measure is the row underneath: whether <em>your</em> prompt does that job on data of that shape.</p>
+    <p><b>Business claims are not measurements.</b> Some business cards include published figures from vendor customer stories: contract review reduced from 4 hours to 1, or product-content work reduced from 8 weeks to 8 hours. Those numbers are claims from cited company stories, not measurements by Prompt Playoff. What the application can measure is the row underneath: <em>Can your prompt perform work of that shape on data of that shape?</em></p>
   </div>
 
-  <h3>The business sets</h3>
-  <p>Seventeen sets named <code>business:*</code>, one per shape of work: email thread → reply, email → subject, subject → marketing email, transcript → minutes, live translation, support question → answer and → intent, retail and banking intent, invoice OCR → JSON fields, contract clause → type, clause → obligation, legal reasoning, filing → figure, brief → product description, review → rating, résumé → fit.</p>
-  <p>Each is a 50–60 row sample of a public Hugging Face repository, bundled so a first run needs no network, and each carries its source repository and licence on the screen that lists it. <code>scripts/fetch_business_datasets.py</code> re-downloads them.</p>
+  <h3>The business datasets</h3>
+  <p>Seventeen datasets are bundled under names beginning with <code>business:</code>. They cover shapes such as: email thread → reply, email → subject, subject → marketing email, transcript → minutes, live translation, support question → answer, support question → intent, retail intent, banking intent, invoice OCR → JSON, contract clause → type, contract clause → obligation, legal reasoning, filing → figure, brief → product description, review → rating, résumé → fit.</p>
+  <p>Each is a 50–60 row sample of a public Hugging Face repository bundled locally so a first run needs no network. The source repository and licence are shown in the application, and <code>scripts/fetch_business_datasets.py</code> can re-download them.</p>
 
   <div class="note warn">
-    <p><b>Most of them are graded on word overlap, and that is a blunt instrument.</b> A reply, a subject line or a set of minutes has no single correct wording, so <code>token_f1</code> compares the answer against the one human answer the corpus happens to record. A good answer phrased differently scores low. Read these as a shape check — the model is doing the right job on the right material — and settle open prose with <b>Check → Pairwise judging</b> or with examples of your own.</p>
+    <p><b>A warning about open prose.</b> Many business datasets are graded with <code>token_f1</code>. That is useful, but blunt: a reply, subject line, or meeting summary can have several correct wordings. If the corpus contains one human reference answer, another perfectly good answer may receive a low overlap score. Treat those measurements as a shape check, not a final verdict on writing quality. For open prose, use <b>Check → Pairwise judging</b> or evaluate on examples of your own.</p>
   </div>
 
   <h3>The task benchmarks</h3>
-  <p>Eleven sets under <b>Datasets → Shipped with the tool</b>. Four come from public research corpora; the rest were built here — partly hand-written, partly generated from fixed rules with a fixed random seed, so they rebuild byte for byte. This is the tool's own test stand: its CI checks are written against the shape of these rows, so a good score here describes the tool rather than your task.</p>
-
+  <p>Eleven task sets ship under <b>Datasets → Shipped with the tool</b>:</p>
   <div class="table-scroll">
   <table class="count">
-    <tr><th>Set</th><th>Examples</th><th>What it checks</th><th>Where from</th></tr>
-    <tr><td><code>entity-extraction</code></td><td>6</td><td>Pull people and places out of a sentence into JSON.</td><td>A demo for clicking around</td></tr>
-    <tr><td><code>entity-extraction-hard</code></td><td>200</td><td>The same, with traps: titles, negation, countries used as adjectives, duplicates, cases where the answer is empty.</td><td>40 by hand, 160 generated</td></tr>
-    <tr><td><code>multiconer-en</code></td><td>200</td><td>People and places in sentences picked for being ambiguous.</td><td><span class="pill tag pub">public</span> MultiCoNER v2</td></tr>
-    <tr><td><code>few-nerd</code></td><td>200</td><td>People, places, organizations.</td><td><span class="pill tag pub">public</span> Few-NERD</td></tr>
-    <tr><td><code>gsm8k</code></td><td>120</td><td>Grade-school word problems needing several arithmetic steps.</td><td><span class="pill tag pub">public</span> GSM8K</td></tr>
-    <tr><td><code>mbpp</code></td><td>80</td><td>Write a Python function from a description.</td><td><span class="pill tag pub">public</span> MBPP</td></tr>
-    <tr><td><code>support-classification</code></td><td>150</td><td>Sort support tickets into four categories. 54 examples are deliberately borderline.</td><td>Generated</td></tr>
-    <tr><td><code>summarization</code></td><td>120</td><td>Compress a document to 170 characters without losing a single name, number or date.</td><td>Generated</td></tr>
-    <tr><td><code>translation</code></td><td>120</td><td>Translate English to Spanish while applying a binding glossary.</td><td>Generated</td></tr>
-    <tr><td><code>grounded-qa</code></td><td>120</td><td>Answer strictly from the attached sources. In 30 examples the answer is not there — the model must say <code>INSUFFICIENT_EVIDENCE</code> instead of inventing one.</td><td>Generated</td></tr>
-    <tr><td><code>agents</code></td><td>120</td><td>Tasks that require calling a tool: a calculator or a word counter.</td><td>Generated</td></tr>
+    <tr><th>Set</th><th>Examples</th><th>What it checks</th><th>Source</th></tr>
+    <tr><td><code>entity-extraction</code></td><td>6</td><td>People and places → JSON</td><td>Interface demo</td></tr>
+    <tr><td><code>entity-extraction-hard</code></td><td>200</td><td>Extraction with negation, titles, adjectives, duplicates and empty answers</td><td>40 hand-written + 160 generated</td></tr>
+    <tr><td><code>multiconer-en</code></td><td>200</td><td>Ambiguous people and place names</td><td><span class="pill tag pub">public</span> MultiCoNER v2</td></tr>
+    <tr><td><code>few-nerd</code></td><td>200</td><td>People, places and organisations</td><td><span class="pill tag pub">public</span> Few-NERD</td></tr>
+    <tr><td><code>gsm8k</code></td><td>120</td><td>Multi-step arithmetic word problems</td><td><span class="pill tag pub">public</span> GSM8K</td></tr>
+    <tr><td><code>mbpp</code></td><td>80</td><td>Python function from a description</td><td><span class="pill tag pub">public</span> MBPP</td></tr>
+    <tr><td><code>support-classification</code></td><td>150</td><td>Four-way support classification with borderline cases</td><td>Generated</td></tr>
+    <tr><td><code>summarization</code></td><td>120</td><td>≤170 characters while preserving every required name, number and date</td><td>Generated</td></tr>
+    <tr><td><code>translation</code></td><td>120</td><td>English → Spanish with a binding glossary</td><td>Generated</td></tr>
+    <tr><td><code>grounded-qa</code></td><td>120</td><td>Answer only from supplied sources; abstain when evidence is missing</td><td>Generated</td></tr>
+    <tr><td><code>agents</code></td><td>120</td><td>Tasks that require a registered tool</td><td>Generated</td></tr>
   </table>
   </div>
 
   <div class="note warn">
-    <p><b>Do not draw conclusions from <code>entity-extraction</code>.</b> Six examples, and the baseline prompt already scores 1.0 on them — there is no headroom, so every method looks equally good. It exists to show you the interface. The sets with real headroom are <code>entity-extraction-hard</code>, <code>multiconer-en</code> and <code>few-nerd</code>.</p>
+    <p><b>Do not draw conclusions from <code>entity-extraction</code>.</b> It contains only six examples and the baseline already scores 1.0 — there is no headroom. It exists solely to demonstrate the interface. Use <code>entity-extraction-hard</code>, <code>multiconer-en</code>, or <code>few-nerd</code> for meaningful extraction experiments.</p>
   </div>
 
-  <h2>What the public corpora are</h2>
-  <p>A public corpus is a set of tasks that somebody else's research group collected and annotated, then released openly. The value is that nobody here tuned the data to produce a convenient result. Every business set is a sample of one; the four below sit behind the task benchmarks.</p>
-
+  <h2>Public corpora</h2>
+  <p>The public corpora are valuable because they were collected and annotated outside this project. Nobody here tuned them to make Prompt Playoff look good.</p>
   <div class="table-scroll">
   <table>
-    <tr><th>Corpus</th><th>What it is, plainly</th><th>Licence</th></tr>
-    <tr><td><b>MultiCoNER v2</b><span class="sub">SemEval-2023, task 2</span></td><td>A name-recognition competition assembled specifically from hard cases: names that look like ordinary words, rare names, ambiguous phrases. The closest public analogue of our <code>entity-extraction-hard</code>.</td><td>CC-BY-4.0</td></tr>
-    <tr><td><b>Few-NERD</b></td><td>A large annotated set of sentences with people, places and organizations.</td><td>CC-BY-SA-4.0</td></tr>
-    <tr><td><b>GSM8K</b><span class="sub">OpenAI</span></td><td>Grade-school "the shop had this many, sold that many" problems. This is the set where "think step by step" was shown to help. It is here as a counterweight: nearly everything else we ship is reading rather than counting, and on reading, reasoning usually gets in the way.</td><td>MIT</td></tr>
-    <tr><td><b>MBPP</b><span class="sub">Google Research</span></td><td>Simple programming tasks, each shipping its own tests. Scored by running the code, not by comparing text.</td><td>CC-BY-4.0</td></tr>
+    <tr><th>Corpus</th><th>What it is</th><th>Licence</th></tr>
+    <tr><td><b>MultiCoNER v2</b><span class="sub">SemEval-2023 Task 2</span></td><td>Hard and ambiguous named entities</td><td>CC-BY-4.0</td></tr>
+    <tr><td><b>Few-NERD</b></td><td>Large fine-grained NER corpus</td><td>CC-BY-SA-4.0</td></tr>
+    <tr><td><b>GSM8K</b><span class="sub">OpenAI</span></td><td>Grade-school multi-step arithmetic problems</td><td>MIT</td></tr>
+    <tr><td><b>MBPP</b><span class="sub">Google Research</span></td><td>Small Python programming tasks with executable tests</td><td>CC-BY-4.0</td></tr>
   </table>
   </div>
+  <p>Import more from <b>Datasets → Import from Hugging Face</b> or via <code>prompt-playoff import-hf</code>. The licence and paper citation are shown on every import.</p>
 
-  <p>Importing more is done from <b>Datasets → Import from Hugging Face</b>, or with <code>prompt-playoff import-hf</code>; the licence and the paper citation are printed on every import.</p>
-
-  <h3>How the import keeps the data honest</h3>
+  <h3>How imported data stays honest</h3>
   <ul>
-    <li><b>The gold answer is sliced out of the finished sentence.</b> Otherwise the name in the answer and the name in the text could differ by a space, and the model would be marked wrong for somebody else's spacing.</li>
-    <li><b>An entity type the schema does not ask for becomes an empty example, not a wrong one.</b> If the only name in a sentence is a film title while the schema asks for people and places, the correct answer is empty rather than a penalty.</li>
-    <li><b>A share of empty examples is kept on purpose.</b> Drop every case where there is nothing to answer, and a prompt that simply guesses starts looking excellent: its extra answers have nowhere to show up.</li>
-    <li><b>Corpus limitations are recorded, not hidden.</b> In Few-NERD, for instance, two adjacent entities of the same type merge into one — that is the corpus's own property, and it is stated in the preset's notes.</li>
+    <li><b>Gold text is sliced from the source sentence:</b> If the source says <em>“Captain Orin”</em>, the expected entity is taken from that exact surface form. The model does not lose points because somebody normalized the gold answer differently.</li>
+    <li><b>Unrequested entity types become empty examples:</b> If a sentence contains only a film title but the schema asks for people and places, the correct answer is empty, not a model error.</li>
+    <li><b>Empty examples are preserved:</b> Negative cases matter. If every row contains something to extract, an aggressive guessing model looks excellent because false positives are under-tested.</li>
+    <li><b>Corpus limitations are recorded:</b> If a source corpus has a known annotation quirk, the preset documents it rather than hiding it.</li>
   </ul>
 
   <h2>How an answer gets checked</h2>
-  <p>A grader takes the model's answer and the correct one and returns a number from 0 to 1. They come in two families, and both appear in the <b>Graders</b> table under every measurement. The split is not cosmetic: the second family is what <code>reliability</code> is computed from, and the first is where <code>quality</code> comes from.</p>
+  <p>Graders fall into two families. The distinction matters because one family contributes primarily to <code>quality</code>, while the other is used to compute <code>reliability</code>.</p>
 
-  <h3>Meaning — is the answer right</h3>
+  <h3>Meaning graders: is the answer right?</h3>
   <div class="table-scroll">
   <table class="terms">
-    <tr><td><code>field_f1</code></td><td>Partial credit over a list. Three entities out of four is roughly 0.86, not zero. Extras that were not in the gold answer are penalised too. This is the headline score for extraction.</td></tr>
-    <tr><td><code>token_f1</code></td><td>Word overlap with the reference answer. The headline for prose that has no single right wording — a reply, a subject line, minutes — and blunt for exactly that reason.</td></tr>
-    <tr><td><code>exact_match</code></td><td>Did the whole thing match, character for character, with no leniency. Almost always far below <code>field_f1</code>, which is normal.</td></tr>
-    <tr><td><code>label_accuracy</code></td><td>Was the category right. For classification.</td></tr>
-    <tr><td><code>numeric_close</code></td><td>Did the number match. Formatting is ignored — only the value counts.</td></tr>
-    <tr><td><code>unit_tests</code></td><td>The code from the answer is actually run against the task's own tests. The score is the share that pass. Execution happens in a sandbox with a restricted set of modules.</td></tr>
-    <tr><td><code>grounding_overlap</code></td><td>How much of the answer's wording actually occurs in the supplied sources. A blunt but working check against invention.</td></tr>
-    <tr><td><code>contains_all</code></td><td>Did every required fact make it into the answer.</td></tr>
-    <tr><td><code>coverage</code></td><td>Recall only: how much of what was wanted showed up. Extras are not penalised.</td></tr>
-    <tr><td><code>schema_shape</code></td><td>The share of required keys that are present. Partial credit on structure, where <code>json_schema</code> is all or nothing.</td></tr>
-    <tr><td><code>regex_match</code></td><td>Did the answer match the required pattern.</td></tr>
-    <tr><td><code>injection_resistance</code></td><td>Did instructions planted in the input fail to make the model give up the canary secret. This is the grader behind <b>Production → Spot checks → Injection attempts</b>.</td></tr>
-    <tr><td><code>agreement</code></td><td>How much several answers agree with each other, when the method generates a batch.</td></tr>
+    <tr><td><code>field_f1</code></td><td>Partial credit over extracted fields or entities. Primary extraction score.</td></tr>
+    <tr><td><code>token_f1</code></td><td>Word overlap against a reference answer. Primary prose score.</td></tr>
+    <tr><td><code>exact_match</code></td><td>Character-for-character equality.</td></tr>
+    <tr><td><code>label_accuracy</code></td><td>Correct class label for classification tasks.</td></tr>
+    <tr><td><code>numeric_close</code></td><td>Numeric value matches within allowed tolerance.</td></tr>
+    <tr><td><code>unit_tests</code></td><td>Generated code is executed against tests in a sandbox.</td></tr>
+    <tr><td><code>grounding_overlap</code></td><td>How much answer wording is supported by supplied sources.</td></tr>
+    <tr><td><code>contains_all</code></td><td>Every required fact is present in the output.</td></tr>
+    <tr><td><code>coverage</code></td><td>Recall only: how much target information was found.</td></tr>
+    <tr><td><code>schema_shape</code></td><td>Required structural keys are present.</td></tr>
+    <tr><td><code>regex_match</code></td><td>Output follows the required regular expression pattern.</td></tr>
+    <tr><td><code>injection_resistance</code></td><td>Prompt injection failed to expose the canary secret.</td></tr>
+    <tr><td><code>agreement</code></td><td>Multiple generated answers agree with one another.</td></tr>
   </table>
   </div>
 
-  <h3>Contract — is the answer shaped right</h3>
+  <h3>Contract graders: is the answer shaped correctly?</h3>
   <div class="table-scroll">
   <table class="terms">
-    <tr><td><code>json_validity</code></td><td>Did the answer parse as JSON.</td></tr>
-    <tr><td><code>json_schema</code></td><td>Did it match the schema completely.</td></tr>
-    <tr><td><code>no_prose</code></td><td>Is there chatter wrapped around the answer.</td></tr>
-    <tr><td><code>allowed_labels</code></td><td>Is the label from the allowed list rather than invented.</td></tr>
-    <tr><td><code>length_limit</code></td><td>Did the answer fit the character limit.</td></tr>
-    <tr><td><code>omission_check</code></td><td>Is the answer truncated or bloated — its length is compared against the source.</td></tr>
-    <tr><td><code>deduplication</code></td><td>Are there repeats inside the lists.</td></tr>
-    <tr><td><code>glossary_consistency</code></td><td>The share of required terms translated the way the glossary demanded. A binding glossary is part of the contract, not a matter of taste.</td></tr>
-    <tr><td><code>tool_success</code></td><td>Did every tool call return a result rather than an error.</td></tr>
-    <tr><td><code>python_syntax</code></td><td>Does the code the model produced parse.</td></tr>
+    <tr><td><code>json_validity</code></td><td>Output parses as valid JSON.</td></tr>
+    <tr><td><code>json_schema</code></td><td>Output fully matches the provided schema.</td></tr>
+    <tr><td><code>no_prose</code></td><td>No unwanted conversational chatter around the answer.</td></tr>
+    <tr><td><code>allowed_labels</code></td><td>Label comes strictly from the allowed set.</td></tr>
+    <tr><td><code>length_limit</code></td><td>Output stays within the character/word limit.</td></tr>
+    <tr><td><code>omission_check</code></td><td>Output is not obviously truncated or bloated against input.</td></tr>
+    <tr><td><code>deduplication</code></td><td>Lists contain no duplicate entries.</td></tr>
+    <tr><td><code>glossary_consistency</code></td><td>Required translations follow the binding glossary.</td></tr>
+    <tr><td><code>tool_success</code></td><td>Tool calls executed without returning errors.</td></tr>
+    <tr><td><code>python_syntax</code></td><td>Generated Python parses without syntax errors.</td></tr>
   </table>
   </div>
 
   <div class="note">
-    <p><b>Graders are deterministic by default.</b> The same answer always gets the same score, checking costs nothing and takes no time, and you can read the rule yourself.</p>
-    <p>For open-ended prose, use <b>Check → Pairwise judging</b>: two answers, one rubric, the order hidden from the judge. The judge is a third model and must not be the one being marked — left blank, the prompt engine stands in, never the evaluation model. Every verdict waits for a person in <b>Production → Reviews</b>; a model's opinion is never promoted to a measured result on its own.</p>
+    <p><b>Graders are deterministic by default.</b> The same answer always receives the same score. They cost nothing to run, take milliseconds, and you can inspect the exact rule.</p>
   </div>
 
-  <h2>How the graders become the two headline numbers</h2>
-  <p><code>quality</code> is one chosen meaning-grader, whichever fits the task, in a fixed order of preference: <code>unit_tests</code> for code, then <code>field_f1</code> for extraction, <code>token_f1</code> for prose, <code>exact_match</code>, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic, and so on down to the contract graders if nothing else applies. In the <b>Graders</b> table it is marked headline; the others are shown beside it for reference.</p>
-  <p><code>reliability</code> is the share of answers that satisfied the contract graders, multiplied by stability — whether the model gives the same answer to the same input.</p>
-  <p>What to do with those two numbers is on the <a href="/help">Help</a> page.</p>
+  <h3>Open-ended prose needs a different workflow</h3>
+  <p>For open-ended text, use <b>Check → Pairwise judging</b>. The application presents two answers, one rubric, and hides the answer order from the judge. The judge must be a different model from the one being evaluated.</p>
+  <p>A model verdict is not automatically promoted into a measured release result. Every verdict waits for human review under <b>Production → Reviews</b>: the model helps prioritize judgement, but humans retain final release authority.</p>
 
-  <h2>Five rules, without which the number means nothing</h2>
+  <h2>The two headline numbers</h2>
+  <span class="num"><code>quality</code> — meaning and correctness</span>
+  <p><code>quality</code> is chosen from the task's meaning graders using a fixed preference order (e.g. <code>unit_tests</code> for code, <code>field_f1</code> for extraction, <code>token_f1</code> for prose, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic). The selected grader is marked as the headline metric in the run.</p>
 
+  <span class="num"><code>reliability</code> — structural contract and stability</span>
+  <p><code>reliability</code> combines compliance with contract graders and stability across repeated runs. A system can therefore be accurate but structurally unreliable, structurally clean but semantically wrong, or good on average but unstable. One number would hide those differences; two numbers expose them.</p>
+
+  <h2>Five rules without which the number means nothing</h2>
   <div class="note warn">
-    <p><b>1. A hundred examples, minimum.</b> On six examples, a 5% difference is one example moving. On forty examples the threshold below which a difference is indistinguishable from noise is roughly 0.04. Anything smaller is not a result — <b>Check → Significance</b> will say so.</p>
+    <p><b>1. Use at least one hundred examples.</b> On six examples, a 5% change can mean one row flipped. On tiny datasets, apparent improvements are often noise. <b>Check → Significance</b> exists to test that.</p>
   </div>
   <div class="note warn">
-    <p><b>2. Three runs per example.</b> With a single pass, stability is 1.000 by definition — not because it is stable, but because there is nothing to compare against.</p>
+    <p><b>2. Run each example more than once.</b> Three runs per example is the default rule. With one pass, stability is 1.000 by definition because there is nothing to compare against — that is not evidence of stability.</p>
   </div>
   <div class="note warn">
-    <p><b>3. Empty examples are mandatory.</b> Cases where the right answer is "nothing" keep a prompt honest. Without them, the guesser wins.</p>
+    <p><b>3. Keep empty examples.</b> Negative cases prevent a guessing prompt from looking artificially strong.</p>
   </div>
   <div class="note warn">
-    <p><b>4. For optimization, read the held-out split only.</b> The search fits itself to the examples it saw. The gain only counts on the part it never saw.</p>
+    <p><b>4. Optimize on one split, judge on another.</b> Prompt search sees the optimization split. The gain only counts on the held-out split; otherwise you are measuring how well the optimizer memorized the benchmark.</p>
   </div>
   <div class="note warn">
-    <p><b>5. A number belongs to one model-plus-examples pair.</b> Carry it to another model and it is a guess again. The app says <span class="pill measured">measured</span> where it measured and <span class="pill prior">prior only</span> where it is assuming; <b>Check → Model matrix</b> is how the transfer gets measured instead of assumed.</p>
+    <p><b>5. A result belongs to one model-plus-examples pair.</b> A score measured on Model A is not evidence about Model B. The application marks assumptions as <span class="pill prior">prior only</span> and actual runs as <span class="pill measured">measured</span>. Use <b>Check → Model matrix</b> to measure transfer instead of assuming it.</p>
   </div>
 
   <h2>From a number to a release</h2>
-  <p>A measurement is evidence about one exact text. A run records a fingerprint of the prompt it measured, and <b>Production → Releases</b> checks it against the text being frozen: <span class="pill measured">measured</span> when they match, <b>indirect</b> when the cited run measured something else — the optimization behind the wording, say — and <b>unverified</b> when nothing is cited. Registering any of the three is recorded; approving anything but <span class="pill measured">measured</span> is not. A release registered before its run can attach one afterwards, verified the same way.</p>
-  <p>Approval is then gated on the thresholds in <code>prompt-playoff.yaml</code> — the same bars CI enforces — applied to the cited run, with no new model calls. A bar that cannot be applied refuses too: a run missing the field the bar names is not a pass, and neither is a run whose examples have changed since. Where the project set no bar, the person is the gate, as before.</p>
+  <p>A benchmark result is evidence about one exact prompt. Every run stores a fingerprint of the text it measured. <b>Production → Releases</b> checks that fingerprint against the prompt being frozen:</p>
+  <ul>
+    <li><span class="pill measured">measured</span> — The prompt being released exactly matches the prompt in the cited run.</li>
+    <li><strong>indirect</strong> — The cited run measured something related (e.g. the optimization pass), but not the exact release text.</li>
+    <li><strong>unverified</strong> — No matching measurement is attached.</li>
+  </ul>
+  <p>All three can be registered, but only a genuinely <span class="pill measured">measured</span> release can pass automatic approval. Approval is also gated by thresholds in <code>prompt-playoff.yaml</code> — the same thresholds CI enforces, with zero extra model calls required during approval.</p>
+
+  <h2>Optimization</h2>
+  <p>Prompt Playoff exposes four search strategies. Anything not installed is shown greyed out rather than disappearing, keeping the conceptual options clear.</p>
+  <div class="table-scroll">
+  <table class="terms">
+    <tr><td><code>native</code></td><td>Greedy prompt rewrite loop: the built-in model critiques the prompt and rewrites it; rewrites that break input placeholders are discarded early. Needs no extra tools.</td></tr>
+    <tr><td><code>DSPy MIPROv2</code></td><td>Joint Bayesian search over instructions and demonstrations together. In our benchmark, this optimizer produced the primary gains.</td></tr>
+    <tr><td><code>DSPy GEPA</code></td><td>Maintains a population of prompt variants and evolves them.</td></tr>
+    <tr><td><code>DSPy BootstrapFewShot</code></td><td>Leaves the instruction alone and searches for optimal demonstration sets.</td></tr>
+  </table>
+  </div>
+  <p>Whatever wins remains text until you choose to adopt it: <b>Adopt optimized prompt</b> moves the winner back into your prompt workspace, or you can export it as a standalone technique runnable by ID.</p>
 
   <h2>What is doing the work</h2>
   <div class="table-scroll">
   <table>
-    <tr><th>What</th><th>What for</th><th>Install?</th></tr>
-    <tr><td><b>The built-in engine</b></td><td>Running examples, grading them, computing quality, reliability, stability, latency and tokens. No external dependencies.</td><td>Built in</td></tr>
-    <tr><td><b>Ollama</b></td><td>Local models on your own machine. The default route: free and no keys.</td><td>A separate program</td></tr>
-    <tr><td><b>OpenAI-compatible APIs</b></td><td>Cloud models: OpenAI, Anthropic, DeepSeek, Together, OpenRouter, Groq, Fireworks. Useful when the local model is too weak.</td><td>Needs a key in an environment variable</td></tr>
-    <tr><td><b>Hugging Face datasets</b></td><td>Importing public corpora, and the source of the seventeen bundled business sets. Only needed to fetch more — the bundled rows are already on disk.</td><td>Optional extra</td></tr>
-    <tr><td><b>DSPy</b></td><td>A library for automatic prompt search. Supplies three of the four searches behind Optimization.</td><td>Optional extra</td></tr>
-    <tr><td><b>promptfoo</b></td><td>Exports the prompt into another test runner, if your team already uses one. Only a method's first stage is exported.</td><td>Optional extra</td></tr>
-    <tr><td><b>Langfuse / Phoenix</b></td><td>Tracing: they log every model call so you can look at exactly what went out and came back.</td><td>Optional extra</td></tr>
+    <tr><th>Component</th><th>What it does</th><th>Required?</th></tr>
+    <tr><td><b>Built-in engine</b></td><td>Runs examples, graders, metrics, latency and token accounting</td><td>Built in</td></tr>
+    <tr><td><b>Ollama</b></td><td>Runs local models for free without API keys</td><td>Separate program</td></tr>
+    <tr><td><b>OpenAI-compatible APIs</b></td><td>Runs cloud models (OpenAI, Anthropic, DeepSeek, Together, OpenRouter, Groq, Fireworks)</td><td>API key</td></tr>
+    <tr><td><b>Hugging Face datasets</b></td><td>Imports public research and industry corpora</td><td>Optional</td></tr>
+    <tr><td><b>DSPy</b></td><td>Supplies automated prompt optimization backends</td><td>Optional</td></tr>
+    <tr><td><b>promptfoo</b></td><td>Exports prompts into external CI/CD test runners</td><td>Optional</td></tr>
+    <tr><td><b>Langfuse / Phoenix</b></td><td>Traces and inspects live model calls</td><td>Optional</td></tr>
   </table>
   </div>
 
-  <h3>The four searches behind Optimization</h3>
-  <p>Chosen in the <b>How to search</b> field. Anything not installed is shown greyed rather than hidden, so the list is the same list every time. They do not search the same thing, and the screen says which: the built-in loop rewrites the prompt you are holding, word for word, while a DSPy backend searches the instruction block of the recipe behind it.</p>
-  <div class="table-scroll">
-  <table class="terms">
-    <tr><td><code>native</code></td><td>The built-in greedy loop: the model critiques your prompt and rewrites it, and the best variant survives. A rewrite that loses the place an example's input goes is refused before it is measured. Nothing to install.</td></tr>
-    <tr><td><code>DSPy MIPROv2</code></td><td>Bayesian search: it proposes instructions and example sets together, and learns from the scores they got. In our measurements this is the only one that produced a gain.</td></tr>
-    <tr><td><code>DSPy GEPA</code></td><td>Evolution: keeps a set of variants nothing has beaten outright and breeds from those.</td></tr>
-    <tr><td><code>DSPy BootstrapFewShot</code></td><td>Leaves the instruction alone and only picks the worked examples that go into the prompt.</td></tr>
-  </table>
-  </div>
-  <p>Whatever wins stays text until you take it. <b>Adopt optimized prompt</b> puts the winner on the prompt screen: copied verbatim when the search rewrote your words, recompiled against your own task when it searched the recipe — the preview under the metrics was compiled against one row of the benchmark. The winner can also be exported as a technique file and kept on this server, which makes it runnable by id instead of a document in your downloads.</p>
+  <h2>Your own data matters more than the bundled data</h2>
+  <p>The bundled datasets help you understand the tool. They do not prove anything about your production task — conclusions about your task must come from your data. Upload a <code>.jsonl</code> file directly:</p>
+  <pre><code>{"id":"1","input":"Mara entered Veyr with Captain Orin.","expected":{"people":["Mara","Captain Orin"],"places":["Veyr"]}}</code></pre>
+  <p>Only <code>id</code> and <code>input</code> are required. When <code>expected</code> is present, graders are inferred from its shape or can be supplied explicitly. For extraction: the gold answer should appear in the source text word-for-word, and keep rows where the correct answer is empty.</p>
 
-  <h2>What has already been measured</h2>
-  <p>The finished reports live in <code>docs/benchmarks/</code>. In short:</p>
+  <h3>If you have no dataset yet</h3>
+  <p><b>Datasets → Build datasets</b> can generate candidate rows along a fixed taxonomy of failure modes (typos, irrelevant debris around input, reordered fields, missing data, conflicting instructions, injection attempts, filler). Deterministic checks run first to reject duplicates or broken rows before human review. Generated rows do not become ground truth until approved.</p>
+
+  <h3>Build from what the model got wrong</h3>
+  <p>Once you have a benchmark run, the most useful new examples are usually not random difficult examples: they are mutations around the failures your current prompt actually made. The dataset builder can seed from missed rows, keeping the original failure and mutating around it to target unresolved edge cases.</p>
+  <p>Model-generated seed inputs from multiple viewpoints can broaden vocabulary. When expected answers are generated, agreement across samples is recorded — low-agreement rows move to the front of the human review queue as a prioritization signal.</p>
+
+  <h2>What Prompt Playoff cannot tell you</h2>
   <ul>
-    <li><b>Thirteen methods from the literature, on <code>few-nerd</code>:</b> eleven out of twelve lost to the plain baseline prompt. The ranking tracked token spend almost exactly, in the wrong direction: the more a method "reasons", the worse it reads. Entity extraction is reading, not reasoning, and an intermediate restatement pulls the model away from the original text.</li>
-    <li><b>The built-in search against MIPROv2</b> on <code>entity-extraction-hard</code>, same split for both: the greedy loop delivered exactly +0.000, MIPROv2 delivered +0.090 while using half as many model calls.</li>
-    <li><b>A large cloud model</b> behaved the same way on reading: a separate reasoning stage cost 0.028 quality at 2.9× the tokens and 4.4× the time. On arithmetic both methods hit the 1.000 ceiling, where no difference can show.</li>
+    <li>Turn a model judge's opinion directly into a release decision without human confirmation.</li>
+    <li>Make a tiny dataset statistically meaningful (six examples is not a measurement).</li>
+    <li>Verify vendor business performance claims printed on catalogue cards.</li>
+    <li>Reduce open-ended writing quality to a single objective number without human review.</li>
+    <li>Observe live production traffic.</li>
+    <li>Call arbitrary tools that have not been registered in the environment.</li>
+    <li>Export every stage of a multi-stage method to promptfoo (first stage only).</li>
+    <li>Assume a result transfers to another model without measuring in <b>Model matrix</b>.</li>
+    <li>Decide whether your benchmark examples truly resemble your production users (input drift measures difference, but relevance remains human judgement).</li>
   </ul>
-  <p>This is also why the catalogue is a catalogue and not a ranking: of the sixty-one methods on <b>Prompt → Techniques</b>, which one wins is a property of your task, your model and your examples. That is what the measurement is for.</p>
 
-  <h2>Your own data</h2>
-  <p>The bundled sets are for finding your way around. Conclusions about your task can only come from your data. A <code>.jsonl</code> file, one task per line, uploaded straight from the interface:</p>
-  <pre><code>{"id": "1", "input": "Mara entered Veyr with Captain Orin.",
- "expected": {"people": ["Mara", "Captain Orin"], "places": ["Veyr"]}}</code></pre>
-  <p>Only <code>id</code> and <code>input</code> are required. Graders are picked from the shape of the expected answer; you can name them yourself in a <code>graders</code> field.</p>
-  <div class="note">
-    <p><b>The one rule.</b> The correct answer has to appear in the text <em>word for word</em>. If the text says "Captain Orin" and your gold says "Orin, captain", the model is marked wrong for not guessing your way of writing it. And keep the examples where the right answer is empty.</p>
-  </div>
-  <p>With no examples at all, <b>Datasets → Build datasets</b> generates rows along every axis of a fixed taxonomy — a typo, debris around the input, reordered fields, missing data, an instruction that argues with the prompt, an injection attempt, an answer buried in filler — and shows which axes are still empty. Deterministic rules object first: a duplicate row, or one whose answer was copied from an input that has since lost half its content, is flagged before anyone reads it. Nothing generated becomes truth before you approve it.</p>
-  <p>Once a run exists, the rows worth having are not the awkward ones in general. Building <b>from what it got wrong</b> seeds a set from the examples the last benchmark missed, keeps each unchanged and mutates around it — aimed at the part of the task this prompt is failing, not at more of what it handles.</p>
-  <p>A model can write the seed inputs too. Several samples pooled instead of one widen the vocabulary; asking each sample to write as a different reader of the task widens it further. Ask for a proposed answer per row and it is sampled several times: the row keeps what the samples agreed on, and how much they agreed is recorded, so the review queue opens on the rows the generator could not settle with itself. None of that is a quality score — it decides what a person reads first.</p>
-
-  <h2>What this cannot do</h2>
-  <ul>
-    <li>Turn a model's verdict into a release decision without a person approving it.</li>
-    <li>Say anything meaningful on a tiny set. Six examples is not a measurement.</li>
-    <li>Check a claim printed on a business card. Those figures are what a company reported; what gets measured here is your prompt on data of that shape.</li>
-    <li>Score open prose against taste. A word-overlap grader compares against one recorded answer, and pairwise judging needs a person at the end of it.</li>
-    <li>Watch live traffic. The three <b>Spot checks</b> run by hand on material you paste in; this server sees nothing else.</li>
-    <li>Call arbitrary tools in agent tasks: only registered ones work, and a calculator is what ships.</li>
-    <li>Export a multi-stage method to promptfoo — only the first stage goes out.</li>
-    <li>Assume a result carries to another model; that is what <b>Model matrix</b> is for.</li>
-    <li>Tell you your examples resemble production. <b>Spot checks → Input drift</b> measures the gap between two sets of inputs you supply; whether the newer ones are what your users really send is your judgement.</li>
-  </ul>
+  <h2>The principle behind the product</h2>
+  <p>The product starts from a practical constraint: <strong>Before changing the model, find out how far the current one can actually go.</strong></p>
+  <p>A surprising amount of model capability is hidden behind task formulation, examples, output contracts, retrieval context, and search strategy. Prompt Playoff exists to measure that headroom rather than assume it. For local and smaller models, this matters even more: the question is not simply whether a larger model scores higher, but whether the current model can meet required quality, reliability, latency, and cost once the prompt has been properly optimized.</p>
+  <p>Prompt Playoff is not built on the idea that prompts can be ranked once and for all. It is built on the opposite idea: <strong>Prompt performance is conditional.</strong></p>
+  <pre><code>Task + Dataset + Model + Prompt + Grader + Run Settings = Result</code></pre>
+  <p>Change one of them and you may have changed the answer. That is why the product does not ask: <em>“Which prompting technique is best?”</em></p>
+  <p>It asks: <strong>“Which technique is best here — for this task, on this model, against these examples — and is the difference large enough to believe?”</strong></p>
+  <p>That is what the measurement is for.</p>
 
   <div class="doc-foot">
     How to read the numbers once you have them: <a href="/help">Help</a>. Per-set detail is in <code>docs/datasets/</code>; run reports are in <code>docs/benchmarks/</code>.
+  </div>
+  </div>
   </div>
 </main>
 </body>

@@ -93,7 +93,7 @@ const state = {
   // re-render the export itself triggers.
   techniqueNote:'',
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
-  openLogs:new Set(), logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
+  openLogs:new Set(), selectedJobId:null, logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
   quality:{projects:[], reviews:[], releases:[], gates:{}, results:{}, error:'', loading:false, loaded:new Set(),
     // The builder form lives here rather than in the DOM: the cost of the
     // settings is quoted before the button is pressed, so a keystroke has to

@@ -392,6 +392,24 @@ def evaluation_page_ru() -> str:
     )
 
 
+@app.get("/prompt-vs-finetuning", response_class=HTMLResponse, include_in_schema=False)
+def prompt_vs_finetuning_page() -> str:
+    return (
+        files("prompt_playoff")
+        .joinpath("data/static/prompt-vs-finetuning.html")
+        .read_text(encoding="utf-8")
+    )
+
+
+@app.get("/prompt-vs-finetuning/ru", response_class=HTMLResponse, include_in_schema=False)
+def prompt_vs_finetuning_page_ru() -> str:
+    return (
+        files("prompt_playoff")
+        .joinpath("data/static/prompt-vs-finetuning.ru.html")
+        .read_text(encoding="utf-8")
+    )
+
+
 # The guide used to be called Benchmarks and lived at these two paths. It is one
 # document either way, so the old paths point at the new ones rather than
 # serving a second copy that would drift from it.

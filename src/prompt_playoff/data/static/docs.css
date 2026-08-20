@@ -1,14 +1,16 @@
 /* --------------------------------------------------------------------------
- * The two reading screens — Help and the Evaluation guide — in four files, two
- * languages each. They used to carry a copy of the app's tokens inside their
- * own <style> block, which meant the app grew a light theme and the documents
- * stayed dark inside it. One stylesheet, loaded from /assets, so a token can
- * only be changed in one place and the pages cannot drift apart.
+ * The reading screens — Help, the Evaluation guide, and Prompt vs Fine-Tuning
+ * — in six files, two languages each. They used to carry a copy of the app's
+ * tokens inside their own <style> block, which meant the app grew a light
+ * theme and the documents stayed dark inside it. One stylesheet, loaded from
+ * /assets, so a token can only be changed in one place and the pages cannot
+ * drift apart.
  *
- * The tokens are the app's, value for value: these pages are shown inside it,
- * in a frame sitting on a panel, so they start from the panel surface. Light is
- * the base and dark answers both the explicit choice and the system setting,
- * exactly as in styles.css.
+ * The tokens are the app's, value for value. Help and Evaluation sit in a
+ * frame on a panel, so they start from the panel surface. Prompt vs Fine-Tuning
+ * is two plates on the page ground, and keeps a large display title; everything
+ * else on it still comes from this file. Light is the base and dark answers
+ * both the explicit choice and the system setting, exactly as in styles.css.
  * -------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
@@ -23,6 +25,7 @@
   --sans:Inter,ui-sans-serif,system-ui,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+  --shadow:0 1px 2px rgba(20,26,36,.05), 0 6px 18px rgba(20,26,36,.05);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -34,6 +37,7 @@
     --good:#5fb87a; --good-ink:#9bd8b3; --good-line:rgba(95,184,122,.32); --good-soft:rgba(95,184,122,.1);
     --warn:#dcaa46; --warn-ink:#e0bf78; --warn-line:rgba(220,170,70,.5); --warn-soft:rgba(220,170,70,.1);
     --bad:#e08585; --bad-text:#e9b6b6; --bad-line:rgba(224,133,133,.4); --bad-soft:rgba(224,133,133,.09);
+    --shadow:0 1px 2px rgba(0,0,0,.4);
   }
 }
 :root[data-theme="dark"] {
@@ -45,11 +49,13 @@
   --good:#5fb87a; --good-ink:#9bd8b3; --good-line:rgba(95,184,122,.32); --good-soft:rgba(95,184,122,.1);
   --warn:#dcaa46; --warn-ink:#e0bf78; --warn-line:rgba(220,170,70,.5); --warn-soft:rgba(220,170,70,.1);
   --bad:#e08585; --bad-text:#e9b6b6; --bad-line:rgba(224,133,133,.4); --bad-soft:rgba(224,133,133,.09);
+  --shadow:0 1px 2px rgba(0,0,0,.4);
 }
 
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
 body { margin:0; font-family:var(--sans); background:var(--panel); color:var(--text); font-size:var(--fs-body); line-height:1.65; -webkit-font-smoothing:antialiased; }
+:root.embed, :root.embed body { background:transparent; }
 /* 600 is the heaviest weight in the app, here too. */
 strong, b { font-weight:600; }
 /* A measure, not a width: past about 78 characters the eye loses the line. */
@@ -128,6 +134,7 @@ h2[id] { scroll-margin-top:14px; }
 /* An aside is the app's prerequisite band: two pixels of colour on the left and
    a tinted ground. Gold is a thing worth knowing; red is a way to get burned. */
 .note { margin:16px 0; padding:12px 15px; border-left:2px solid var(--accent-line); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--accent-soft); color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
+.note.good { border-left-color:var(--good-line); background:var(--good-soft); }
 .note.warn { border-left-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
 .note p { margin:0; color:inherit; font-size:inherit; }
 .note p + p { margin-top:9px; }
@@ -172,4 +179,242 @@ details p, details li, details td { font-size:var(--fs-base); }
      wrap rather than push the page sideways. */
   .doc-index-links { gap:5px 14px; }
   .doc-index a { white-space:normal; }
+}
+
+/* --------------------------------------------------------------------------
+ * Prompt vs Fine-Tuning. Same tokens and type ladder as above; a different
+ * composition: two plates on the page ground, and a large display title the
+ * other reading screens do not use. Scoped to main.page so Help and the
+ * Evaluation guide keep their measure and heading rules.
+ * -------------------------------------------------------------------------- */
+html:has(main.page) body { background:var(--bg); }
+
+main.page {
+  display:grid;
+  grid-template-columns:minmax(220px,252px) minmax(0,1fr);
+  gap:18px;
+  align-items:start;
+  width:auto;
+  max-width:1180px;
+  margin:0 auto;
+  padding:34px 22px 70px;
+}
+:root.embed main.page { grid-template-columns:minmax(0,1fr); max-width:none; margin:0; padding:0; }
+:root.embed main.page .toc,
+:root.embed main.page footer { display:none; }
+
+main.page .toc {
+  position:sticky;
+  top:18px;
+  align-self:start;
+  max-height:calc(100vh - 36px);
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:22px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  background:var(--panel);
+  box-shadow:var(--shadow);
+}
+main.page .toc strong {
+  display:block;
+  margin:0 8px 10px;
+  color:var(--muted);
+  font-size:var(--fs-micro);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+main.page .toc a {
+  display:block;
+  margin:1px 0;
+  padding:7px 8px 7px 10px;
+  border-left:2px solid transparent;
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  color:var(--text-2);
+  font-size:var(--fs-base);
+  text-decoration:none;
+}
+main.page .toc a:hover { background:var(--wash); color:var(--text); }
+main.page .toc a[aria-current="true"] {
+  border-left-color:var(--accent);
+  background:var(--accent-soft);
+  color:var(--text);
+}
+
+main.page .article {
+  min-width:0;
+  padding:16px 28px 32px;
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  background:var(--panel);
+  box-shadow:var(--shadow);
+}
+
+main.page .hero {
+  position:relative;
+  padding:12px 0 32px;
+  margin-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+main.page h1 {
+  max-width:960px;
+  padding-right:7.5rem;
+  font-size:clamp(36px,6vw,64px);
+  font-weight:600;
+  line-height:.98;
+  letter-spacing:-.05em;
+}
+main.page .lede {
+  margin:20px 0 0;
+  max-width:62ch;
+  color:var(--muted);
+  font-size:var(--fs-lead);
+}
+main.page .quote {
+  margin-top:24px;
+  padding:12px 15px;
+  border-left:2px solid var(--accent-line);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--accent-soft);
+  color:var(--text);
+  font-size:var(--fs-body);
+  font-weight:600;
+}
+main.page .content > h2 {
+  margin:40px 0 14px;
+  padding-top:20px;
+  border-top:1px solid var(--border);
+}
+main.page .content > h2:first-child {
+  margin-top:0;
+  padding-top:0;
+  border-top:0;
+}
+
+main.page .hero .lang,
+main.page .lang-switch {
+  position:absolute;
+  top:16px;
+  right:0;
+  padding:6px 11px;
+  border:1px solid var(--border);
+  border-radius:var(--r-sm);
+  background:var(--panel);
+  color:var(--muted);
+  font-size:var(--fs-sm);
+  font-weight:500;
+  line-height:1.5;
+  text-decoration:none;
+  white-space:nowrap;
+}
+main.page .hero .lang:hover,
+main.page .lang-switch:hover { border-color:var(--border-strong); color:var(--text); }
+
+main.page section { padding:28px 0; margin:0; border-bottom:1px solid var(--border); }
+main.page section:last-of-type { border-bottom:0; }
+main.page h2 {
+  margin:0 0 12px;
+  padding-top:0;
+  border-top:0;
+  font-size:var(--fs-h2);
+  font-weight:600;
+  letter-spacing:-.01em;
+  line-height:1.2;
+}
+main.page h3 {
+  margin:24px 0 8px;
+  font-size:var(--fs-base);
+  font-weight:600;
+  letter-spacing:-.01em;
+}
+main.page .muted { color:var(--muted); }
+main.page .cite {
+  margin-left:2px;
+  color:var(--muted);
+  font-size:.82em;
+  font-weight:600;
+  vertical-align:super;
+  text-decoration:none;
+}
+main.page .cite:hover { color:var(--accent-ink); }
+main.page table { margin-top:16px; }
+
+main.page .pillrow { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+main.page .callout {
+  margin-top:16px;
+  padding:12px 15px;
+  border:0;
+  border-left:2px solid var(--accent-line);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--accent-soft);
+  color:var(--text-2);
+  font-size:var(--fs-base);
+  line-height:1.6;
+}
+main.page .callout.good { border-left-color:var(--good-line); background:var(--good-soft); }
+main.page .callout.warn { border-left-color:var(--warn-line); background:var(--warn-soft); color:var(--warn-ink); }
+main.page .callout.bad { border-left-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
+
+main.page .decision { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px; }
+main.page .decision > div {
+  padding:15px 17px;
+  border:1px solid var(--border);
+  border-radius:var(--r-md);
+  background:var(--panel2);
+}
+main.page .formula {
+  margin-top:16px;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:var(--r-md);
+  background:var(--panel2);
+  text-align:center;
+  font-family:Georgia,serif;
+  font-size:var(--fs-lead);
+  line-height:1.5;
+}
+
+main.page .refs { list-style:none; padding:0; margin:12px 0 0; counter-reset:refs; }
+main.page .refs li {
+  counter-increment:refs;
+  position:relative;
+  padding:0 0 8px 2.1em;
+  margin:0;
+  color:var(--text-2);
+  font-size:var(--fs-body);
+}
+main.page .refs li::before {
+  content:"[" counter(refs) "]";
+  position:absolute;
+  left:0;
+  top:0;
+  font-weight:400;
+  color:var(--muted);
+}
+main.page .refs .title { color:var(--muted); font-weight:400; }
+main.page .refs .meta { display:block; color:var(--muted); margin-top:1px; }
+main.page .refs .url {
+  display:block;
+  margin-top:1px;
+  color:var(--muted);
+  word-break:break-all;
+  text-decoration:none;
+}
+
+main.page footer { padding:18px 2px 0; color:var(--muted); font-size:var(--fs-sm); }
+
+@media (max-width:900px) {
+  main.page { grid-template-columns:1fr; width:auto; }
+  main.page .toc { position:relative; top:auto; }
+  main.page .decision { grid-template-columns:1fr; }
+  main.page .article { padding:8px 18px 24px; }
+}
+@media (max-width:600px) {
+  main.page { width:auto; }
+}
+@media print {
+  body { background:white; }
+  main.page { display:block; max-width:none; padding:0; }
+  main.page .toc { display:none; }
 }

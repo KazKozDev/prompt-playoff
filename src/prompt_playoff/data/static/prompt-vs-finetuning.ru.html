@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Промпт против файн-тюнинга · Prompt Playoff</title>
+  <meta name="description" content="Практическое руководство по выбору между промптингом, few-shot ICL, RAG, файн-тюнингом, дистилляцией и инструментами/агентами." />
+  <script>
+    try {
+      var choice = localStorage.getItem('pp-theme') || 'dark';
+      if (choice !== 'auto') document.documentElement.setAttribute('data-theme', choice);
+    } catch (error) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    if (location.search.indexOf('embed') !== -1) document.documentElement.classList.add('embed');
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!document.documentElement.classList.contains('embed')) return;
+      document.querySelectorAll('a.lang-switch').forEach(function (link) {
+        if (link.search.indexOf('embed') === -1) {
+          link.search += (link.search ? '&' : '') + 'embed';
+        }
+      });
+    });
+    window.addEventListener('storage', function (event) {
+      if (event.key !== 'pp-theme') return;
+      var next = event.newValue || 'dark';
+      if (next === 'auto') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', next);
+    });
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/docs.css">
+  <script src="/assets/docs.js" defer></script>
+</head>
+<body>
+<main class="page">
+    <nav class="toc" aria-label="На этой странице">
+      <strong>Содержание</strong>
+      <a href="#split">1. Главное различие</a>
+      <a href="#test">2. Простой тест</a>
+      <a href="#prompt">3. Когда промптинг выигрывает</a>
+      <a href="#finetune">4. Когда файн-тюнинг выигрывает</a>
+      <a href="#knowledge">5. Знания vs поведение</a>
+      <a href="#signals">6. Пять сильных сигналов</a>
+      <a href="#badidea">7. Когда не надо файн-тюнить</a>
+      <a href="#longcontext">8. Long-context ICL</a>
+      <a href="#ladder">9. Продакшен-лестница</a>
+      <a href="#formula">10. Формула решения</a>
+      <a href="#references">Ссылки</a>
+    </nav>
+  <div class="article">
+  <header class="hero">
+      <a class="lang-switch" href="/prompt-vs-finetuning">English</a>
+    <h1>Когда файн-тюнить модель — а когда промпта достаточно</h1>
+    <p class="lede">Практическое, опирающееся на исследования руководство по выбору между промпт-инжинирингом, few-shot in-context learning, RAG, файн-тюнингом, дистилляцией и инструментами/агентами — по качеству, стоимости, задержке и стабильности в продакшене.</p>
+    <div class="quote">Файн-тюнинг нужен не тогда, когда вы просто хотите «сделать модель умнее». Он оправдан, когда замеры показывают, что нужное поведение не удаётся получить надёжно, дёшево или достаточно быстро с помощью промптинга, примеров в контексте, поиска релевантных фактов или более способной базовой модели.</div>
+  </header>
+    <div class="content">
+      <section id="split">
+        <h2>1. Начните с типа задачи</h2>
+        <p>Промптинг, поиск, файн-тюнинг и вызов инструментов решают разные задачи. Большие языковые модели часто способны адаптироваться к задаче по инструкциям и демонстрациям без обновления весов — поэтому промптинг и in-context learning следует рассматривать как настоящие механизмы адаптации, а не просто как слой интерфейса. <a class="cite" href="#ref1">[1]</a></p>
+        <table><thead><tr><th>Задача</th><th>Лучший первый подход</th></tr></thead><tbody>
+          <tr><td>Модель не понимает, чего именно вы хотите</td><td><strong>Промпт-инжиниринг</strong></td></tr>
+          <tr><td>Нужно показать желаемое поведение примерами</td><td><strong>Few-shot / ICL</strong></td></tr>
+          <tr><td>Модели не хватает релевантных фактов или документов</td><td><strong>RAG</strong></td></tr>
+          <tr><td>Информация часто меняется</td><td><strong>Поиск / RAG / инструменты</strong></td></tr>
+          <tr><td>Модель должна вызывать API, базы данных, CRM или программы</td><td><strong>Инструменты / агент</strong></td></tr>
+          <tr><td>Задача понятна, но нужное поведение остаётся нестабильным</td><td><strong>Файн-тюнинг</strong></td></tr>
+          <tr><td>Большой повторяющийся промпт определяет стоимость вывода</td><td><strong>Файн-тюнинг / дистилляция</strong></td></tr>
+          <tr><td>Меньшей модели нужно специализироваться на узкой повторяющейся задаче</td><td><strong>Файн-тюнинг</strong></td></tr>
+        </tbody></table>
+        <div class="callout">Исследования instruction tuning показывают, что обучение с учителем на парах «инструкция–ответ» может существенно изменить, насколько надёжно модель следует инструкциям и обобщает на новые задачи. <a class="cite" href="#ref2">[2]</a> Недавний обзор характеризует instruction tuning как механизм повышения управляемости модели и её соответствия задаче. <a class="cite" href="#ref7">[7]</a></div>
+      </section>
+      <section id="test">
+        <h2>2. Простой тест решения</h2>
+        <p>Предположим, у вас уже есть сильный промпт:</p>
+        <pre><code>INSTRUCTION
+...
+RULES
+...
+EXAMPLES
+20 good examples
+...
+INPUT
+...</code></pre>
+        <div class="decision">
+          <div><strong>≈ 98% целевого качества</strong><br><span class="muted">Файн-тюнинг, скорее всего, не нужен.</span></div>
+          <div><strong>≈ 85%</strong><br><span class="muted">Сначала улучшите промпт, примеры, поиск или базовую модель.</span></div>
+          <div><strong>85% → 93% → 93.5% → 93.6%</strong><br><span class="muted">Вы выходите на плато качества промпта.</span></div>
+          <div><strong>Остаточные ошибки систематичны</strong><br><span class="muted">Теперь файн-тюнинг — серьёзный кандидат.</span></div>
+        </div>
+        <pre><code>1000 eval cases
+
+best prompt
+accuracy = 91%
+
+errors:
+- category A/B confusion: 4%
+- special company rule: 2%
+- unusual wording: 2%
+- output format: 1%</code></pre>
+        <p>Важное слово — <strong>систематичны</strong>. Один плохой ответ — не доказательство того, что нужно менять веса. Стабильный паттерн ошибок, измеренный на репрезентативном наборе после итераций промпта, — гораздо более сильное доказательство.</p>
+      </section>
+      <section id="prompt">
+        <h2>3. Когда промптинга обычно достаточно</h2>
+        <p>Возьмём стандартную задачу извлечения:</p>
+        <pre><code>«Extract the customer name, order ID,
+and issue from this email. Return JSON.»</code></pre>
+        <p>Способная языковая модель уже обладает общими навыками понимания текста и извлечения. Few-shot промптинг позволяет ей вывести структуру задачи из демонстраций без обновления весов. <a class="cite" href="#ref1">[1]</a></p>
+        <pre><code>Extract:
+- customer_name
+- order_id
+- issue
+
+Return valid JSON using this schema...</code></pre>
+        <div class="callout good"><strong>Правило:</strong> если способность уже существует, сначала попробуйте раскрыть и ограничить её через инструкции, схемы вывода, примеры и оценку.</div>
+      </section>
+      <section id="finetune">
+        <h2>4. Сильный аргумент за файн-тюнинг</h2>
+        <p>Допустим, у компании 73 внутренние категории поддержки, границы которых зависят от правил организации:</p>
+        <pre><code>"refund pending" → PAY_REFUND_PENDING
+
+if refund initiated less than 3 days ago →
+PAY_REFUND_PROCESSING
+
+but if merchant disputed →
+MERCHANT_DISPUTE_REFUND
+
+except enterprise users →
+ENT_REFUND_ESCALATION</code></pre>
+        <p>Если у вас также есть 20 000 корректно размеченных исторических тикетов, то это классическая задача адаптации с учителем: стабильное распределение входов, стабильная таксономия целей и много примеров желаемого поведения. Исследования instruction tuning показывают, что обучающие примеры могут научить модель конвенциям ответа и следованию задаче. <a class="cite" href="#ref2">[2]</a> <a class="cite" href="#ref4">[4]</a></p>
+        <pre><code>Before fine-tuning:
+
+1500-token prompt
++
+ticket
++
+output
+
+
+After fine-tuning:
+
+ticket
+→
+PAY_REFUND_PENDING</code></pre>
+        <p>Выгода не только в качестве. Успешно дообученная модель может сократить повторяющиеся токены промпта, уменьшить задержку, повысить стабильность и позволить развернуть меньшую модель.</p>
+      </section>
+      <section id="knowledge">
+        <h2>5. Не путайте нехватку знаний с ошибкой поведения</h2>
+        <pre><code>100,000 pages
+product documentation
+internal policies
+prices
+contracts
+FAQ</code></pre>
+        <p>Файн-тюнинг обычно не первый механизм, когда главное требование — доступ к большому меняющемуся массиву фактов. Retrieval-Augmented Generation был создан именно для того, чтобы объединить параметрические знания модели с внешней непараметрической памятью, решая задачи провенанса и обновления мировых знаний. <a class="cite" href="#ref3">[3]</a></p>
+        <pre><code>User
+ ↓
+Retrieval
+ ↓
+relevant documents
+ ↓
+LLM
+ ↓
+answer + citations</code></pre>
+        <div class="callout"><strong>Знания → контекст.<br>Поведение → веса.</strong></div>
+        <h3>Но доменный файн-тюнинг всё равно может помочь</h3>
+        <p>Файн-тюнинг может адаптировать терминологию, конвенции ответа, границы классификации и специализированное поведение. Результаты LIMA — полезное напоминание: относительно небольшое число тщательно отобранных примеров может научить модель сильному поведению ответа, даже когда большая часть фактических знаний приходит из предобучения. <a class="cite" href="#ref4">[4]</a></p>
+        <pre><code>             DOMAIN BEHAVIOR
+                    ↓
+              Fine-tuned LLM
+                    ↑
+                    │
+User → Retrieval → Context</code></pre>
+        <p>Поэтому <strong>RAG и файн-тюнинг дополняют друг друга</strong>: поиск даёт актуальные знания, а настройка формирует то, как модель ведёт себя с этими знаниями.</p>
+      </section>
+      <section id="signals">
+        <h2>6. Пять сильных сигналов, что файн-тюнинг оправдан</h2>
+        <h3>1. У вас много примеров «это правильно»</h3>
+        <pre><code>INPUT → CORRECT OUTPUT
+INPUT → CORRECT OUTPUT
+INPUT → CORRECT OUTPUT
+...</code></pre>
+        <p>Это особенно привлекательно, когда целевое поведение проще показать, чем описать длинным списком правил. Исследования вроде LIMA показывают, что тщательно подобранные обучающие примеры могут существенно управлять поведением модели. <a class="cite" href="#ref4">[4]</a></p>
+        <h3>2. Промпт превратился в монстра</h3>
+        <pre><code>SYSTEM PROMPT
+14,000 tokens
+
+RULES
+75 rules
+
+EXAMPLES
+42 examples</code></pre>
+        <p>Long-context ICL может оставаться эффективным даже с сотнями или тысячами демонстраций, но эти демонстрации должны обрабатываться при каждом выводе. Это создаёт реальный компромисс между адаптацией через контекст и адаптацией через веса. <a class="cite" href="#ref5">[5]</a></p>
+        <h3>3. Нужна очень высокая стабильность</h3>
+        <div class="pillrow">
+          <span class="pill">классификация</span><span class="pill">маршрутизация</span><span class="pill">структурированное извлечение</span>
+          <span class="pill">нормализация</span><span class="pill">таксономия модерации</span><span class="pill">детекция интента</span><span class="pill">NER</span>
+        </div>
+        <p>Часто это узкие задачи с измеримыми метками и понятными ошибками — именно та среда, где адаптацию с учителем можно объективно оценить.</p>
+        <h3>4. Маленькая спец. модель должна заменить большую общую</h3>
+        <pre><code>70B general model
++
+large prompt
++
+20 examples
+
+↓ SFT / distillation
+
+7B specialist model</code></pre>
+        <p>Эксперименты EMNLP 2025 на восьми задачах классификации показали, что специализированным меньшим моделям часто хватало небольшого числа размеченных примеров — в среднем около 100 в тестовых условиях — чтобы догнать или превзойти большие общие модели. Точная точка безубыточности сильно зависела от задачи. <a class="cite" href="#ref6">[6]</a></p>
+        <h3>5. Есть постоянная остаточная ошибка</h3>
+        <pre><code>Base model
+     ↓
+prompt
+     ↓
+few-shot
+     ↓
+RAG if necessary
+     ↓
+eval</code></pre>
+        <p>После нескольких итераций:</p>
+        <pre><code>6.3% failure</code></pre>
+        <p>Если эти ошибки кластеризуются вокруг стабильного поведения, которое модель раз за разом не может выполнить, превратите случаи ошибок и их исправленные ответы в кандидаты на обучающие данные.</p>
+      </section>
+      <section id="badidea">
+        <h2>7. Когда файн-тюнинг, скорее всего, неверный ход</h2>
+        <ul>
+          <li>Промпт выдал один плохой ответ.</li>
+          <li>Главное — свежие или часто меняющиеся факты.</li>
+          <li>Есть лишь горстка слабых или противоречивых примеров.</li>
+          <li>Определение задачи меняется каждую неделю.</li>
+          <li>Сама таксономия ещё нестабильна.</li>
+          <li>Нет репрезентативного набора для оценки.</li>
+          <li>Нельзя описать режимы ошибок, которые должен исправить тюнинг.</li>
+          <li>Базовая модель фундаментально не обладает нужной способностью.</li>
+        </ul>
+        <pre><code>incapable base model
++
+500 examples
+≠
+frontier reasoning model</code></pre>
+        <div class="callout bad">Файн-тюнинг сильнее всего как <strong>специализация</strong>. Не стоит относиться к нему как к волшебному способу создать произвольные новые способности из неподходящей базовой модели.</div>
+      </section>
+      <section id="longcontext">
+        <h2>8. Модели с длинным контекстом сдвинули границу</h2>
+        <p>Старая эвристика «мало примеров — промптинг; много примеров — файн-тюнинг» больше недостаточна. Эксперименты NAACL 2025 показали, что long-context ICL может продолжать улучшаться с тысячами демонстраций на некоторых задачах. То же исследование обнаружило, что файн-тюнинг был более требователен к данным в тестовых условиях, но мог превзойти long-context ICL при дополнительном обучении. <a class="cite" href="#ref5">[5]</a></p>
+        <pre><code>Today you should consider all of these:
+
+quality
+inference cost
+training cost
+latency
+context size
+dataset quality
+task stability
+traffic volume
+maintenance burden</code></pre>
+        <p>Это делает решение экономическим, а не только статистическим: одно и то же целевое качество может иметь очень разные операционные затраты в зависимости от того, живёт ли адаптация в промпте или в весах.</p>
+      </section>
+      <section id="ladder">
+        <h2>9. Продакшен-лестница решений</h2>
+        <pre><code>                     ┌───────────────┐
+                     │  BASE MODEL   │
+                     └───────┬───────┘
+                             ↓
+                      1. ZERO-SHOT
+                             ↓
+                           EVAL
+                             ↓
+                     2. BETTER PROMPT
+                             ↓
+                           EVAL
+                             ↓
+                       3. FEW-SHOT
+                             ↓
+                           EVAL
+                             ↓
+               ┌─────────────┴─────────────┐
+               │                           │
+       knowledge problem?          behavior problem?
+               │                           │
+               ↓                           ↓
+             RAG                     Fine-tuning
+               │                           │
+               └─────────────┬─────────────┘
+                             ↓
+                           EVAL</code></pre>
+        <p>Few-shot ICL может адаптировать поведение модели без обновления весов. <a class="cite" href="#ref1">[1]</a> Instruction tuning меняет поведение на уровне весов. <a class="cite" href="#ref2">[2]</a> RAG добавляет внешние знания. <a class="cite" href="#ref3">[3]</a> Архитектура должна соответствовать типу ошибки.</p>
+        <h3>Вторая продакшен-ветка: экономика</h3>
+        <pre><code>quality is already acceptable
+but
+cost / latency is not
+        ↓
+fine-tune or distill a smaller model</code></pre>
+        <p>Файн-тюнинг может быть оправдан, даже когда промптинг уже достигает целевого качества: целью оптимизации может быть экономика вывода, а не чистая точность.</p>
+      </section>
+      <section id="formula">
+        <h2>10. Критерий решения</h2>
+        <div class="formula">Прирост качества + Экономия на выводе + Выигрыш в задержке<br>&gt;<br>Стоимость обучения + Стоимость данных + Стоимость поддержки</div>
+        <p>Задача также должна быть достаточно стабильной, чтобы освоенная специализация оставалась полезной достаточно долго, чтобы окупить затраты на создание данных, обучение, оценку и поддержку.</p>
+        <div class="callout warn">Полезный вопрос не <strong>«Можно ли это решить промптом?»</strong><br>А <strong>«Может ли промптинг достичь нужного качества, стоимости и задержки SLO на реальном распределении данных?»</strong></div>
+        <table><thead><tr><th>Если узкое место в…</th><th>Использовать</th></tr></thead><tbody>
+          <tr><td>Спецификация задачи</td><td><strong>Промпт</strong></td></tr>
+          <tr><td>Не хватает демонстраций</td><td><strong>Few-shot / ICL</strong></td></tr>
+          <tr><td>Не хватает или устарели знания</td><td><strong>RAG / Поиск</strong></td></tr>
+          <tr><td>Внешние действия</td><td><strong>Инструменты / Агент</strong></td></tr>
+          <tr><td>Стабильное поведение под задачу</td><td><strong>Файн-тюнинг</strong></td></tr>
+          <tr><td>Высокая стоимость или задержка вывода</td><td><strong>Файн-тюнинг / Дистилляция</strong></td></tr>
+        </tbody></table>
+        <div class="quote">Промптинг говорит модели, что делать в этом контексте.<br>RAG говорит ей, что нужно знать в этом контексте.<br>Файн-тюнинг меняет то, что она склонна делать по умолчанию.</div>
+        <p>Для маленьких локальных моделей специализация может стать привлекательной довольно рано. Недавние контролируемые эксперименты показывают, что небольшие дообученные модели могут догнать или превзойти большие модели общего назначения на узких задачах классификации с удивительно скромным объёмом размеченных данных, хотя точка безубыточности сильно зависит от задачи. <a class="cite" href="#ref6">[6]</a></p>
+      </section>
+      <section id="references">
+        <h2>Ссылки</h2>
+        <p class="muted">Только академические источники. Внутритекстовые ссылки используют нумерацию; все внешние ссылки собраны здесь.</p>
+        <ol class="refs">
+          <li id="ref1"><span class="title">Language Models are Few-Shot Learners</span><span class="meta">Brown, T. B. et al. · NeurIPS 2020.</span><a class="url" href="https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html" target="_blank" rel="noopener noreferrer">https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html</a></li>
+          <li id="ref2"><span class="title">Finetuned Language Models Are Zero-Shot Learners</span><span class="meta">Wei, J. et al. · ICLR 2022.</span><a class="url" href="https://arxiv.org/abs/2109.01652" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2109.01652</a></li>
+          <li id="ref3"><span class="title">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</span><span class="meta">Lewis, P. et al. · NeurIPS 2020.</span><a class="url" href="https://arxiv.org/abs/2005.11401" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2005.11401</a></li>
+          <li id="ref4"><span class="title">LIMA: Less Is More for Alignment</span><span class="meta">Zhou, C. et al. · 2023.</span><a class="url" href="https://arxiv.org/abs/2305.11206" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2305.11206</a></li>
+          <li id="ref5"><span class="title">In-Context Learning with Long-Context Models: An In-Depth Exploration</span><span class="meta">Bertsch, A. et al. · NAACL 2025, pp. 12119–12149.</span><a class="url" href="https://aclanthology.org/2025.naacl-long.605/" target="_blank" rel="noopener noreferrer">https://aclanthology.org/2025.naacl-long.605/</a></li>
+          <li id="ref6"><span class="title">Comparing Specialised Small and General Large Language Models on Text Classification: 100 Labelled Samples to Achieve Break-Even Performance</span><span class="meta">Pecher, B., Srba, I., Bielikova, M. · EMNLP 2025, pp. 165–184.</span><a class="url" href="https://aclanthology.org/2025.emnlp-main.9/" target="_blank" rel="noopener noreferrer">https://aclanthology.org/2025.emnlp-main.9/</a></li>
+          <li id="ref7"><span class="title">Instruction Tuning for Large Language Models: A Survey</span><span class="meta">Zhang, S. et al. · ACM Computing Surveys, 2026.</span><a class="url" href="https://doi.org/10.1145/3777411" target="_blank" rel="noopener noreferrer">https://doi.org/10.1145/3777411</a></li>
+        </ol>
+      </section>
+      <footer>Самодостаточный HTML-документ. Без внешних зависимостей JavaScript и CSS. Ссылки ограничены академическими публикациями.</footer>
+    </div>
+  </div>
+</main>
+</body>
+</html>

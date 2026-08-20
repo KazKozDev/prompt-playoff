@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompting vs Fine-Tuning — A Practical Decision Guide</title>
+  <meta name="description" content="A practical, research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents." />
+  <style>
+    :root{
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#17191d;
+      --muted:#676d77;
+      --line:#e3e6eb;
+      --accent:#111827;
+      --soft:#f0f2f5;
+      --good:#0f766e;
+      --warn:#9a6700;
+      --bad:#b42318;
+      --code:#111318;
+      --codeText:#e8ecf1;
+      --max:1180px;
+      --radius:20px;
+      --shadow:0 8px 28px rgba(20,24,32,.06);
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      background:
+        radial-gradient(circle at top left, rgba(17,24,39,.035), transparent 32%),
+        var(--bg);
+      color:var(--text);
+      font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height:1.65;
+    }
+
+    a{color:inherit}
+    .page{max-width:var(--max);margin:0 auto;padding:34px 22px 70px}
+
+    .hero{
+      padding:58px 0 38px;
+      border-bottom:1px solid var(--line);
+      margin-bottom:28px;
+    }
+
+    .eyebrow{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding:7px 11px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.7);
+      border-radius:999px;
+      font-size:13px;
+      color:var(--muted);
+      margin-bottom:18px;
+    }
+
+    h1{
+      margin:0;
+      max-width:960px;
+      font-size:clamp(40px,7vw,76px);
+      line-height:.98;
+      letter-spacing:-.055em;
+      font-weight:760;
+    }
+
+    .lede{
+      margin:24px 0 0;
+      max-width:900px;
+      font-size:20px;
+      color:var(--muted);
+    }
+
+    .quote{
+      margin-top:30px;
+      padding:20px 22px;
+      border-left:4px solid var(--accent);
+      background:var(--card);
+      box-shadow:var(--shadow);
+      border-radius:0 var(--radius) var(--radius) 0;
+      font-size:18px;
+      font-weight:600;
+    }
+
+    .layout{
+      display:grid;
+      grid-template-columns:250px minmax(0,1fr);
+      gap:30px;
+      align-items:start;
+    }
+
+    .toc{
+      position:sticky;
+      top:18px;
+      background:rgba(255,255,255,.86);
+      backdrop-filter:blur(12px);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:var(--shadow);
+    }
+
+    .toc strong{
+      display:block;
+      font-size:13px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:var(--muted);
+      margin-bottom:8px;
+    }
+
+    .toc a{
+      display:block;
+      text-decoration:none;
+      font-size:14px;
+      color:#30343a;
+      padding:7px 8px;
+      border-radius:9px;
+    }
+    .toc a:hover{background:var(--soft)}
+
+    .content{min-width:0}
+
+    section{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding:30px;
+      margin-bottom:20px;
+      box-shadow:var(--shadow);
+    }
+
+    h2{
+      margin:0 0 14px;
+      font-size:30px;
+      line-height:1.1;
+      letter-spacing:-.03em;
+    }
+
+    h3{
+      margin:30px 0 10px;
+      font-size:20px;
+      letter-spacing:-.015em;
+    }
+
+    p{margin:10px 0 0}
+    .muted{color:var(--muted)}
+
+    .cite{
+      font-weight:700;
+      font-size:.82em;
+      vertical-align:super;
+      text-decoration:none;
+      color:#4b5563;
+      margin-left:2px;
+    }
+    .cite:hover{color:#111827}
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:18px;
+      font-size:15px;
+    }
+
+    th,td{
+      text-align:left;
+      vertical-align:top;
+      padding:13px 14px;
+      border-bottom:1px solid var(--line);
+    }
+
+    th{
+      background:#f8f9fb;
+      font-weight:650;
+    }
+    tr:last-child td{border-bottom:none}
+
+    pre{
+      margin:16px 0 0;
+      padding:20px;
+      border-radius:16px;
+      background:var(--code);
+      color:var(--codeText);
+      overflow:auto;
+      font:14px/1.55 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      white-space:pre;
+    }
+
+    code{font-family:"SFMono-Regular", Consolas, "Liberation Mono", monospace}
+
+    .pillrow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:18px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      padding:8px 11px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      font-size:14px;
+      background:#fafafa;
+    }
+
+    .callout{
+      margin-top:20px;
+      border-radius:16px;
+      padding:18px 20px;
+      background:#f7f8fa;
+      border:1px solid var(--line);
+    }
+    .good{border-left:4px solid var(--good)}
+    .warn{border-left:4px solid var(--warn)}
+    .bad{border-left:4px solid var(--bad)}
+
+    ul{margin:12px 0 0;padding-left:22px}
+    li{margin:7px 0}
+
+    .decision{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+      margin-top:18px;
+    }
+
+    .decision > div{
+      padding:16px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fafbfc;
+    }
+
+    .formula{
+      text-align:center;
+      font-family:Georgia, serif;
+      font-size:24px;
+      line-height:1.5;
+      padding:22px;
+      background:#fafafa;
+      border:1px solid var(--line);
+      border-radius:16px;
+      margin-top:18px;
+    }
+
+    .refs{
+      list-style:none;
+      padding:0;
+      margin:20px 0 0;
+      counter-reset:refs;
+    }
+
+    .refs li{
+      counter-increment:refs;
+      position:relative;
+      padding:18px 18px 18px 54px;
+      margin:0 0 10px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fbfbfc;
+    }
+
+    .refs li::before{
+      content:"[" counter(refs) "]";
+      position:absolute;
+      left:17px;
+      top:18px;
+      font-weight:750;
+      color:#4b5563;
+    }
+
+    .refs .title{font-weight:700}
+    .refs .meta{display:block;color:var(--muted);font-size:14px;margin-top:3px}
+    .refs .url{
+      display:block;
+      word-break:break-all;
+      margin-top:7px;
+      color:#374151;
+      text-decoration:underline;
+      text-underline-offset:2px;
+    }
+
+    footer{
+      color:var(--muted);
+      font-size:13px;
+      padding:18px 2px 0;
+    }
+
+    @media (max-width:900px){
+      .layout{grid-template-columns:1fr}
+      .toc{position:relative;top:auto}
+      .decision{grid-template-columns:1fr}
+      section{padding:23px}
+      .page{padding-left:14px;padding-right:14px}
+    }
+
+    @media print{
+      body{background:white}
+      .toc{display:none}
+      .layout{display:block}
+      section{box-shadow:none;break-inside:avoid}
+      .page{max-width:none;padding:0}
+    }
+  </style>
+</head>
+<body>
+<main class="page">
+
+  <header class="hero">
+    <div class="eyebrow">LLM Architecture · Prompting · RAG · Fine-Tuning</div>
+    <h1>When to fine-tune a model — and when prompting is enough</h1>
+    <p class="lede">
+      A practical, research-backed guide to choosing between prompt engineering, few-shot in-context learning,
+      RAG, fine-tuning, distillation, and tools/agents — based on quality, cost, latency, and production stability.
+    </p>
+    <div class="quote">
+      Fine-tuning is not for when you simply want to “make the model smarter.” It becomes justified when evals show
+      that the behavior you need cannot be achieved reliably, cheaply, or quickly enough with prompting, in-context
+      examples, retrieval, or a more capable base model.
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc">
+      <strong>Contents</strong>
+      <a href="#split">1. The core distinction</a>
+      <a href="#test">2. A simple test</a>
+      <a href="#prompt">3. When prompting wins</a>
+      <a href="#finetune">4. When fine-tuning wins</a>
+      <a href="#knowledge">5. Knowledge vs behavior</a>
+      <a href="#signals">6. Five strong signals</a>
+      <a href="#badidea">7. When not to fine-tune</a>
+      <a href="#longcontext">8. Long-context ICL</a>
+      <a href="#ladder">9. Production ladder</a>
+      <a href="#formula">10. Decision formula</a>
+      <a href="#references">References</a>
+    </nav>
+
+    <div class="content">
+
+      <section id="split">
+        <h2>1. Start by identifying the type of problem</h2>
+        <p>
+          Prompting, retrieval, fine-tuning, and tool use solve different problems. Large language models can often
+          adapt to a task from instructions and demonstrations without any weight updates, which is why prompting and
+          in-context learning should be treated as genuine adaptation mechanisms rather than merely a UI layer.
+          <a class="cite" href="#ref1">[1]</a>
+        </p>
+
+        <table>
+          <thead>
+            <tr><th>Problem</th><th>Best first approach</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>The model does not understand what exactly you want</td><td><strong>Prompt engineering</strong></td></tr>
+            <tr><td>You need to demonstrate the desired behavior with examples</td><td><strong>Few-shot / ICL</strong></td></tr>
+            <tr><td>The model lacks relevant facts or documents</td><td><strong>RAG</strong></td></tr>
+            <tr><td>The information changes frequently</td><td><strong>Search / RAG / tools</strong></td></tr>
+            <tr><td>The model must call APIs, databases, CRM systems, or software</td><td><strong>Tools / agent</strong></td></tr>
+            <tr><td>The task is understood, but the required behavior remains inconsistent</td><td><strong>Fine-tuning</strong></td></tr>
+            <tr><td>A large repeated prompt dominates inference cost</td><td><strong>Fine-tuning / distillation</strong></td></tr>
+            <tr><td>A smaller model needs to specialize in a narrow, repetitive task</td><td><strong>Fine-tuning</strong></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          Instruction tuning research shows that supervised training on instruction–response pairs can materially change
+          how reliably a model follows instructions and generalizes to unseen tasks.
+          <a class="cite" href="#ref2">[2]</a>
+          A recent survey similarly characterizes instruction tuning as a mechanism for improving model controllability
+          and task alignment.
+          <a class="cite" href="#ref7">[7]</a>
+        </div>
+      </section>
+
+      <section id="test">
+        <h2>2. A simple decision test</h2>
+        <p>Assume you already have a strong prompt:</p>
+
+        <pre><code>INSTRUCTION
+...
+RULES
+...
+EXAMPLES
+20 good examples
+...
+INPUT
+...</code></pre>
+
+        <div class="decision">
+          <div><strong>≈ 98% target quality</strong><br><span class="muted">Fine-tuning is probably unnecessary.</span></div>
+          <div><strong>≈ 85%</strong><br><span class="muted">Improve the prompt, examples, retrieval, or base model first.</span></div>
+          <div><strong>85% → 93% → 93.5% → 93.6%</strong><br><span class="muted">You are approaching a prompt-performance plateau.</span></div>
+          <div><strong>Residual errors are systematic</strong><br><span class="muted">Now fine-tuning becomes a serious candidate.</span></div>
+        </div>
+
+        <pre><code>1000 eval cases
+
+best prompt
+accuracy = 91%
+
+errors:
+- category A/B confusion: 4%
+- special company rule: 2%
+- unusual wording: 2%
+- output format: 1%</code></pre>
+
+        <p>
+          The important word is <strong>systematic</strong>. One bad answer is not evidence that weights must change.
+          A stable pattern of errors, measured on a representative eval set after prompt iteration, is much stronger evidence.
+        </p>
+      </section>
+
+      <section id="prompt">
+        <h2>3. When prompting is usually enough</h2>
+
+        <p>Consider a standard extraction task:</p>
+
+        <pre><code>“Extract the customer name, order ID,
+and issue from this email. Return JSON.”</code></pre>
+
+        <p>
+          A capable language model already has general text-understanding and extraction abilities. Few-shot prompting
+          lets it infer task structure from demonstrations without gradient updates.
+          <a class="cite" href="#ref1">[1]</a>
+        </p>
+
+        <pre><code>Extract:
+- customer_name
+- order_id
+- issue
+
+Return valid JSON using this schema...</code></pre>
+
+        <div class="callout good">
+          <strong>Rule:</strong> if the capability already exists, first try to expose and constrain that capability
+          through instructions, output schemas, examples, and evaluation.
+        </div>
+      </section>
+
+      <section id="finetune">
+        <h2>4. A strong case for fine-tuning</h2>
+
+        <p>
+          Suppose a company has 73 internal support categories whose boundaries depend on organization-specific rules:
+        </p>
+
+        <pre><code>"refund pending" → PAY_REFUND_PENDING
+
+if refund initiated less than 3 days ago →
+PAY_REFUND_PROCESSING
+
+but if merchant disputed →
+MERCHANT_DISPUTE_REFUND
+
+except enterprise users →
+ENT_REFUND_ESCALATION</code></pre>
+
+        <p>
+          If you also have 20,000 correctly labeled historical tickets, you now have a classic supervised adaptation
+          problem: a stable input distribution, a stable target taxonomy, and many examples of desired behavior.
+          Research on instruction tuning demonstrates that supervised examples can teach response conventions and
+          task-following behavior.
+          <a class="cite" href="#ref2">[2]</a>
+          <a class="cite" href="#ref4">[4]</a>
+        </p>
+
+        <pre><code>Before fine-tuning:
+
+1500-token prompt
++
+ticket
++
+output
+
+
+After fine-tuning:
+
+ticket
+→
+PAY_REFUND_PENDING</code></pre>
+
+        <p>
+          The potential gain is not only quality. A successful tuned model may reduce repeated prompt tokens,
+          decrease latency, improve consistency, and make it possible to deploy a smaller model.
+        </p>
+      </section>
+
+      <section id="knowledge">
+        <h2>5. Do not confuse missing knowledge with wrong behavior</h2>
+
+        <pre><code>100,000 pages
+product documentation
+internal policies
+prices
+contracts
+FAQ</code></pre>
+
+        <p>
+          Fine-tuning is usually not the first mechanism to choose when the main requirement is access to a large,
+          changing body of facts. Retrieval-Augmented Generation was specifically introduced to combine parametric
+          model knowledge with an external non-parametric memory, addressing problems such as provenance and updating
+          world knowledge.
+          <a class="cite" href="#ref3">[3]</a>
+        </p>
+
+        <pre><code>User
+ ↓
+Retrieval
+ ↓
+relevant documents
+ ↓
+LLM
+ ↓
+answer + citations</code></pre>
+
+        <div class="callout">
+          <strong>Knowledge → context.<br>Behavior → weights.</strong>
+        </div>
+
+        <h3>But domain fine-tuning can still help</h3>
+        <p>
+          Fine-tuning can adapt terminology, response conventions, classification boundaries, and specialized task behavior.
+          The LIMA results are a useful reminder that a relatively small quantity of carefully curated examples can teach
+          strong response behavior even when most factual knowledge comes from pretraining.
+          <a class="cite" href="#ref4">[4]</a>
+        </p>
+
+        <pre><code>             DOMAIN BEHAVIOR
+                    ↓
+              Fine-tuned LLM
+                    ↑
+                    │
+User → Retrieval → Context</code></pre>
+
+        <p>
+          Therefore, <strong>RAG and fine-tuning are complementary</strong>: retrieval can supply current knowledge while
+          tuning shapes how the model behaves with that knowledge.
+        </p>
+      </section>
+
+      <section id="signals">
+        <h2>6. Five strong signals that fine-tuning is justified</h2>
+
+        <h3>1. You have many examples of “this is correct”</h3>
+        <pre><code>INPUT → CORRECT OUTPUT
+INPUT → CORRECT OUTPUT
+INPUT → CORRECT OUTPUT
+...</code></pre>
+
+        <p>
+          This is especially attractive when the target behavior is easier to demonstrate than to describe as a long list of rules.
+          Research such as LIMA shows that carefully curated supervised examples can exert substantial control over model behavior.
+          <a class="cite" href="#ref4">[4]</a>
+        </p>
+
+        <h3>2. The prompt has become a monster</h3>
+        <pre><code>SYSTEM PROMPT
+14,000 tokens
+
+RULES
+75 rules
+
+EXAMPLES
+42 examples</code></pre>
+
+        <p>
+          Long-context ICL can remain effective even with hundreds or thousands of demonstrations, but those demonstrations
+          must be processed at inference time. This creates a real tradeoff between context-based adaptation and weight-based adaptation.
+          <a class="cite" href="#ref5">[5]</a>
+        </p>
+
+        <h3>3. You need very high consistency</h3>
+        <div class="pillrow">
+          <span class="pill">classification</span>
+          <span class="pill">routing</span>
+          <span class="pill">structured extraction</span>
+          <span class="pill">normalization</span>
+          <span class="pill">moderation taxonomy</span>
+          <span class="pill">intent detection</span>
+          <span class="pill">NER</span>
+        </div>
+
+        <p>
+          These are often narrow tasks with measurable labels and clear error rates — exactly the environment where supervised
+          adaptation can be evaluated objectively.
+        </p>
+
+        <h3>4. A small specialist model should replace a larger general model</h3>
+
+        <pre><code>70B general model
++
+large prompt
++
+20 examples
+
+↓ SFT / distillation
+
+7B specialist model</code></pre>
+
+        <p>
+          EMNLP 2025 experiments across eight text-classification tasks found that specialized smaller models often needed
+          only a small number of labeled samples — around 100 on average in the tested setting — to reach or exceed the
+          performance of larger general models. The exact break-even point varied substantially by task.
+          <a class="cite" href="#ref6">[6]</a>
+        </p>
+
+        <h3>5. There is persistent residual error</h3>
+
+        <pre><code>Base model
+     ↓
+prompt
+     ↓
+few-shot
+     ↓
+RAG if necessary
+     ↓
+eval</code></pre>
+
+        <p>After several iterations:</p>
+
+        <pre><code>6.3% failure</code></pre>
+
+        <p>
+          If those failures cluster around stable task-specific behavior that the model repeatedly fails to follow,
+          turn the failure cases and their corrected outputs into candidate training data.
+        </p>
+      </section>
+
+      <section id="badidea">
+        <h2>7. When fine-tuning is probably the wrong move</h2>
+
+        <ul>
+          <li>A prompt produced one bad answer.</li>
+          <li>You mainly need fresh or frequently changing facts.</li>
+          <li>You have only a handful of weak or contradictory examples.</li>
+          <li>The task definition changes every week.</li>
+          <li>The taxonomy itself is still unstable.</li>
+          <li>You have no representative eval set.</li>
+          <li>You cannot describe the failure modes you expect tuning to fix.</li>
+          <li>The base model fundamentally lacks the capability required by the task.</li>
+        </ul>
+
+        <pre><code>incapable base model
++
+500 examples
+≠
+frontier reasoning model</code></pre>
+
+        <div class="callout bad">
+          Fine-tuning is usually strongest as <strong>specialization</strong>. It should not be treated as a magical way to
+          manufacture arbitrary new capabilities from an unsuitable base model.
+        </div>
+      </section>
+
+      <section id="longcontext">
+        <h2>8. Long-context models changed the boundary</h2>
+
+        <p>
+          The old heuristic “a few examples means prompting; many examples means fine-tuning” is no longer sufficient.
+          NAACL 2025 experiments found that long-context ICL can continue improving with thousands of demonstrations on some
+          tasks. The same study found that fine-tuning was more data-hungry in the tested settings, but could exceed
+          long-context ICL with additional training data.
+          <a class="cite" href="#ref5">[5]</a>
+        </p>
+
+        <pre><code>Today you should consider all of these:
+
+quality
+inference cost
+training cost
+latency
+context size
+dataset quality
+task stability
+traffic volume
+maintenance burden</code></pre>
+
+        <p>
+          This makes the decision economic as well as statistical: the same target accuracy can have very different
+          operational costs depending on whether adaptation lives in the prompt or in the weights.
+        </p>
+      </section>
+
+      <section id="ladder">
+        <h2>9. A production decision ladder</h2>
+
+        <pre><code>                     ┌───────────────┐
+                     │  BASE MODEL   │
+                     └───────┬───────┘
+                             ↓
+                      1. ZERO-SHOT
+                             ↓
+                           EVAL
+                             ↓
+                     2. BETTER PROMPT
+                             ↓
+                           EVAL
+                             ↓
+                       3. FEW-SHOT
+                             ↓
+                           EVAL
+                             ↓
+               ┌─────────────┴─────────────┐
+               │                           │
+       knowledge problem?          behavior problem?
+               │                           │
+               ↓                           ↓
+             RAG                     Fine-tuning
+               │                           │
+               └─────────────┬─────────────┘
+                             ↓
+                           EVAL</code></pre>
+
+        <p>
+          Few-shot ICL can adapt model behavior without weight updates.
+          <a class="cite" href="#ref1">[1]</a>
+          Instruction tuning alters weight-level behavior.
+          <a class="cite" href="#ref2">[2]</a>
+          Retrieval adds external knowledge.
+          <a class="cite" href="#ref3">[3]</a>
+          The architecture should match the failure mode.
+        </p>
+
+        <h3>A second production branch: economics</h3>
+
+        <pre><code>quality is already acceptable
+but
+cost / latency is not
+        ↓
+fine-tune or distill a smaller model</code></pre>
+
+        <p>
+          Fine-tuning can therefore be justified even when prompting already reaches the quality target:
+          the optimization objective may be inference economics rather than raw accuracy.
+        </p>
+      </section>
+
+      <section id="formula">
+        <h2>10. The decision criterion</h2>
+
+        <div class="formula">
+          Quality Gain + Inference Savings + Latency Gain<br>
+          &gt;<br>
+          Training Cost + Data Cost + Maintenance Cost
+        </div>
+
+        <p>
+          The task should also be stable enough that the learned specialization will remain useful long enough to repay
+          the cost of dataset creation, training, evaluation, and maintenance.
+        </p>
+
+        <div class="callout warn">
+          The useful question is not <strong>“Can this be solved with a prompt?”</strong><br>
+          It is <strong>“Can prompting meet the required quality, cost, and latency SLO on the real data distribution?”</strong>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>If the bottleneck is…</th><th>Use</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Task specification</td><td><strong>Prompt</strong></td></tr>
+            <tr><td>Missing demonstrations</td><td><strong>Few-shot / ICL</strong></td></tr>
+            <tr><td>Missing or fresh knowledge</td><td><strong>RAG / Search</strong></td></tr>
+            <tr><td>External actions</td><td><strong>Tools / Agent</strong></td></tr>
+            <tr><td>Stable, task-specific behavior</td><td><strong>Fine-tuning</strong></td></tr>
+            <tr><td>Excessive inference cost or latency</td><td><strong>Fine-tuning / Distillation</strong></td></tr>
+          </tbody>
+        </table>
+
+        <div class="quote">
+          Prompting tells the model what to do in this context.<br>
+          RAG tells it what it needs to know in this context.<br>
+          Fine-tuning changes what it tends to do by default.
+        </div>
+
+        <p>
+          For smaller local models, specialization can become attractive relatively early. Recent controlled experiments
+          show that small fine-tuned models can reach or outperform larger general-purpose models on narrow classification
+          tasks with surprisingly modest amounts of labeled data, although the break-even point is strongly task-dependent.
+          <a class="cite" href="#ref6">[6]</a>
+        </p>
+      </section>
+
+      <section id="references">
+        <h2>References</h2>
+        <p class="muted">
+          Academic sources only. In-text citations use numbered references; all external links are collected here.
+        </p>
+
+        <ol class="refs">
+          <li id="ref1">
+            <span class="title">Language Models are Few-Shot Learners</span>
+            <span class="meta">Brown, T. B. et al. · NeurIPS 2020.</span>
+            <a class="url" href="https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html" target="_blank" rel="noopener noreferrer">https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html</a>
+          </li>
+
+          <li id="ref2">
+            <span class="title">Finetuned Language Models Are Zero-Shot Learners</span>
+            <span class="meta">Wei, J. et al. · ICLR 2022.</span>
+            <a class="url" href="https://arxiv.org/abs/2109.01652" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2109.01652</a>
+          </li>
+
+          <li id="ref3">
+            <span class="title">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</span>
+            <span class="meta">Lewis, P. et al. · NeurIPS 2020.</span>
+            <a class="url" href="https://arxiv.org/abs/2005.11401" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2005.11401</a>
+          </li>
+
+          <li id="ref4">
+            <span class="title">LIMA: Less Is More for Alignment</span>
+            <span class="meta">Zhou, C. et al. · 2023.</span>
+            <a class="url" href="https://arxiv.org/abs/2305.11206" target="_blank" rel="noopener noreferrer">https://arxiv.org/abs/2305.11206</a>
+          </li>
+
+          <li id="ref5">
+            <span class="title">In-Context Learning with Long-Context Models: An In-Depth Exploration</span>
+            <span class="meta">Bertsch, A. et al. · NAACL 2025, pp. 12119–12149.</span>
+            <a class="url" href="https://aclanthology.org/2025.naacl-long.605/" target="_blank" rel="noopener noreferrer">https://aclanthology.org/2025.naacl-long.605/</a>
+          </li>
+
+          <li id="ref6">
+            <span class="title">Comparing Specialised Small and General Large Language Models on Text Classification: 100 Labelled Samples to Achieve Break-Even Performance</span>
+            <span class="meta">Pecher, B., Srba, I., Bielikova, M. · EMNLP 2025, pp. 165–184.</span>
+            <a class="url" href="https://aclanthology.org/2025.emnlp-main.9/" target="_blank" rel="noopener noreferrer">https://aclanthology.org/2025.emnlp-main.9/</a>
+          </li>
+
+          <li id="ref7">
+            <span class="title">Instruction Tuning for Large Language Models: A Survey</span>
+            <span class="meta">Zhang, S. et al. · ACM Computing Surveys, 2026.</span>
+            <a class="url" href="https://doi.org/10.1145/3777411" target="_blank" rel="noopener noreferrer">https://doi.org/10.1145/3777411</a>
+          </li>
+        </ol>
+      </section>
+
+      <footer>
+        Standalone HTML document. No external JavaScript or CSS dependencies. References are restricted to academic publications.
+      </footer>
+
+    </div>
+  </div>
+</main>
+</body>
+</html>

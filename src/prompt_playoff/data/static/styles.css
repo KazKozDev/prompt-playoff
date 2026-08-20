@@ -107,9 +107,29 @@
     .lifecycle-nav a { display:flex; align-items:center; gap:9px; margin:1px 0; padding:6px 8px 6px 18px; border-left:2px solid transparent; border-radius:0 var(--r-sm) var(--r-sm) 0; color:var(--text-2); font-size:var(--fs-sm); text-decoration:none; }
     .lifecycle-nav a:hover { background:var(--wash); color:var(--text); }
     .lifecycle-nav a[aria-current="page"] { border-left-color:var(--accent); background:var(--accent-soft); color:var(--text); }
-    /* Appearance sits with the environment, at the foot of the rail, not in a
-       menu: three words, and Auto means the system decides. */
-    .sidebar-foot { margin-top:auto; padding-top:13px; border-top:1px solid var(--border); }
+    /* Appearance and system tools sit at the foot of the rail */
+    .sidebar-foot { margin-top:auto; padding-top:11px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+    .sidebar-system { display:flex; flex-direction:column; gap:2px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+    .sidebar-system a {
+      display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:var(--r-sm);
+      color:var(--text-2); font-size:var(--fs-sm); font-weight:500; text-decoration:none;
+      transition:background .15s ease, color .15s ease;
+    }
+    .sidebar-system a:hover { background:var(--wash); color:var(--text); }
+    .sidebar-system a[aria-current="page"], .sidebar-system a.active {
+      background:var(--accent-soft); color:var(--text); font-weight:600;
+    }
+    .sidebar-system a .i { width:15px; height:15px; flex:0 0 15px; color:var(--muted); }
+    .sidebar-system a:hover .i, .sidebar-system a[aria-current="page"] .i, .sidebar-system a.active .i {
+      color:var(--accent-ink);
+    }
+    .system-link-name { flex:1; min-width:0; }
+    .system-count {
+      display:none; padding:1px 6px; border-radius:999px; font-size:var(--fs-micro); font-weight:600;
+      font-variant-numeric:tabular-nums;
+    }
+    .system-count:not(:empty) { display:inline-block; }
+    .system-count.wait { background:var(--warn-soft); color:var(--warn-ink); }
     .theme-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; padding:3px; border:1px solid var(--border); border-radius:999px; background:var(--panel2); }
     .theme-switch button { width:auto; margin:0; padding:5px 0; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:var(--fs-micro); font-weight:600; }
     .theme-switch button:hover:not([aria-pressed="true"]) { background:transparent; color:var(--text-2); }
@@ -357,7 +377,7 @@
     .model-pop-foot button { width:100%; margin:0; padding:7px; font-size:var(--fs-sm); }
     /* The model again in the corner of the rail, where an app usually keeps the
        account: the environment every screen depends on. */
-    .rail-model { display:flex; align-items:center; gap:9px; margin-bottom:10px; padding:8px; border-radius:var(--r-sm); color:var(--text-2); text-decoration:none; }
+    .rail-model { display:flex; align-items:center; gap:9px; padding:8px; border-radius:var(--r-sm); color:var(--text-2); text-decoration:none; }
     .rail-model:hover { background:var(--wash); }
     .rail-model strong { display:block; font-size:var(--fs-sm); font-weight:600; }
     .rail-model small { display:block; color:var(--muted); font-size:var(--fs-micro); }
@@ -689,6 +709,7 @@
       .work-wide .screen-guide { position:sticky; top:74px; max-height:calc(100vh - 96px); overflow:auto; }
     }
     .build-work { min-width:0; }
+    .build-work > * + * { margin-top:18px; }
     /* A list of model ids is short lines, not prose. The field stands in the
        wide half, so it is held to the width of the longest id anyone would type
        and set in the type ids are written in — a 900px box for `qwen3:8b` reads
@@ -1040,22 +1061,55 @@
     .progress { font-size:var(--fs-sm); color:var(--muted); font-variant-numeric:tabular-nums; }
     .log-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
     .log-toolbar .meta { margin:0; }
-    button.log-refresh { width:auto; margin:0; padding:6px 10px; font-size:var(--fs-sm); }
-    .log-job { border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); overflow:hidden; }
-    .log-job + .log-job { margin-top:10px; }
-    .log-job > summary { display:flex; align-items:center; gap:10px; padding:12px; cursor:pointer; list-style:none; }
-    .log-job > summary::-webkit-details-marker { display:none; }
+    button.log-refresh { width:auto; margin:0; padding:4px 9px; font-size:var(--fs-sm); }
     .log-kind { color:var(--text); font-size:var(--fs-base); font-weight:600; }
     .log-id { color:var(--muted); font:var(--fs-sm)/1.5 var(--mono); }
-    .log-time { margin-left:auto; color:var(--muted); font-size:var(--fs-sm); white-space:nowrap; }
+    .log-time { color:var(--muted); font-size:var(--fs-sm); white-space:nowrap; }
     /* Status is the one place a colour still means something, so these keep
        theirs — as a hairline and a tinted fill, not as a shout. */
     .log-status { padding:2px 8px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
     .log-status.running { color:var(--accent-ink); border-color:var(--accent-line); background:var(--accent-soft); }
     .log-status.done { color:var(--good); border-color:var(--good-line); background:var(--good-soft); }
     .log-status.error { color:var(--bad); border-color:var(--bad-line); background:var(--bad-soft); }
-    .log-lines { margin:0; padding:12px; border:0; border-top:1px solid var(--border); border-radius:0; background:var(--sunken); max-height:320px; overflow:auto; color:var(--text-2); }
-    .log-error { margin:12px; color:var(--bad-text); font:var(--fs-sm)/1.6 var(--mono); overflow-wrap:anywhere; }
+    .log-lines { margin:0; padding:14px; border:0; background:transparent; max-height:calc(100vh - 280px); min-height:200px; overflow:auto; color:var(--text-2); font:var(--fs-sm)/1.6 var(--mono); white-space:pre-wrap; word-break:break-word; }
+    .log-error { margin:0 0 12px; padding:10px 12px; border:1px solid var(--bad-line); border-radius:var(--r-sm); background:var(--bad-soft); color:var(--bad-text); font:var(--fs-sm)/1.6 var(--mono); overflow-wrap:anywhere; }
+
+    /* Two-column layout for Jobs & logs screen */
+    .logs-split { display:grid; grid-template-columns:1fr; gap:18px; align-items:start; margin-top:18px; }
+    @media (min-width:900px) {
+      .logs-split { grid-template-columns:minmax(280px,340px) minmax(0,1fr); }
+    }
+    .logs-sidebar { display:flex; flex-direction:column; gap:10px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-md); padding:14px; }
+    .logs-sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .logs-sidebar-head h3 { margin:0; font-size:var(--fs-base); font-weight:600; color:var(--text); }
+    .log-status-text { margin:0; font-size:var(--fs-micro); color:var(--muted); }
+    .logs-job-list { display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 240px); overflow-y:auto; }
+
+    .log-job-card {
+      display:flex; flex-direction:column; gap:6px; padding:10px 12px;
+      text-align:left; border:1px solid var(--border); border-radius:var(--r-sm);
+      background:var(--panel); color:var(--text); cursor:pointer;
+      transition:all .15s ease; width:100%; font-family:inherit;
+    }
+    .log-job-card:hover { border-color:var(--border-strong); background:var(--sunken); }
+    .log-job-card.active {
+      border-color:var(--accent-line); background:var(--accent-soft);
+      box-shadow:inset 3px 0 0 var(--accent-line);
+    }
+    .log-job-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .log-job-card-bottom { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:var(--fs-sm); }
+    .log-job-card .log-kind { font-size:var(--fs-sm); font-weight:600; color:var(--text); }
+    .log-job-card .log-id { font-size:var(--fs-micro); color:var(--muted); font-family:var(--mono); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:140px; }
+    .log-job-card .log-time { font-size:var(--fs-micro); color:var(--muted); white-space:nowrap; }
+
+    .logs-detail-panel { display:flex; flex-direction:column; gap:12px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r-md); padding:16px; min-width:0; }
+    .log-detail-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid var(--border); }
+    .log-detail-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .log-detail-meta .log-kind { font-size:var(--fs-lead); font-weight:600; color:var(--text); }
+    .log-detail-meta .log-id { font-size:var(--fs-sm); font-family:var(--mono); color:var(--muted); }
+    .log-detail-meta .log-time { font-size:var(--fs-sm); color:var(--muted); }
+    .log-detail-actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
+    .log-viewer { border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sunken); overflow:hidden; }
     /* ------------------------------------------------------------------ *
      * The catalog uses the same ladder as the rest of the app and adds
      * nothing: micro for every kicker and key, sm for the source line and
@@ -1176,6 +1230,32 @@
        must not force one: with color-scheme:dark pinned here, a light app got
        dark scrollbars and controls inside the frame. */
     .doc-frame { display:block; width:100%; min-height:420px; border:0; background:transparent; }
+    /* The guide's contents sit in the app, not in the frame: the frame is as
+       tall as the article, so a sticky nav inside it would never stick. Same
+       plate as run-side — viewport tall, stays put while the article scrolls. */
+    .guide-split { display:grid; grid-template-columns:minmax(220px,252px) minmax(0,1fr); gap:18px; align-items:start; }
+    .guide-toc {
+      position:sticky; top:74px; align-self:start;
+      max-height:calc(100vh - 92px);
+      overflow:auto; overscroll-behavior:contain;
+      padding:22px 16px; border:1px solid var(--border); border-radius:var(--r-lg);
+      background:var(--panel); box-shadow:var(--shadow);
+    }
+    .guide-toc strong {
+      display:block; margin:0 8px 10px; color:var(--muted);
+      font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em;
+    }
+    .guide-toc a {
+      display:block; margin:1px 0; padding:7px 8px 7px 10px;
+      border-left:2px solid transparent; border-radius:0 var(--r-sm) var(--r-sm) 0;
+      color:var(--text-2); font-size:var(--fs-base); text-decoration:none;
+    }
+    .guide-toc a:hover { background:var(--wash); color:var(--text); }
+    .guide-toc a[aria-current="true"] { border-left-color:var(--accent); background:var(--accent-soft); color:var(--text); }
+    @media (max-width:900px) {
+      .guide-split { grid-template-columns:1fr; }
+      .guide-toc { position:relative; top:auto; max-height:none; }
+    }
     .history-chart { width:100%; height:150px; margin:16px 0; border:1px solid var(--border); border-radius:var(--r-md); background:var(--panel2); }
     .history-chart polyline { fill:none; stroke:var(--accent); stroke-width:2; vector-effect:non-scaling-stroke; }
     .history-chart circle { fill:var(--accent); }

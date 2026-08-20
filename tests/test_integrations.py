@@ -21,7 +21,9 @@ from prompt_playoff.providers import ProviderError
 
 HAS_DSPY = installed("dspy")
 HAS_LANGFUSE = installed("langfuse")
-HAS_OTEL = installed("opentelemetry.sdk")
+HAS_OTEL = installed("opentelemetry.sdk") and installed(
+    "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+)
 
 
 def dataset(schema):

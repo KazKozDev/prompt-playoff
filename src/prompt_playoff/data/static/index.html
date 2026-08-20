@@ -123,7 +123,6 @@
         <a href="#report" data-global-tab="report" data-screen="report" data-testid="nav-report">Measurement</a>
         <a href="#comparison" data-global-tab="comparison" data-screen="comparison" data-testid="nav-comparison">Method comparison</a>
         <a href="#optimization" data-global-tab="optimization" data-screen="optimization" data-testid="nav-optimization">Optimization</a>
-        <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="examples">
@@ -160,25 +159,36 @@
         </div>
       </div>
       <div class="sidebar-group" data-section="reference">
-        <button class="sidebar-section" type="button" data-section-toggle="reference" aria-expanded="false" aria-controls="section-reference"><span class="section-name">Reference</span><span class="section-count" data-section-count="reference"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <button class="sidebar-section" type="button" data-section-toggle="reference" aria-expanded="false" aria-controls="section-reference"><span class="section-name">Docs</span><span class="section-count" data-section-count="reference"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-reference">
-        <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="nav-settings">Models &amp; keys</a>
-        <a href="#logs" data-global-tab="logs" data-screen="logs" data-testid="nav-logs">Jobs &amp; logs</a>
+        <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
+        <a href="#help" data-global-tab="help" data-screen="help" data-testid="nav-help">User Guide</a>
         <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation" data-testid="nav-evaluation-guide">Evaluation guide</a>
-        <a href="#help" data-global-tab="help" data-screen="help" data-testid="nav-help">Help</a>
+        <a href="#prompt-vs-finetuning" data-global-tab="prompt-vs-finetuning" data-screen="prompt-vs-finetuning" data-testid="nav-prompt-vs-finetuning">Prompt vs Fine-Tuning</a>
         </div>
       </div>
     </nav>
     <div class="sidebar-foot">
-      <div class="theme-switch" role="group" aria-label="Appearance" data-testid="theme-switch">
-        <button type="button" data-theme-set="auto" aria-pressed="false">Auto</button>
-        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
-        <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
+      <div class="sidebar-system" aria-label="System tools">
+        <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="nav-settings">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9M19 7.5h1M4 16.5h3M13 16.5h7"/><circle cx="16" cy="7.5" r="2.4"/><circle cx="10" cy="16.5" r="2.4"/></svg>
+          <span class="system-link-name">Models &amp; keys</span>
+        </a>
+        <a href="#logs" data-global-tab="logs" data-screen="logs" data-testid="nav-logs">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.4v13.2L19 12Z"/></svg>
+          <span class="system-link-name">Jobs &amp; logs</span>
+          <span class="system-count" data-system-count="logs"></span>
+        </a>
       </div>
       <a class="rail-model" href="#settings" data-global-tab="settings" data-screen="settings" data-testid="rail-model">
         <span class="rail-model-dot" aria-hidden="true"></span>
         <span><strong id="rail-model-name">llama3.2:3b</strong><small>Runs every measurement · change</small></span>
       </a>
+      <div class="theme-switch" role="group" aria-label="Appearance" data-testid="theme-switch">
+        <button type="button" data-theme-set="auto" aria-pressed="false">Auto</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
+      </div>
     </div>
   </aside>
   <button class="drawer-backdrop" type="button" tabindex="-1" data-action="close-drawer" aria-label="Close navigation"></button>

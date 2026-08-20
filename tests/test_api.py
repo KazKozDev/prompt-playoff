@@ -90,10 +90,44 @@ def test_documentation_pages_are_reachable(client):
     assert 'lang="ru"' in client.get("/help/ru").text
     assert "/help/ru" in client.get("/help").text
     assert "/help" in client.get("/help/ru").text
+    assert 'class="page"' in client.get("/help").text
+    assert 'class="page"' in client.get("/help/ru").text
+    assert 'class="article"' in client.get("/help").text
     assert 'lang="en"' in client.get("/evaluation").text
     assert 'lang="ru"' in client.get("/evaluation/ru").text
     assert "/evaluation/ru" in client.get("/evaluation").text
     assert "/evaluation" in client.get("/evaluation/ru").text
+
+
+def test_the_prompt_vs_finetuning_guide_is_served_in_both_languages(client):
+    assert "/prompt-vs-finetuning/ru" in client.get("/prompt-vs-finetuning").text
+    assert "/prompt-vs-finetuning" in client.get("/prompt-vs-finetuning/ru").text
+
+
+def test_the_prompt_vs_finetuning_guide_follows_the_app_theme(client):
+    # Same stylesheet as Help and the Evaluation guide, so a token cannot drift
+    # to a second copy inside this page. The large title and two-plate layout
+    # are the only things it adds; embed must not hide the heading.
+    css = client.get("/assets/docs.css").text
+    assert "prefers-color-scheme" in css
+    assert "main.page" in css
+    assert "html:has(main.page) body" in css
+    for path in ("/prompt-vs-finetuning", "/prompt-vs-finetuning/ru"):
+        html = client.get(path).text
+        assert "/assets/docs.css" in html
+        assert "<style>" not in html
+        assert ":root.embed .hero{display:none}" not in html
+        assert "lang-switch" in html
+        assert 'class="article"' in html
+        assert 'class="toc"' in html
+        assert html.index('class="toc"') < html.index('class="article"')
+        assert "\\!==" not in html
+        assert html.lstrip().startswith("<!DOCTYPE html>")
+    nav = client.get("/assets/navigation.js").text
+    assert "guide-split" in nav
+    assert "data-guide-toc" in nav
+    assert ":root.embed main.page footer" in css
+    assert "max-height:calc(100vh - 36px)" in css
 
 
 def test_the_old_benchmarks_paths_point_at_the_guide(client):
@@ -109,7 +143,14 @@ def test_documents_reference_reachable_packaged_assets(client):
     # Both documents load the same stylesheet and the same script; a page that
     # points at a file the package does not ship renders as a wall of text, and
     # nothing else in the suite would notice.
-    for path in ("/help", "/help/ru", "/evaluation", "/evaluation/ru"):
+    for path in (
+        "/help",
+        "/help/ru",
+        "/evaluation",
+        "/evaluation/ru",
+        "/prompt-vs-finetuning",
+        "/prompt-vs-finetuning/ru",
+    ):
         assets = re.findall(r'(?:href|src)="(/assets/[^"]+)"', client.get(path).text)
         assert assets == ["/assets/docs.js", "/assets/docs.css"] or assets == [
             "/assets/docs.css",
@@ -195,6 +236,7 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         ("settings", "settings"),
         ("logs", "logs"),
         ("evaluation", "evaluation"),
+        ("prompt-vs-finetuning", "prompt-vs-finetuning"),
         ("help", "help"),
     }
     assert 'data-testid="rail-model"' in html

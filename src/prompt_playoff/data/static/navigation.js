@@ -7,9 +7,24 @@ const sectionTabs = ['s-prompt', 's-examples', 's-check', 's-ship', 's-reference
 // they sit in carries no plate of its own, or the parts would read as one.
 const unplatedScreens = new Set(['dataset-upload', 'dataset-hub', 'dataset-builder', 'techniques', 'dataset-bundled',
   'judge', 'model-matrix', 'context-lab', 'analysis',
-  'regressions', 'reviews', 'releases', 'production']);
-const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'dataset-hub', 'dataset-upload', ...platformTabs];
-const docPages = { help: ['/help', 'Help'], evaluation: ['/evaluation', 'Evaluation Guide'] };
+  'regressions', 'reviews', 'releases', 'production', 'logs',
+  'prompt-vs-finetuning', 'help', 'evaluation']);
+const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'prompt-vs-finetuning', 'dataset-hub', 'dataset-upload', ...platformTabs];
+const docPages = { help: ['/help', 'User Guide'], evaluation: ['/evaluation', 'Evaluation Guide'], 'prompt-vs-finetuning': ['/prompt-vs-finetuning', 'Prompt vs Fine-Tuning'] };
+const GUIDE_TOC = {
+  en: { label:'On this page', title:'Contents', items:[
+    ['#split','1. The core distinction'], ['#test','2. A simple test'], ['#prompt','3. When prompting wins'],
+    ['#finetune','4. When fine-tuning wins'], ['#knowledge','5. Knowledge vs behavior'], ['#signals','6. Five strong signals'],
+    ['#badidea','7. When not to fine-tune'], ['#longcontext','8. Long-context ICL'], ['#ladder','9. Production ladder'],
+    ['#formula','10. Decision formula'], ['#references','References']
+  ]},
+  ru: { label:'На этой странице', title:'Содержание', items:[
+    ['#split','1. Главное различие'], ['#test','2. Простой тест'], ['#prompt','3. Когда промптинг выигрывает'],
+    ['#finetune','4. Когда файн-тюнинг выигрывает'], ['#knowledge','5. Знания vs поведение'], ['#signals','6. Пять сильных сигналов'],
+    ['#badidea','7. Когда не надо файн-тюнить'], ['#longcontext','8. Long-context ICL'], ['#ladder','9. Продакшен-лестница'],
+    ['#formula','10. Формула решения'], ['#references','Ссылки']
+  ]}
+};
 // One name per screen, written down once. The sidebar link, the heading in the
 // context bar and the browser tab all read from here, so a screen can never be
 // called three different things on the way to itself. Names in the navigation
@@ -35,16 +50,16 @@ const screenMeta = {
   // nothing here is connected to live traffic. Each of the three checks works on
   // material you paste in, and the screen says so before it offers a box.
   production:['Production', 'Spot checks', 'Three checks you run by hand on text you paste in: whether real inputs still look like your examples, whether an agent called the tools it should, and whether the prompt holds when the input attacks it. It does not watch live traffic.'],
-  techniques:['Prompt', 'Techniques', 'The catalogue of every method in the registry, each with a real prompt compiled for a task that suits it. Read it to see what the selector chose from, or to pick a method yourself.'],
-  logs:['Reference', 'Jobs & logs', 'What is running right now and what each finished job did, step by step. Come here when a run is slow or failed. The numbers those runs produced are in Check → Results.'],
-  settings:['Reference', 'Models & keys', 'Where you set the three models and their keys. The prompt engine writes prompts and generated rows, the evaluation model runs them and produces every number you see, and the judge compares two answers — it must never be the model being judged.'],
-  evaluation:['Reference', 'Evaluation guide'], help:['Reference', 'Help'],
+  techniques:['Docs', 'Techniques', 'The catalogue of every method in the registry, each with a real prompt compiled for a task that suits it. Read it to see what the selector chose from, or to pick a method yourself.'],
+  logs:['System', 'Jobs & logs', 'What is running right now and what each finished job did, step by step. Come here when a run is slow or failed. The numbers those runs produced are in Check → Results.'],
+  settings:['System', 'Models & keys', 'Where you set the three models and their keys. The prompt engine writes prompts and generated rows, the evaluation model runs them and produces every number you see, and the judge compares two answers — it must never be the model being judged.'],
+  evaluation:['Docs', 'Evaluation guide'], help:['Docs', 'User Guide'], 'prompt-vs-finetuning':['Docs', 'Prompt vs Fine-Tuning', 'When to fine-tune a model — and when prompting is enough. A research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents.'],
   home:['Workspace', 'Prompt Playoff', 'Five sections, in the order a prompt goes through them, and one button that runs the whole path for you. Everything here runs on your machine.'],
   's-prompt':['Prompt', 'Prompt', 'The prompt itself and everything measured on it: one run over your examples, the methods scored side by side, and the search for better wording. Start here.'],
   's-examples':['Datasets', 'Datasets', 'The example rows every score is computed against. Bring your own, import public ones, or generate them — a score describes your task only if these look like your real inputs.'],
   's-check':['Check', 'Check', 'Ways to test whether a number holds up: on other models, with other context, against another answer, or against statistics. Use this before you trust a result. One plain measurement lives in Prompt.'],
   's-ship':['Production', 'Production', 'What stands between a good score here and a prompt in front of real users: a version register, a regression gate, a review queue, and checks you run by hand.'],
-  's-reference':['Reference', 'Reference', 'The models everything runs on, the job log and the documentation. Nothing here changes your prompt.']
+  's-reference':['Docs', 'Docs', 'Guides, evaluation methodology, and architectural decisions. Everything you need to understand prompt engineering and model trade-offs.']
 };
 
 // The one action a screen offers about itself lives in the same corner on every
@@ -81,7 +96,9 @@ function screenShell(tab, body) {
   const gate = modelGatedScreens.has(tab) ? MODEL_GATE : '';
   // The name belongs to the screen, not to the chrome: the bar carries the path
   // you took, the screen carries what it is.
-  const head = `<div class="screen-head">
+  // This guide brings its own display title — a large article heading — so
+  // the plate must not print the screen name again on top of it.
+  const head = (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation') ? '' : `<div class="screen-head">
       <div><h1 class="screen-title">${esc(title)}</h1>${lead ? `<p class="screen-lead">${esc(lead)}</p>` : ''}</div>
       ${actions ? `<div class="screen-actions">${actions}</div>` : ''}
     </div>`;
@@ -99,19 +116,31 @@ document.addEventListener('click', event => {
 // Appearance. "Auto" clears the attribute so the media query decides; the other
 // two override it in both directions. The head script has already applied the
 // stored choice — this only keeps the control in step with it.
+function currentTheme() {
+  try { return localStorage.getItem('pp-theme') || 'dark'; } catch { return 'dark'; }
+}
+
+function applyThemeTo(root, choice) {
+  if (!root) return;
+  if (choice === 'auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', choice);
+}
+
 function applyTheme(choice) {
-  if (choice === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', choice);
+  applyThemeTo(document.documentElement, choice);
   document.querySelectorAll('[data-theme-set]').forEach(button =>
     button.setAttribute('aria-pressed', String(button.dataset.themeSet === choice)));
   try { localStorage.setItem('pp-theme', choice); } catch { /* storage can be denied; the page still works */ }
+  // Reading screens live in frames. Without this they keep the colour they
+  // loaded with, so Light → Dark left a grey sheet sitting on the panel.
+  document.querySelectorAll('.doc-frame').forEach(frame => {
+    try { applyThemeTo(frame.contentDocument?.documentElement, choice); } catch { /* frame not ready */ }
+  });
 }
 
 document.querySelectorAll('[data-theme-set]').forEach(button =>
   button.addEventListener('click', () => applyTheme(button.dataset.themeSet)));
-applyTheme((() => {
-  try { return localStorage.getItem('pp-theme') || 'dark'; } catch { return 'dark'; }
-})());
+applyTheme(currentTheme());
 
 // The mobile bar is static markup; its marks come from the one icon set here.
 // The rail alongside it carries none: there the name is the whole row.
@@ -165,15 +194,22 @@ document.querySelectorAll('[data-section-toggle]').forEach(button => button.addE
 // A count that needs a person is the only thing in the rail allowed a colour.
 function renderSectionCounts() {
   const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
-  // The catalogue is counted where it is now read: beside the prompt it writes.
+  const running = state.jobs.filter(job => job.status === 'running').length;
   const counts = {
-    prompt:state.techniqueCatalog.size || '', examples:state.datasetSizes.size || '',
-    check:state.experiments.length || '', ship:pending || '', reference:''
+    prompt:'', examples:state.datasetSizes.size || '',
+    check:state.experiments.length || '', ship:pending || '', reference:state.techniqueCatalog.size || ''
   };
   document.querySelectorAll('[data-section-count]').forEach(node => {
     const key = node.dataset.sectionCount;
     node.textContent = counts[key] === '' ? '' : String(counts[key]);
     node.classList.toggle('wait', key === 'ship' && Boolean(pending));
+  });
+  document.querySelectorAll('[data-system-count]').forEach(node => {
+    const key = node.dataset.systemCount;
+    if (key === 'logs') {
+      node.textContent = running ? String(running) : '';
+      node.classList.toggle('wait', Boolean(running));
+    }
   });
 }
 
@@ -442,8 +478,8 @@ function sectionTiles() {
       state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')} recorded`] : ['idle', 'Nothing measured yet']],
     ['s-ship', 'Production', 'Freeze the version you ship, gate changes against the last run, and answer what is waiting for you.',
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
-    ['s-reference', 'Reference', 'Set the models and keys, watch what the server is doing, and read what every number means.',
-      ['idle', state.jobs.some(job => job.status === 'running') ? 'A job is running' : 'Nothing running']]
+    ['s-reference', 'Docs', 'Evaluation methodology, fine-tuning trade-offs, and guides to understanding every score.',
+      ['idle', '3 guides']]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
       <span class="tile-top">${sectionArt(tab.slice(2), 34)}<strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
@@ -477,7 +513,8 @@ const tileDesc = {
   logs:'What is running right now, and what each finished job did, step by step.',
   settings:'Set the three models and keys: one writes prompts, one runs them, one compares answers.',
   evaluation:'Where every number comes from, and when it is worth trusting.',
-  help:'How the whole thing fits together, start to finish.'
+  help:'How the whole thing fits together, start to finish.',
+  'prompt-vs-finetuning':'When to fine-tune a model — and when prompting is enough. A research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents.'
 };
 
 /* A section screen is where "where am I" is answered, so its tiles carry state
@@ -532,7 +569,7 @@ function screenState(tab) {
       const running = state.jobs.filter(job => job.status === 'running').length;
       return running ? ['wait', `${plural(running, 'job')} running`] : ['idle', 'Idle'];
     }
-    case 'evaluation': case 'help': return ['idle', 'Reading'];
+    case 'evaluation': case 'help': case 'prompt-vs-finetuning': return ['idle', 'Reading'];
     default: return null;
   }
 }
@@ -542,7 +579,7 @@ const screenActionLabels = {
   'dataset-library':'Browse Sets', 'dataset-upload':'Upload', 'dataset-hub':'Import Hub', 'dataset-builder':'Generate', 'dataset-bundled':'Browse',
   history:'View Results', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', analysis:'Analyze',
   regressions:'Check Diff', reviews:'Review', releases:'Manage', production:'Run a check',
-  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', settings:'Set Models'
+  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', 'prompt-vs-finetuning':'Read Guide', settings:'Set Models'
 };
 
 const sectionSpotlights = {
@@ -553,7 +590,7 @@ const sectionSpotlights = {
       return `<span>Prompt Health:</span> <span class="state ${isReady ? 'ok' : 'wait'}">${isReady ? 'Ready' : 'Requires Attention'}</span><span class="info-dot" title="Prompt status">ℹ</span>`;
     },
     desc: (st) => st.chosen
-      ? 'Your prompt is written. Measure it on your examples, compare it with the other methods, or search for better wording. The catalogue it came from is here too.'
+      ? 'Your prompt is written. Measure it on your examples, compare it with the other methods, or search for better wording.'
       : 'No prompt yet. Describe the task in plain words and one gets written for you, using a method picked for that kind of work.'
   },
   examples: {
@@ -592,10 +629,10 @@ const sectionSpotlights = {
   reference: {
     tag: 'Knowledge Base',
     statusTitle: (st) => {
-      const running = st.jobs.filter(job => job.status === 'running').length;
-      return `<span>Reference:</span> <span class="state ${running ? 'wait' : 'idle'}">${running ? `${plural(running, 'job')} running` : 'Nothing running'}</span><span class="info-dot" title="Reference status">ℹ</span>`;
+      const count = st.techniqueCatalog?.size || 0;
+      return `<span>Documentation:</span> <span class="state ok">${count ? `${count} Techniques · 3 Guides` : '3 Guides'}</span><span class="info-dot" title="Documentation">ℹ</span>`;
     },
-    desc: () => 'Nothing here changes your prompt. Set a model before the first run — every screen that measures anything waits on it.'
+    desc: () => 'Techniques catalogue, evaluation methodology, and architectural decisions.'
   }
 };
 
@@ -643,7 +680,10 @@ function tally(items, keyOf) {
 const sectionStock = {
   prompt() {
     const program = state.program;
-    if (!program) return sectionStock.catalogue();
+    if (!program) return {
+      title:'What the prompt is made of', legend:'One circle per message, sized by how long it is.', unit:'chars', tab:'prompt', items:[],
+      caption: '', empty:'Nothing written yet. Once the prompt exists, every part of it is drawn here to scale.'
+    };
     const items = [];
     (program?.stages || []).forEach((stage, index) => stage.messages.forEach(message => items.push({
       label: promptPartName(program, index, message),
@@ -690,6 +730,9 @@ const sectionStock = {
         : (pending ? `${pending} waiting for you` : ''),
       empty:'Nothing in flight. Releases and anything waiting for your yes or no are drawn here.'
     };
+  },
+  reference() {
+    return sectionStock.catalogue();
   },
   catalogue() {
     // Not by family: there are nearly as many families as techniques, and a map
@@ -754,8 +797,7 @@ const sectionNextStep = {
     return ['releases', 'Move the release along', 'Draft → tested → approved → production, one explicit step at a time.'];
   },
   reference() {
-    if (!state.experiments.length && !state.report) return ['evaluation', 'Read what the scores mean', 'Worth ten minutes before the first number arrives.'];
-    return ['logs', 'See what has run', 'Every finished job, and whatever is running right now.'];
+    return ['techniques', 'Browse techniques catalogue', 'Explore prompt methods with live compiled examples.'];
   }
 };
 
@@ -957,7 +999,12 @@ function detailBody(tab) {
     // ?embed is the documents' own switch for "the screen around me is already
     // carrying my name": without it the panel header and the page's title say
     // the same words twice.
-    body = `<iframe class="doc-frame" src="${src}?embed" title="${title}"></iframe>`;
+    const frame = `<iframe class="doc-frame" src="${src}?embed" title="${title}"></iframe>`;
+    // The guide's contents live beside the frame, not inside it: the frame is
+    // as tall as the article, so a sticky nav in there would never stick.
+    body = (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation')
+      ? `<div class="guide-split">${tab === 'prompt-vs-finetuning' ? renderGuideToc('en') : '<nav class="toc guide-toc" data-guide-toc aria-label="On this page"><strong>Contents</strong></nav>'}${frame}</div>`
+      : frame;
   }
   return body;
 }
@@ -971,9 +1018,79 @@ function ensureDetailShell() {
   $('detail').innerHTML = `<div class="detail-panels">${panels}</div>`;
 }
 
+function renderGuideToc(lang) {
+  const spec = GUIDE_TOC[lang] || GUIDE_TOC.en;
+  const links = spec.items.map(([href, text]) => `<a href="${href}">${esc(text)}</a>`).join('');
+  return `<nav class="toc guide-toc" aria-label="${esc(spec.label)}" data-guide-toc><strong>${esc(spec.title)}</strong>${links}</nav>`;
+}
+
+function fillGuideToc(nav, lang) {
+  const spec = GUIDE_TOC[lang] || GUIDE_TOC.en;
+  nav.setAttribute('aria-label', spec.label);
+  nav.innerHTML = `<strong>${esc(spec.title)}</strong>${spec.items.map(([href, text]) => `<a href="${href}">${esc(text)}</a>`).join('')}`;
+}
+
+function markGuideToc(nav, id) {
+  nav.querySelectorAll('a').forEach(link => {
+    if (link.hash === `#${id}`) link.setAttribute('aria-current', 'true');
+    else link.removeAttribute('aria-current');
+  });
+}
+
+function spyGuideToc(frame, nav) {
+  const tick = () => {
+    const doc = frame.contentDocument;
+    if (!doc || !nav.isConnected) return;
+    const frameTop = frame.getBoundingClientRect().top;
+    let current = null;
+    nav.querySelectorAll('a[href^="#"]').forEach(link => {
+      const target = doc.getElementById(decodeURIComponent(link.hash.slice(1)));
+      if (target && frameTop + target.getBoundingClientRect().top <= 120) current = link.hash.slice(1);
+    });
+    if (!current) {
+      const first = nav.querySelector('a[href^="#"]');
+      current = first && first.hash.slice(1);
+    }
+    if (current) markGuideToc(nav, current);
+  };
+  if (spyGuideToc.tick) window.removeEventListener('scroll', spyGuideToc.tick);
+  spyGuideToc.tick = tick;
+  window.addEventListener('scroll', tick, { passive:true });
+  tick();
+}
+
+function wireGuideToc(panel, frame) {
+  const nav = panel.querySelector('[data-guide-toc]');
+  const doc = frame.contentDocument;
+  if (!nav || !doc) return;
+  const apply = () => {
+    const inner = doc.querySelector('main.page > .toc');
+    if (inner && inner.querySelector('a')) {
+      nav.innerHTML = inner.innerHTML;
+      const label = inner.getAttribute('aria-label');
+      if (label) nav.setAttribute('aria-label', label);
+      return true;
+    }
+    return false;
+  };
+  if (!apply()) [60, 250, 800].forEach(delay => setTimeout(() => { if (nav.isConnected) apply(); }, delay));
+  nav.onclick = event => {
+    const link = event.target.closest('a[href^="#"]');
+    if (!link) return;
+    event.preventDefault();
+    const target = frame.contentDocument.getElementById(decodeURIComponent(link.hash.slice(1)));
+    if (!target) return;
+    const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    const top = frame.getBoundingClientRect().top + window.scrollY + target.getBoundingClientRect().top - 16;
+    window.scrollTo({ top, behavior });
+  };
+  spyGuideToc(frame, nav);
+}
+
 function fitDocFrame(frame) {
   const doc = frame.contentDocument;
   if (!doc) { frame.style.height = '80vh'; return; }
+  applyThemeTo(doc.documentElement, currentTheme());
   const main = doc.querySelector('main');
   if (main) main.style.margin = '0 auto 8px';
   // The height has to be taken once the document has actually laid out. The
@@ -1012,15 +1129,25 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   }
   if (docPages[tab]) {
     const frame = panel.querySelector('.doc-frame');
-    if (frame) frame.addEventListener('load', () => fitDocFrame(frame));
+    if (frame) {
+      frame.addEventListener('load', () => {
+        fitDocFrame(frame);
+        if (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation') wireGuideToc(panel, frame);
+      });
+    }
   }
   if (tab === 'logs') {
-    const refresh = panel.querySelector('.log-refresh');
-    if (refresh) refresh.addEventListener('click', () => refreshLogs(true));
-    panel.querySelectorAll('.log-job').forEach(item => item.addEventListener('toggle', () => {
-      if (item.open) state.openLogs.add(item.dataset.jobId);
-      else state.openLogs.delete(item.dataset.jobId);
-    }));
+    const refreshBtn = panel.querySelector('.log-refresh');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => refreshLogs(true));
+    panel.querySelectorAll('.log-job-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const jobId = card.dataset.jobId;
+        if (jobId && state.selectedJobId !== jobId) {
+          state.selectedJobId = jobId;
+          renderDetail();
+        }
+      });
+    });
   }
   // Any link a screen draws to another screen is wired the same way, wherever
   // it is: the map's circles, the home tiles, and a run's example blocks all go
@@ -1292,22 +1419,23 @@ async function refreshLogs(manual=false) {
   if (manual && state.logTimer) { window.clearTimeout(state.logTimer); state.logTimer = null; }
   const previous = JSON.stringify(state.jobs);
   const previousStatus = state.logStatus;
+  const previousSelected = state.selectedJobId;
   if (!state.jobs.length || manual) state.logStatus = 'loading';
   state.logError = '';
   if (manual || !state.jobs.length) renderDetail();
   try {
     state.jobs = await api('/v1/jobs');
     state.logStatus = 'ready';
-    if (!state.logsInitialized && state.jobs.length) {
-      state.openLogs.add(state.jobs[0].id);
-      state.logsInitialized = true;
+    renderSectionCounts();
+    if (!state.selectedJobId && state.jobs.length) {
+      state.selectedJobId = state.jobs[0].id;
     }
   } catch (e) {
     state.logStatus = 'error';
     state.logError = e.message;
   }
   if (state.tab !== 'logs') return;
-  if (manual || previous !== JSON.stringify(state.jobs) || previousStatus !== state.logStatus || state.logError) renderDetail();
+  if (manual || previous !== JSON.stringify(state.jobs) || previousStatus !== state.logStatus || previousSelected !== state.selectedJobId || state.logError) renderDetail();
   state.logTimer = window.setTimeout(() => refreshLogs(), 1000);
 }
 
@@ -1327,19 +1455,76 @@ function logEvent(event) {
 
 function renderLogs() {
   const status = state.logStatus === 'loading' ? 'Refreshing…' : 'Updates automatically every second';
-  const toolbar = `<div class="meta log-status">${status}</div>`;
-  if (state.logError) return `${toolbar}<div class="error">Could not load logs: ${esc(state.logError)}</div>`;
-  if (!state.jobs.length) return `${toolbar}<div class="empty">No benchmark, comparison, or optimization runs yet.</div>`;
-  const jobs = state.jobs.map(job => {
-    const lines = (job.events || []).map(logEvent);
-    if (!lines.length) lines.push(`[${logClock(job.created_at)}] event=queued`);
-    return `<details class="log-job" data-job-id="${esc(job.id)}" ${state.openLogs.has(job.id) ? 'open' : ''}>
-      <summary><span class="log-status ${esc(job.status)}">${esc(job.status)}</span><span class="log-kind">${esc(job.kind)}</span><span class="log-id">${esc(job.id)}</span><span class="log-time">${esc(logClock(job.created_at))}</span></summary>
-      ${job.error ? `<div class="log-error">${esc(job.error)}</div>` : ''}
-      <pre class="log-lines">${esc(lines.join('\n'))}</pre>
-    </details>`;
+  if (state.logError) {
+    return `<div class="log-toolbar"><div class="meta log-status-text">${status}</div><button type="button" class="ghost log-refresh">Refresh</button></div><div class="error">Could not load logs: ${esc(state.logError)}</div>`;
+  }
+  if (!state.jobs.length) {
+    return `<div class="log-toolbar"><div class="meta log-status-text">${status}</div><button type="button" class="ghost log-refresh">Refresh</button></div><div class="empty">No benchmark, comparison, or optimization runs yet.</div>`;
+  }
+
+  if (!state.selectedJobId || !state.jobs.some(j => j.id === state.selectedJobId)) {
+    state.selectedJobId = state.jobs[0].id;
+  }
+  const activeJob = state.jobs.find(j => j.id === state.selectedJobId) || state.jobs[0];
+
+  const jobItems = state.jobs.map(job => {
+    const isActive = job.id === activeJob.id;
+    return `<button type="button" class="log-job-card ${isActive ? 'active' : ''}" data-job-id="${esc(job.id)}">
+      <div class="log-job-card-top">
+        <span class="log-status ${esc(job.status)}">${esc(job.status)}</span>
+        <span class="log-kind">${esc(job.kind)}</span>
+      </div>
+      <div class="log-job-card-bottom">
+        <code class="log-id">${esc(job.id)}</code>
+        <span class="log-time">${esc(logClock(job.created_at))}</span>
+      </div>
+    </button>`;
   }).join('');
-  return toolbar + jobs;
+
+  const lines = (activeJob.events || []).map(logEvent);
+  if (!lines.length) lines.push(`[${logClock(activeJob.created_at)}] event=queued`);
+  const logText = lines.join('\n');
+  const copyKey = `log-${activeJob.id}`;
+  if (state.copyPayloads) {
+    state.copyPayloads.set(copyKey, logText);
+  }
+
+  const detailHtml = `
+    <div class="log-detail-header">
+      <div class="log-detail-meta">
+        <span class="log-status ${esc(activeJob.status)}">${esc(activeJob.status)}</span>
+        <span class="log-kind">${esc(activeJob.kind)}</span>
+        <code class="log-id">${esc(activeJob.id)}</code>
+        <span class="log-time">Started ${esc(logClock(activeJob.created_at))}</span>
+      </div>
+      <div class="log-detail-actions">
+        ${typeof copyButton === 'function' ? copyButton(copyKey, 'Copy logs', `Copy logs for job ${activeJob.id}`) : ''}
+      </div>
+    </div>
+    <div class="copy-status" data-copy-status="${esc(copyKey)}" role="status" aria-live="polite"></div>
+    ${activeJob.error ? `<div class="log-error">${esc(activeJob.error)}</div>` : ''}
+    <div class="log-viewer">
+      <pre class="log-lines">${esc(logText)}</pre>
+    </div>
+  `;
+
+  return `
+    <div class="screen-split logs-split">
+      <aside class="logs-sidebar">
+        <div class="logs-sidebar-head">
+          <h3>Jobs (${state.jobs.length})</h3>
+          <button type="button" class="ghost log-refresh">Refresh</button>
+        </div>
+        <div class="meta log-status-text">${status}</div>
+        <div class="logs-job-list">
+          ${jobItems}
+        </div>
+      </aside>
+      <section class="logs-detail-panel">
+        ${detailHtml}
+      </section>
+    </div>
+  `;
 }
 
 async function refreshHistory() {
