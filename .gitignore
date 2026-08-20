@@ -29,3 +29,5 @@ references/papers/
 # business catalogue. Kept on disk, out of the history.
 design-preview/
 llm_business_50_cases_datasets.pdf
+node_modules/
+.npm-cache/
