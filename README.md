@@ -1,261 +1,284 @@
 # Prompt Playoff — Prompt Optimization and Benchmarking for Local LLMs
 
-Prompt Playoff picks the prompting technique your task needs, compiles the prompt that technique implies, measures it on your own Ollama or OpenAI-compatible model, and searches for a better one. Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25 more — ranked on your data, not on a blog post's opinion.
+Prompt optimization and LLM evaluation for local LLMs: picks the prompting technique your task needs, compiles the prompt it implies, measures it on your model, and searches for a better one.
 
 ```bash
-# macOS
+# macOS / Linux
 git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && ./start.command
 
-# Windows
-git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && start.bat
-
-# Linux — or any machine with Python 3.11+
-pip install 'prompt-playoff[all]' && prompt-playoff serve
+# Windows (PowerShell or cmd, after cloning)
+git clone https://github.com/KazKozDev/prompt-playoff.git
+cd prompt-playoff
+start.bat
 ```
 
 <p align="center">
-  <a href="start.command"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/macos.png" alt="macOS" height="36"></a>
-  <a href="start.bat"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/windows.png" alt="Windows" height="36"></a>
-  <a href="#quick-start"><img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/badges/linux.png" alt="Linux" height="36"></a>
+  <a href="start.command"><img src="assets/badges/macos.png" alt="macOS" height="36"></a>
+  <a href="start.bat"><img src="assets/badges/windows.png" alt="Windows" height="36"></a>
+  <a href="start.command"><img src="assets/badges/linux.png" alt="Linux" height="36"></a>
 </p>
 
+<p align="center">Launchers after clone — double-click <code>.command</code> / <code>.bat</code>, or run <code>.sh</code>.</p>
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model, then showing how it ranked the techniques" width="100%">
+  <img src="assets/demo-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model" width="820">
 </p>
 
 ---
 
 ## Quick start
 
-1. Run the commands above. The launchers prepare everything themselves — Python 3.11+, `.venv`, every optional extra, Ollama and `llama3.2:3b`, a free port, the browser.
+1. Run the command above. On macOS and Linux it clones the repository and starts the launcher; on Windows, clone first, then double-click `start.bat`. The launcher creates `venv`, installs the Python dependencies, checks Ollama and the required local models, starts Prompt Playoff at `http://localhost:8000`, and opens it in your browser.
 
 2. Keep Ollama running with at least one local model. Selection and compilation work without one; only measurement needs it.
 
 3. Describe the task, read the ranking, then measure the winner instead of trusting it:
 
    ```text
-   describe → ranked techniques with reasons → compiled prompt → measured result → optimized prompt
+   → 1 DESCRIBE → 2 RECOMMEND → 3 COMPILE → 4 BENCHMARK → OPTIMIZE
    ```
 
-   The same four steps are `recommend`, `compile`, `benchmark` and `optimize` on the command line.
+   **DESCRIBE** parses your task. **RECOMMEND** ranks techniques. **COMPILE** builds the prompt. **BENCHMARK** measures on your model. **OPTIMIZE** searches for better variants.
 
-## Prompt builder UI for local models
+## Optimize prompts for your local LLM
 
-`prompt-playoff serve`, or either launcher, opens the same four steps in a browser.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/KazKozDev/prompt-playoff/main/assets/prompt-playoff-ui.gif" alt="The Prompt Playoff web interface producing a schema-first prompt from a plain-language task, with the ranked alternatives below it" width="100%">
-</p>
-
-## Which prompting technique to use for your task
-
-Selection runs in two passes. Hard constraints come first — declared capabilities, tool access, call budget, model class, and whether the evidence is supplied or still has to be fetched. Whatever survives is ranked on what the request looks like: dependent steps, a checkable answer, a fixed output shape, a long input, real cost of error. Not on its task type alone.
-
-Every recommendation and every rejection carries its reasons, and says whether the number behind it was declared or measured:
+Choose the task type, describe what you need, and let Prompt Playoff pick the best technique.
 
 ```text
-Schema-first output (structured.schema-first)
-  • Strong declared fit for structured_extraction.
-  • Built for this request being exact format, verifiable.
-  • Unmeasured prior 0.91 from: task:structured_extraction, provider:ollama, default.
-  • Executes as single (1 call minimum).
+Task type:      structured_extraction, summarization, classification, reasoning
+Input:          plain language description
+Output:         ranked techniques, compiled prompt, measured quality
 ```
 
-The registry ships **29 techniques** across 7 execution strategies — 13 `single`, 11 `multi_stage`, and one each of `self_consistency`, `map_reduce`, `tool_loop`, `program_of_thought` and `tree_search`. 22 of them carry the paper they come from, and the catalog links it.
+Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25+ more — ranked on your data, not on a blog post's opinion.
 
-Compilation then turns the task into the prompt *that technique implies* — its own blocks, stages and call count. Schema-first and map-reduce do not produce the same prompt with a different label on it:
+Click **→ 1 DESCRIBE** to parse your task. **→ 2 RECOMMEND** ranks techniques with reasons. **→ 3 COMPILE** builds the actual prompt. **→ 4 BENCHMARK** measures quality and reliability on your Ollama model.
 
-```bash
-prompt-playoff compile --task structured_extraction \
-  --input-file examples/book_excerpt.txt --schema-file examples/entity_schema.json \
-  --technique structured.schema-first --capabilities structured_output,system_messages
-```
+The optimization is saved locally, so you can revisit it later. A full benchmark can take minutes to hours depending on dataset size and model speed.
 
-## Benchmark and compare prompt techniques on your own model
+## Thirty-two prompting techniques out of the box
 
-`benchmark` runs the compiled prompt on a dataset and prints what the model actually did next to what the registry claimed:
+Prompt Playoff ships with techniques from research papers, ready to use. Click a thumbnail for the full technique card.
 
-```bash
-prompt-playoff benchmark --model llama3.2:3b --model-class small --dataset entity-extraction --repeats 3
-```
+<table>
+  <tr>
+    <td align="center"><a href="docs/techniques.md#chain-of-thought"><img src="assets/techniques/thumbs/chain-of-thought.png" alt="Chain of Thought" width="260"></a><br><code>reasoning.cot</code></td>
+    <td align="center"><a href="docs/techniques.md#self-consistency"><img src="assets/techniques/thumbs/self-consistency.png" alt="Self Consistency" width="260"></a><br><code>reasoning.self-consistency</code></td>
+    <td align="center"><a href="docs/techniques.md#react"><img src="assets/techniques/thumbs/react.png" alt="ReAct" width="260"></a><br><code>reasoning.react</code></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/techniques.md#schema-first"><img src="assets/techniques/thumbs/schema-first.png" alt="Schema First" width="260"></a><br><code>structured.schema-first</code></td>
+    <td align="center"><a href="docs/techniques.md#direct"><img src="assets/techniques/thumbs/direct.png" alt="Direct" width="260"></a><br><code>direct.explicit-constraints</code></td>
+    <td align="center"><a href="docs/techniques.md#few-shot"><img src="assets/techniques/thumbs/few-shot.png" alt="Few Shot" width="260"></a><br><code>direct.few-shot</code></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/techniques.md#reflexion"><img src="assets/techniques/thumbs/reflexion.png" alt="Reflexion" width="260"></a><br><code>refinement.reflexion</code></td>
+    <td align="center"><a href="docs/techniques.md#maieutic"><img src="assets/techniques/thumbs/maieutic.png" alt="Maieutic" width="260"></a><br><code>reasoning.maieutic</code></td>
+    <td align="center"><a href="docs/techniques.md#graph-of-thought"><img src="assets/techniques/thumbs/graph-of-thought.png" alt="Graph of Thought" width="260"></a><br><code>reasoning.graph-of-thought</code></td>
+  </tr>
+</table>
+
+## Use with business catalogue datasets
+
+After describing the task, click **→ BENCHMARK**. Prompt Playoff loads the matching business dataset from the catalogue.
 
 ```text
-                Measured: Schema-first output on llama3.2:3b
-  Metric                      Measured   Declared
-  quality                        0.867      0.840
-  reliability                    1.000      0.960
-  contract pass rate             1.000          —
-  stability across repeats       1.000          —
-  mean latency (s)               0.936          —
-  mean tokens                    204.3          —
+Support desk:    classify support tickets
+Invoice reader:  extract fields from invoices
+Legal reasoning: reason about contract clauses
 ```
 
-**quality** is the headline grader for that data — `field_f1` here, so 3 of 4 entities scores 0.86 rather than 0. **reliability** is contract pass rate × stability, because a technique that emits valid JSON every time but a different answer each time is not reliable. **stability** needs `--repeats > 1` and reports the share that produced the modal answer. Latency, tokens and calls are summed across every call the technique makes, so a three-sample technique reports three calls' worth of cost.
+Review the dataset before starting the benchmark: check the input format, verify the expected output, and ensure the grader matches your use case.
 
-`compare` ranks several techniques on one dataset, weighted by your priorities:
+- `business-catalogue` tag marks all business datasets
+- Each dataset has input/expected/graders structure
+- Graders include exact_match, contains_all, field_f1, and LLM judges
 
-```bash
-prompt-playoff compare --model llama3.2:3b --model-class small --dataset entity-extraction \
-  --techniques structured.schema-first,structured.few-shot-repair,reasoning.self-consistency,direct.explicit-constraints
-```
+The benchmark belongs to this task and model pair. If you configure an external provider, **LLM grading** can evaluate open-ended outputs; Prompt Playoff reports scores without modifying your prompt.
+
+## Measure prompt quality side by side
+
+After **→ 4 BENCHMARK** finishes, open **Results**. Each technique shows quality, reliability, and detailed grades next to each other.
+
+Proposed winners can be inspected manually, compiled into a final prompt, or optimized with DSPy backends. Optimization is restricted to the technique's structure; it cannot invent another technique.
 
 ```text
-  Technique                       Weighted  Quality  Reliability  Latency s  Tokens  Calls
-  direct.explicit-constraints        0.962    0.891        1.000       0.64     127    1.0
-  structured.schema-first            0.833    0.867        1.000       1.11     204    1.0
-  structured.few-shot-repair         0.711    0.700        1.000       1.51     366    2.0
-  reasoning.self-consistency         0.706    0.775        1.000       2.08     499    3.0
+Technique → Quality → Reliability → Grades → Compile → Optimize
 ```
 
-That contradicts the registry, which priors `structured.schema-first` at 0.95 for this task: on a 3B model the plainer technique wins. Results are recorded to `benchmark-results/measurements.json` and reused for later ranking, labelled `measured` instead of `prior only`.
+Start with the headline quality metric, inspect the compiled prompt, and measure only the top candidates. You can export the prompt directly or run optimization for incremental improvements. Prompt Playoff never replaces your chosen technique automatically.
 
-Eleven datasets ship with the package, from a 6-example smoke set to `entity-extraction-hard`, `multiconer-en` and `few-nerd` at 200 each. `prompt-playoff list-datasets` prints their sizes and how many carry gold answers.
-
-## Automatic prompt optimization, natively or with DSPy
-
-```bash
-prompt-playoff optimize --model llama3.2:3b --model-class small \
-  --dataset entity-extraction --technique structured.schema-first \
-  --rounds 3 --token-cost 0.3 --export my-technique.yaml
-```
-
-The loop: seed candidates (baseline, plus few-shot demos bootstrapped from the train examples the baseline already gets right) → benchmark each on the train split → score with your priorities over measured quality, reliability, latency and tokens → feed the worst failures back to the model and ask for better instructions → repeat → verify the winner on data it never optimized against.
-
-```text
-  Metric (held-out)   Baseline   Optimized     Delta
-  quality                1.000       1.000    +0.000
-  reliability            1.000       1.000    +0.000
-  mean tokens          211.500     201.000   -10.500
-  mean latency s         0.826       0.741    -0.086
-```
-
-Only instruction blocks are mutable — a candidate cannot win by dropping the output contract. The Pareto front over quality, reliability, tokens and latency is reported next to the scalarized winner, so a cheaper-but-slightly-worse prompt stays visible instead of being averaged away.
-
-`--backend` swaps the search algorithm and nothing else — `native`, or three DSPy optimizers ([which to pick](docs/integrations.md)). The prompt is still built by this project's compiler, executed by the technique's own strategy and graded by its graders.
-
-```bash
-prompt-playoff optimize --model llama3.2:3b --model-class small \
-  --dataset entity-extraction --backend dspy:gepa --max-metric-calls 60
-```
-
-On `entity-extraction-hard` (40 examples, 26 train / 14 held out, `llama3.2:3b`), MIPROv2 beat the native loop by **+0.064 F1** over three repeats, using about half the model calls. Neither recovered the dataset's annotation rules, because the proposer was the same 3B model — [full write-up with the failure modes](docs/benchmarks/native-vs-mipro.md).
-
-That last point is why the proposer is a separate profile. `PROMPT_PLAYOFF_ENGINE_MODEL` puts a stronger model on the job of writing candidate prompts while the numbers still describe your target model, and a run where the two are the same says so in its notes:
-
-> Candidate prompts were written by llama3.2:3b, the same model the numbers describe. Part of the gain may be that model's own phrasing rather than a better prompt.
-
-Selection, compilation and grading stay LLM-free either way: the engine never chooses the technique and never scores anything.
-
-## Prompt regression testing in CI
-
-Commit `prompt-playoff.yaml` with the model and the thresholds your build promises:
-
-```yaml
-version: 1
-model:
-  provider: ollama
-  model_id: llama3.2:3b
-  model_class: small
-  capabilities: [structured_output, system_messages]
-checks:
-  - name: entities-schema-first
-    technique: structured.schema-first
-    task: structured_extraction
-    dataset: entity-extraction
-    repeats: 3
-    require:
-      quality_min: 0.85
-      reliability_min: 0.95
-      mean_total_tokens_max: 300
-      p95_latency_seconds_max: 2.0
-```
-
-```bash
-prompt-playoff check
-```
-
-Exit code `0` means every bound passed, `1` means at least one regression, `2` means invalid configuration such as an unknown dataset or an unreachable provider. Requirement names are explicit fields ending in `_min` or `_max`, and an empty `require` block is an error — a check can never pass while enforcing nothing. `--json` prints machine-readable output; `--update` rewrites the committed bounds to the current measurements, preserving YAML comments and key order.
-
-For wider matrices, `export-promptfoo` writes a promptfoo project whose assertions call this project's graders, so both tools report the same `field_f1` rather than two metrics sharing a name — [docs/integrations.md](docs/integrations.md).
-
-## Build datasets from traces and public corpora
-
-```bash
-prompt-playoff import-traces --output datasets/from-prod.jsonl --limit 200
-prompt-playoff import-hf multiconer-en --output datasets/multiconer.jsonl --limit 200
-```
-
-Tracing to Langfuse or Phoenix makes every call of every technique its own span, and `import-traces` turns observed traffic into a dataset — with `expected: null` and tagged `unreviewed`, because a trace has no gold answer and pretending otherwise would benchmark a model against its own past mistakes. Four presets convert Hugging Face corpora instead: MultiCoNER v2 and Few-NERD for extraction, GSM8K for reasoning, MBPP for code graded by running its own tests. Both paths are set up in [docs/integrations.md](docs/integrations.md).
-
-## How it differs from DSPy, promptfoo and PromptWizard
-
-**DSPy** optimizes the prompt inside a module you have already chosen — you write `dspy.ChainOfThought` or `dspy.ReAct` yourself. Prompt Playoff makes that choice for you, deterministically and with its reasons printed, then hands the winner to DSPy's search if you want it.
-
-**promptfoo** measures prompts you have already written: a test harness, not a designer, and it does not tell you which technique the task needs. Prompt Playoff produces the prompt to be measured, and `export-promptfoo` hands it over.
-
-**PromptWizard** and other agent-driven optimizers ask an LLM to critique and rewrite instructions. Prompt Playoff does that too, but only during optimization — never to choose the technique, never to score an answer.
-
-### When not to use it
-
-Do not use it for one prompt on one task that already works — selection needs something to rank against, and every number here comes from examples with expected answers. It pays for itself when several techniques are plausible, when you have a dataset with gold answers, when picking wrong is expensive, or when the choice has to be defended to somebody else.
-
-It is also the wrong tool for open-ended prose: quality here is field overlap, grounding overlap, contract compliance and constraint coverage, not whether the writing is good.
+Optional quality checks include grader agreement, sample difficulty analysis, and model variance. They are diagnostics: they do not change the ranking or prevent export.
 
 ## How it works
 
-One Python package with a Typer CLI, a FastAPI service and a YAML registry.<br>
-The **normalizer** turns a description into a `TaskProfile`.<br>
-The **selector** filters on hard constraints, then ranks on the shape of the request, and prints a reason for every accept and reject.<br>
-The **compiler** builds the blocks and stages that technique implies, and a strategy executor issues its 1..n provider calls.<br>
-Deterministic **graders** score the result, and the measurement is stored where ranking, the optimizer and the CI gate all read it.
+The CLI or browser sends your task description to the Python backend running on your computer.<br>
+**DESCRIBE** parses the task type and constraints.<br>
+**RECOMMEND** ranks techniques using heuristics and priors.<br>
+**COMPILE** builds the actual prompt from the technique template.<br>
+**BENCHMARK** runs on the dataset and computes quality metrics.<br>
+SQLite saves the optimization, rankings, compiled prompts, and measurements locally.
 
 ```text
-Task → TaskProfile → Selector → Compiled prompt → Model calls → Graders → Measurement
+Task → Technique selection → Prompt compilation → Benchmark → Human review → Export
 ```
 
-One module per step, mapped in [docs/architecture.md](docs/architecture.md). Adding a technique is one YAML file and no Python — see [docs/extending.md](docs/extending.md).
+<details>
+<summary>Technical architecture</summary>
+
+### Optimization pipeline
+
+1. **Describe** — the parser reads your task description and extracts type, constraints, and capabilities. A structured extraction task gets different priors than a reasoning task.
+2. **Recommend** — the Selector scores all techniques against your task profile. Heuristics consider task type, model capabilities, and prior performance. The top 5 techniques are shown with reasons.
+3. **Compile** — the PromptCompiler renders the technique template with your task description. Each technique has stages (e.g., cot has reasoning → answer) that become numbered model calls.
+4. **Benchmark** — the dataset loader reads JSONL examples. The service runs each example through the compiled prompt. Graders score outputs: exact_match for classification, contains_all for extraction, chrF for summarization, LLM judges for open-ended tasks.
+5. **Optimize** — optional DSPy backend (MIPROv2, GEPA) searches for better prompt variants. The optimizer modifies instructions and demonstrations while preserving the technique structure.
+
+```text
+User task
+   ↓
+Parser → TaskProfile
+   ↓
+Selector → ranked Techniques
+   ↓
+Compiler → compiled Prompt
+   ↓
+Benchmark → quality, reliability, grades
+   ↓
+SQLite + JSON export
+```
+
+### Storage and measurements
+
+- `prompt_playoff.db` stores optimizations, task profiles, technique rankings, and measurement results.
+- `measurements/` stores per-experiment JSONL with detailed scores.
+- Quality is the headline grader's mean score (e.g., exact_match accuracy).
+- Reliability measures variance across dataset subsets.
+- Grades break down performance by grader (e.g., terminology, fluency, completeness).
+
+### Important files
+
+- `start.command` / `start.bat` — cross-platform launchers for macOS, Windows, Linux.
+- `src/prompt_playoff/service.py` — core optimization service, selection, compilation, benchmarking.
+- `src/prompt_playoff/selector.py` — technique ranking with heuristics and priors.
+- `src/prompt_playoff/optimizer.py` — prompt optimization with native and DSPy backends.
+- `src/prompt_playoff/graders.py` — exact_match, contains_all, field_f1, chrF, LLM judges.
+- `src/prompt_playoff/business_catalog.py` — business dataset catalogue.
+- `src/prompt_playoff/technique_store.py` — technique registry from YAML files.
+- `src/prompt_playoff/data/techniques/` — 32 technique definitions.
+- `src/prompt_playoff/data/datasets/` — bundled JSONL datasets.
+- `src/prompt_playoff/data/static/` — web interface HTML/CSS/JS.
+- `tests/` — unit and integration tests.
+
+</details>
+
+<details>
+<summary>Configuration</summary>
+
+| Setting | Default | What it means |
+|---|---|---|
+| App address | `http://localhost:8000` | Local browser interface; set `--host` and `--port` to change |
+| Ollama address | `http://localhost:11434` | Local server that runs the language models |
+| Model profile | keyword parsing only | Model capabilities detected from name (e.g., `llama3.2:3b` → 3B params, instruct) |
+| Dataset directory | `src/prompt_playoff/data/datasets/` | JSONL datasets for benchmarking |
+| Techniques directory | `src/prompt_playoff/data/techniques/` | YAML technique definitions |
+| Measurements directory | `measurements/` | JSONL export of benchmark results |
+| Engine model | unset | Model that reads descriptions, authors prompts, and proposes rewrites |
+| Chunk size | dataset-defined | Examples per benchmark (typically 50-100) |
+| Grader | task-dependent | exact_match for classification, chrF for summarization, LLM for open-ended |
+
+</details>
+
+<details>
+<summary>Requirements</summary>
+
+- **macOS, Windows, or Linux** for the launchers. Any platform with Python 3.11+ for manual install.
+- **Ollama** running on the same computer for measurement.
+- The minimum local setup is one instruct model (e.g., `llama3.2:3b`). For better discrimination, use a larger model (7B+).
+- A stack that personally produced good results for the author: Benchmark `llama3.1:8b` (8B), Optimization `llama3.1:70b` (70B), Engine `qwen2.5:32b` (32B).
+- Enough memory and disk space for the models you choose.
+- Internet access on the first run to download Python dependencies and Ollama models.
+- Optional: DSPy for advanced optimization, Hugging Face datasets for importing external corpora, Langfuse/OpenTelemetry for tracing.
+
+The launchers use an existing Python 3.11+ installation when available. Otherwise, they install Python via `uv`.
+
+</details>
+
+<details>
+<summary>Limitations</summary>
+
+- Prompt Playoff is not a one-click optimizer. A good prompt needs the staged workflow (describe → recommend → compile → benchmark → optimize); expecting automatic perfection will disappoint.
+- Benchmark quality depends heavily on the model. A stack that personally produced good results for the author is Benchmark `llama3.1:8b` (8B), Optimization `llama3.1:70b` (70B), Engine `qwen2.5:32b` (32B). Smaller models still run; expect less discrimination between techniques.
+- A long benchmark keeps going if you close the browser tab; use the Experiments page to check progress after an interrupt or server restart. A full machine sleep or Ollama crash still stops the measurement.
+- Prompt Playoff accepts JSONL datasets. External datasets must be converted to input/expected/graders format.
+- Benchmarking a technique on 100 examples can take minutes to hours depending on model speed and dataset complexity.
+- Technique rankings can still miss edge cases or favor techniques that match the grader rather than your actual use case. Review compiled prompts before deploying.
+- Large Ollama models need substantial memory and disk space; Prompt Playoff cannot make a model fit hardware that is too small.
+- Optional LLM grading sends examples to the selected API provider and may cost money.
+- DSPy optimization is optional, requires additional dependencies, and may take many model calls to converge.
+- Prompt Playoff does not currently provide an official Docker image.
+
+</details>
+
+<details>
+<summary>Manual installation, Docker, development setup</summary>
+
+### Manual installation
 
 ```bash
-prompt-playoff new-technique structured.my-technique
-prompt-playoff validate-registry     # placeholders, strategies, graders, render probe
+git clone https://github.com/KazKozDev/prompt-playoff.git
+cd prompt-playoff
+pip install -e '.[all]'
+prompt-playoff serve
 ```
 
-The HTTP API mirrors the CLI, with benchmark, compare and optimize returning a job id — [docs/architecture.md](docs/architecture.md). Everything configurable, including the provider list and the engine-model variables, is in [docs/configuration.md](docs/configuration.md).
+`prompt-playoff serve` starts the web interface at `http://localhost:8000`.
 
-## Limitations
+The platform launchers use the same setup:
 
-- Ranking still uses declared priors for any (technique, task, model) triple you have not benchmarked. The UI and the CLI mark those `prior only`.
-- Of the 29 techniques, 6 carry `benchmarked` evidence, 16 `documented` and 7 `heuristic`. The label is on every row; do not read a prior as a measurement.
-- `entity-extraction-hard` (200 examples) and `multiconer-en` (200, imported) are the datasets with real headroom. The others, especially the 6-example `entity-extraction`, are demonstrations.
-- The optimizer is only as good as the model writing its proposals. With the target model doubling as the proposer, expect rephrasings rather than genuine rule discovery — use `--engine-model` to put a stronger model on that job.
-- `tool_loop` executes only tools present in `prompt_playoff.tools`, which ships with a calculator. Register your own to benchmark real agent work.
-- Graders are deterministic by design. There is no LLM judge, so open-ended generation cannot be scored on prose quality at all.
-- The promptfoo export covers a technique's first stage only. Multi-call techniques must be measured here.
-- Trace import reads from Langfuse only. Phoenix is write-only in this direction — spans go out, datasets do not come back.
+- macOS: double-click `start.command`
+- Linux: run `./start.command`
+- Windows: double-click `start.bat`
+
+To use optional integrations, copy `.env.example` to `.env` and add the provider keys.
+
+### Docker
+
+This repository does not currently include a Dockerfile or published image. Use the native launcher so Prompt Playoff can detect Ollama, installed models, and local hardware.
+
+### Development setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+pytest tests -q
+ruff check .
+ruff format --check .
+```
+
+The test suite does not require Ollama, downloaded models, or network access.
+
+</details>
 
 ## License
 
-Prompt Playoff is free and open-source software licensed under the [MIT License](LICENSE).
+Prompt Playoff is free and open-source software licensed under the [MIT License](LICENSE) (`MIT`).
 
 <br><br>
 
 <p align="center">
-  <a href="https://pypi.org/project/prompt-playoff/"><img alt="PyPI" src="https://img.shields.io/pypi/v/prompt-playoff"></a>
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
   <a href="https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KazKozDev/prompt-playoff/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB.svg?logo=python&amp;logoColor=white"></a>
-  <a href="https://ollama.com/"><img alt="Ollama" src="https://img.shields.io/badge/Ollama-local-000000.svg"></a>
-  <a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/Ruff-passing-D7FF64.svg"></a>
+  <a href="https://ollama.ai/"><img alt="Ollama" src="https://img.shields.io/badge/Ollama-supported-green.svg"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/KazKozDev/prompt-playoff/issues">Issues</a> ·
+  <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/CHANGELOG.md">Changelog</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/CONTRIBUTING.md">Contributing</a> ·
-  <a href="docs/configuration.md">Configuration</a> ·
-  <a href="docs/extending.md">Extending</a> ·
-  <a href="docs/integrations.md">Integrations</a> ·
-  <a href="docs/architecture.md">Architecture</a> ·
-  <a href="references/README.md">Papers</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE">LICENSE</a> ·
+  <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/docs/architecture.md">Architecture</a> ·
   <a href="https://www.linkedin.com/in/kazkozdev/">LinkedIn</a>
 </p>
