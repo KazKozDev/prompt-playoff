@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from prompt_playoff.api import app
@@ -188,20 +189,24 @@ def test_pairwise_judge_is_blind_and_enters_review(client: TestClient, monkeypat
     assert reviews[0]["status"] == "pending"
 
 
-def test_release_api_requires_human_review_before_approval(client: TestClient):
+def test_registering_a_release_asks_nobody_to_approve_their_own_work(client: TestClient):
+    """One user cannot be two, so a self-approval established nothing.
+
+    Registering used to raise a review item asking the same person, at the same
+    keyboard, to approve what they had just registered — and advancing was then
+    refused until they clicked it. The queue's own guide already said approving
+    there does not promote a release; the backend disagreed with it.
+    """
     release = client.post(
         "/v1/releases",
         json={"name": "support", "technique_id": "direct", "prompt": {"text": "v1"}},
     ).json()
+    assert [item for item in client.get("/v1/reviews").json() if item["kind"] == "release"] == []
+
     assert (
         client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"}).status_code
         == 200
     )
-    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
-    assert blocked.status_code == 409
-
-    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
-    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
     approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
@@ -474,8 +479,13 @@ def test_a_release_below_the_committed_bar_cannot_be_approved(client: TestClient
     assert "0.85" in blocked.json()["detail"]
 
 
-def test_a_release_over_the_bar_still_needs_a_person(client: TestClient):
-    """The gate is added to the human one, not substituted for it."""
+def test_a_release_over_the_committed_bar_advances_on_the_bar_alone(client: TestClient):
+    """The committed thresholds are the whole gate.
+
+    They are the same numbers `prompt-playoff check` enforces in CI, applied to
+    the run this release cites — so clearing them here means clearing them there.
+    A second click by the author never established that.
+    """
     _commit_thresholds(quality_min=0.85)
     experiment = _record_a_run(quality=0.91)
     release = client.post(
@@ -490,14 +500,9 @@ def test_a_release_over_the_bar_still_needs_a_person(client: TestClient):
     client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
     assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "passed"
 
-    blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
-    assert blocked.status_code == 409
-    assert "Human Review" in blocked.json()["detail"]
-
-    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
-    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
     approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
 
 
 def test_a_release_with_a_bar_but_no_run_cannot_be_approved(client: TestClient):
@@ -514,18 +519,23 @@ def test_a_release_with_a_bar_but_no_run_cannot_be_approved(client: TestClient):
     assert "cites no recorded run" in blocked.json()["detail"]
 
 
-def test_a_technique_with_no_committed_bar_is_gated_by_the_person_alone(client: TestClient):
-    """Adding the gate must not stop projects that never configured one."""
+def test_a_technique_with_no_committed_bar_advances_and_says_there_was_none(client: TestClient):
+    """A project that never committed thresholds is recorded, not blocked.
+
+    There is nothing to enforce, and inventing a bar would be worse than saying
+    so. The gate says `not_configured` and the manifest hands over a `checks:`
+    block to commit, which is the constructive answer to having no gate.
+    """
     _commit_thresholds(technique="structured.schema-first")
     release = client.post(
         "/v1/releases",
         json={"name": "support", "technique_id": "direct", "prompt": {"text": "v1"}},
     ).json()
     client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
-    assert client.get(f"/v1/releases/{release['id']}/gate").json()["status"] == "not_configured"
+    gate = client.get(f"/v1/releases/{release['id']}/gate").json()
+    assert gate["status"] == "not_configured"
+    assert "no bar to clear" in gate["reason"]
 
-    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
-    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
     approved = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert approved.status_code == 200
 
@@ -656,13 +666,140 @@ def test_an_approved_release_keeps_the_run_it_was_approved_on(client: TestClient
         },
     ).json()
     client.post(f"/v1/releases/{release['id']}/action", json={"action": "test"})
-    review = next(item for item in client.get("/v1/reviews").json() if item["kind"] == "release")
-    client.post(f"/v1/reviews/{review['id']}", json={"action": "approve"})
     client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
 
     refused = client.post(f"/v1/releases/{release['id']}/cite", json={"experiment_id": experiment})
     assert refused.status_code == 409
     assert "keeps the evidence it was approved on" in refused.json()["detail"]
+
+
+def test_a_queue_written_by_an_older_version_still_opens(client: TestClient):
+    """A file holding a retired kind is still the user's file.
+
+    Releases used to raise approval items. Narrowing the kind without reading
+    the old rows leniently turned every existing install's Reviews screen into
+    a 500 on the first request.
+    """
+    from prompt_playoff.quality import QualityStore
+
+    store = QualityStore(Path(os.environ["PROMPT_PLAYOFF_QUALITY"]))
+    data = store._load_unlocked()
+    data["reviews"].append(
+        {
+            "id": "review_rel_old",
+            "kind": "release",
+            "created_at": "2026-01-01T00:00:00Z",
+            "title": "Approve release support v1",
+            "status": "pending",
+            "payload": {"release_id": "rel_old"},
+        }
+    )
+    data["reviews"].append(
+        {
+            "id": "review_judge_1",
+            "kind": "judge",
+            "created_at": "2026-01-02T00:00:00Z",
+            "title": "Confirm verdict",
+            "status": "pending",
+            "payload": {},
+        }
+    )
+    store._save_unlocked(data)
+
+    listed = client.get("/v1/reviews")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == ["review_judge_1"]
+
+    # Answering the readable one leaves the retired row in the file rather than
+    # quietly deleting history nobody asked to lose.
+    client.post("/v1/reviews/review_judge_1", json={"action": "approve"})
+    kinds = [item["kind"] for item in store._load_unlocked()["reviews"]]
+    assert "release" in kinds
+
+
+def test_the_review_queue_holds_only_what_a_model_asked_a_person(client: TestClient):
+    """Reviews is for decisions a model could not make, not for self-approval."""
+    from prompt_playoff.quality import ReviewItem
+
+    kinds = ReviewItem.model_fields["kind"].annotation.__args__
+    assert set(kinds) == {"dataset", "judge", "regression"}
+
+
+def test_a_release_exports_a_manifest_and_a_checks_block_to_commit(client: TestClient):
+    """The register stops being the record; the repository becomes it."""
+    _commit_thresholds(quality_min=0.85)
+    experiment = _record_a_run(quality=0.91)
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "Support Desk",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+
+    manifest = client.get(f"/v1/releases/{release['id']}/manifest").json()
+    assert manifest["filename"] == "support-desk-v1.release.json"
+    assert manifest["checks_filename"] == "support-desk-v1.checks.yaml"
+
+    document = json.loads(manifest["content"])
+    assert document["prompt"]["fingerprint"] == release["prompt_hash"]
+    assert document["evidence"]["verdict"] == "measured"
+    assert document["evidence"]["experiment_id"] == experiment
+    assert document["evidence"]["dataset_changed_since"] is False
+    assert document["gate"]["status"] == "passed"
+
+    # The checks file is the bar, in the shape `prompt-playoff check` reads.
+    committed = yaml.safe_load(manifest["checks"])
+    assert committed["checks"][0]["technique"] == "direct"
+    assert committed["checks"][0]["require"]["quality_min"] == 0.85
+
+
+def test_a_manifest_says_so_when_the_numbers_describe_another_prompt(client: TestClient):
+    """A file that leaves the machine carries its own caveats or none survive."""
+    _commit_thresholds(quality_min=0.85)
+    experiment = _record_a_run(quality=0.99, measured={"text": "a different prompt"})
+    release = client.post(
+        "/v1/releases",
+        json={
+            "name": "support",
+            "technique_id": "direct",
+            "prompt": RELEASED_PROMPT,
+            "experiment_id": experiment,
+        },
+    ).json()
+
+    manifest = client.get(f"/v1/releases/{release['id']}/manifest").json()
+    assert json.loads(manifest["content"])["evidence"]["verdict"] == "indirect"
+    assert any("measured a different prompt" in note for note in manifest["notes"])
+
+
+def test_a_manifest_separates_no_run_at_all_from_the_wrong_run(client: TestClient):
+    """Unfinished work and a misattributed number are not the same warning."""
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": RELEASED_PROMPT},
+    ).json()
+    assert release["evidence"] == "unverified"
+
+    notes = client.get(f"/v1/releases/{release['id']}/manifest").json()["notes"]
+    assert any("cites no recorded run" in note for note in notes)
+    assert not any("measured a different prompt" in note for note in notes)
+
+
+def test_a_project_with_no_committed_bar_gets_one_to_paste(client: TestClient):
+    _commit_thresholds(technique="structured.schema-first")
+    release = client.post(
+        "/v1/releases",
+        json={"name": "support", "technique_id": "direct", "prompt": RELEASED_PROMPT},
+    ).json()
+
+    manifest = client.get(f"/v1/releases/{release['id']}/manifest").json()
+    assert any("prompt-playoff.yaml" in note for note in manifest["notes"])
+    committed = yaml.safe_load(manifest["checks"])
+    assert committed["checks"][0]["name"] == "support-v1"
+    assert committed["checks"][0]["require"] == {}
 
 
 def test_a_bar_cleared_on_rows_that_have_since_changed_is_not_cleared(client: TestClient):

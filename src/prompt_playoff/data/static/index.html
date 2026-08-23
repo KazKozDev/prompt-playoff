@@ -117,54 +117,47 @@
     </div>
     <nav class="lifecycle-nav" data-testid="lifecycle-nav" aria-label="Prompt delivery lifecycle">
       <div class="sidebar-group" data-section="prompt">
-        <button class="sidebar-section" type="button" data-section-toggle="prompt" aria-expanded="false" aria-controls="section-prompt"><span class="section-name">Prompt</span><span class="section-count" data-section-count="prompt"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <button class="sidebar-section" type="button" data-section-toggle="prompt" aria-expanded="false" aria-controls="section-prompt"><span class="section-name">Prompt Studio</span><span class="section-count" data-section-count="prompt"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-prompt">
         <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="nav-prompt">Prompt text</a>
         <a href="#report" data-global-tab="report" data-screen="report" data-testid="nav-report">Measurement</a>
-        <a href="#comparison" data-global-tab="comparison" data-screen="comparison" data-testid="nav-comparison">Method comparison</a>
+        <a href="#comparison" data-global-tab="comparison" data-screen="comparison" data-testid="nav-comparison">Technique comparison</a>
         <a href="#optimization" data-global-tab="optimization" data-screen="optimization" data-testid="nav-optimization">Optimization</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="examples">
         <button class="sidebar-section" type="button" data-section-toggle="examples" aria-expanded="false" aria-controls="section-examples"><span class="section-name">Datasets</span><span class="section-count" data-section-count="examples"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-examples">
-        <!-- The order is the doctrine: what is already here, then the three ways
-             to get rows of your own in descending order of how much a score on
-             them says about your work, and last the tool's own benchmarks, which
-             say nothing about it at all. -->
+        <!-- Two outcomes: inspect what is here, or add material. Sources and
+             benchmark provenance live one level inside those outcomes. -->
         <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="nav-dataset-library">Dataset library</a>
-        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload" data-testid="nav-dataset-upload">Upload your own</a>
-        <a href="#dataset-hub" data-global-tab="dataset-hub" data-screen="dataset-hub" data-testid="nav-dataset-hub">Import from Hugging Face</a>
-        <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder" data-testid="nav-dataset-builder">Build datasets</a>
-        <a href="#dataset-bundled" data-global-tab="dataset-bundled" data-screen="dataset-bundled" data-testid="nav-dataset-bundled">Shipped with the tool</a>
+        <a href="#dataset-add" data-global-tab="dataset-add" data-screen="dataset-add" data-testid="nav-dataset-add">Add dataset</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="check">
-        <button class="sidebar-section" type="button" data-section-toggle="check" aria-expanded="false" aria-controls="section-check"><span class="section-name">Check</span><span class="section-count" data-section-count="check"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <button class="sidebar-section" type="button" data-section-toggle="check" aria-expanded="false" aria-controls="section-check"><span class="section-name">Evaluation</span><span class="section-count" data-section-count="check"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-check">
-        <a href="#history" data-global-tab="history" data-screen="history" data-testid="nav-history">Results</a>
-        <a href="#judge" data-global-tab="judge" data-screen="judge" data-testid="nav-judge">Pairwise judging</a>
-        <a href="#model-matrix" data-global-tab="model-matrix" data-screen="model-matrix" data-testid="nav-model-matrix">Model matrix</a>
-        <a href="#context-lab" data-global-tab="context-lab" data-screen="context-lab" data-testid="nav-context-lab">Context lab</a>
-        <a href="#analysis" data-global-tab="analysis" data-screen="analysis" data-testid="nav-analysis">Significance</a>
+        <a href="#results/history" data-global-tab="results" data-screen="results" data-mode="history" data-testid="nav-results">Results</a>
+        <a href="#judge" data-global-tab="judge" data-screen="judge" data-testid="nav-judge">Answer judging</a>
+        <a href="#test-lab/models" data-global-tab="test-lab" data-screen="test-lab" data-mode="models" data-testid="nav-test-lab">Test lab</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="ship">
         <button class="sidebar-section" type="button" data-section-toggle="ship" aria-expanded="false" aria-controls="section-ship"><span class="section-name">Production</span><span class="section-count" data-section-count="ship"></span><span class="section-caret" aria-hidden="true"></span></button>
+        <!-- Two rows, because there are two things here: turning a measured
+             prompt into files a repository holds, and the decisions a model
+             asked a person to make. Regressions moved to Results, where the
+             runs they compare already live. -->
         <div class="sidebar-links" id="section-ship">
-        <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="nav-regressions">Regressions</a>
+        <a href="#ship/releases" data-global-tab="ship" data-screen="ship" data-mode="releases" data-testid="nav-ship">Ship</a>
         <a href="#reviews" data-global-tab="reviews" data-screen="reviews" data-testid="nav-reviews">Reviews</a>
-        <a href="#releases" data-global-tab="releases" data-screen="releases" data-testid="nav-releases">Releases</a>
-        <a href="#production" data-global-tab="production" data-screen="production" data-testid="nav-production">Spot checks</a>
         </div>
       </div>
       <div class="sidebar-group" data-section="reference">
         <button class="sidebar-section" type="button" data-section-toggle="reference" aria-expanded="false" aria-controls="section-reference"><span class="section-name">Docs</span><span class="section-count" data-section-count="reference"></span><span class="section-caret" aria-hidden="true"></span></button>
         <div class="sidebar-links" id="section-reference">
         <a href="#techniques" data-global-tab="techniques" data-screen="techniques" data-testid="nav-techniques">Techniques</a>
-        <a href="#help" data-global-tab="help" data-screen="help" data-testid="nav-help">User Guide</a>
-        <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation" data-testid="nav-evaluation-guide">Evaluation guide</a>
-        <a href="#prompt-vs-finetuning" data-global-tab="prompt-vs-finetuning" data-screen="prompt-vs-finetuning" data-testid="nav-prompt-vs-finetuning">Prompt vs Fine-Tuning</a>
+        <a href="#guides/user" data-global-tab="guides" data-screen="guides" data-mode="user" data-testid="nav-guides">Guides</a>
         </div>
       </div>
     </nav>
@@ -256,16 +249,14 @@
       </div>
     </main>
 
-    <!-- One entry per section, in the order the rail lists them, so a screen is
-         never in a section the bar cannot show. Reference had no entry, which
-         left Jobs & logs, the guide, Help and Models & keys with nothing lit
-         on a phone; it opens the section screen, which is where its four live. -->
+    <!-- One entry per approved lifecycle section. Docs opens the canonical
+         guide destination; Techniques shares the same active mobile bucket. -->
     <nav class="bottom-nav" aria-label="Primary mobile destinations">
-      <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="bottom-prompt">Prompt</a>
+      <a href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="bottom-prompt">Prompt Studio</a>
       <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="bottom-data">Datasets</a>
-      <a href="#history" data-global-tab="history" data-screen="history" data-testid="bottom-evaluate">Check</a>
-      <a href="#regressions" data-global-tab="regressions" data-screen="regressions" data-testid="bottom-ship">Production</a>
-      <a href="#s-reference" data-global-tab="s-reference" data-screen="settings" data-testid="bottom-reference">Reference</a>
+      <a href="#results/history" data-global-tab="results" data-screen="results" data-mode="history" data-testid="bottom-evaluate">Evaluate</a>
+      <a href="#ship/releases" data-global-tab="ship" data-screen="ship" data-mode="releases" data-testid="bottom-ship">Production</a>
+      <a href="#guides/user" data-global-tab="guides" data-screen="guides" data-mode="user" data-testid="bottom-docs">Docs</a>
     </nav>
   </div>
 </div>

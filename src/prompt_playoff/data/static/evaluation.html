@@ -116,24 +116,28 @@ Release</code></pre>
   <p><b>Datasets → Dataset library</b> is split into three zones: the business catalogue, the business datasets behind those cases, and task benchmarks together with anything you import yourself. Only the last zone is user-managed.</p>
 
   <h3>The business catalogue</h3>
-  <p>The catalogue contains 50 jobs businesses pay a model to do, grouped into ten categories.</p>
+  <p>The shelf is browsed by business work: 12 categories holding 59 tasks between them. Every task stays on the shelf whether or not a packaged dataset measures it — a task marked <em>No dataset</em> is a gap stated on purpose, not an omission.</p>
   <div class="table-scroll">
   <table class="count">
-    <tr><th>Category</th><th>Cases</th><th>The work it stands for</th></tr>
-    <tr><td><b>Email</b></td><td>7</td><td>Sort, classify and draft email</td></tr>
-    <tr><td><b>Customer support</b></td><td>10</td><td>Answer, route and summarise support conversations</td></tr>
-    <tr><td><b>Meetings</b></td><td>6</td><td>Turn transcripts into minutes, actions or translations</td></tr>
-    <tr><td><b>Document routing</b></td><td>2</td><td>Send documents to the workflow that handles them</td></tr>
-    <tr><td><b>Invoices and receipts</b></td><td>3</td><td>Pull structured financial fields out of a scan</td></tr>
-    <tr><td><b>Legal and contracts</b></td><td>8</td><td>Classify clauses, flag risk, answer from a contract</td></tr>
-    <tr><td><b>Finance</b></td><td>3</td><td>Answer questions from filings or tables</td></tr>
-    <tr><td><b>Privacy and compliance</b></td><td>3</td><td>Find information that should not have been sent</td></tr>
-    <tr><td><b>HR and recruiting</b></td><td>1</td><td>Match a résumé against a role</td></tr>
-    <tr><td><b>Marketing and e-commerce</b></td><td>7</td><td>Generate and enrich product content</td></tr>
+    <tr><th>Category</th><th>Tasks</th><th>The work it stands for</th></tr>
+    <tr><td><b>Customer Support</b></td><td>5</td><td>Improve support efficiency and customer satisfaction</td></tr>
+    <tr><td><b>Marketing</b></td><td>5</td><td>Create, analyze and optimize content &amp; campaigns</td></tr>
+    <tr><td><b>Sales &amp; CRM</b></td><td>5</td><td>Qualify leads and improve sales productivity</td></tr>
+    <tr><td><b>Operations</b></td><td>5</td><td>Automate workflows and streamline processes</td></tr>
+    <tr><td><b>Finance &amp; Accounting</b></td><td>5</td><td>Extract, classify and analyze financial data</td></tr>
+    <tr><td><b>Legal &amp; Compliance</b></td><td>5</td><td>Review contracts and ensure compliance</td></tr>
+    <tr><td><b>HR &amp; Recruiting</b></td><td>5</td><td>Attract talent and streamline HR processes</td></tr>
+    <tr><td><b>Product</b></td><td>5</td><td>Understand users and build better products</td></tr>
+    <tr><td><b>Engineering &amp; IT</b></td><td>5</td><td>Build, maintain and support systems</td></tr>
+    <tr><td><b>Data &amp; Analytics</b></td><td>5</td><td>Query data, generate reports and extract insights</td></tr>
+    <tr><td><b>Knowledge &amp; Internal Search</b></td><td>5</td><td>Find information and answer questions across your org</td></tr>
+    <tr><td><b>Localization</b></td><td>4</td><td>Translate and adapt content for global markets</td></tr>
   </table>
   </div>
+  <p>Open a category and it lists its tasks, then the recorded cases underneath: 50 jobs real companies point a model at, drawn from the datasets that category's tasks route to. A category whose tasks route only to task benchmarks has no cases to show, and shows none.</p>
   <p>The catalogue exists because <em>“0.71 on summarization”</em> is a fact about a corpus, while <em>“0.71 on transcript → minutes”</em> is a fact about work.</p>
   <p>Seventeen of the fifty cases have a public dataset that matches the work directly. Twenty-three use the closest useful neighbour. Ten deliberately state that no suitable public dataset was found — a benchmark that does not match the job is worse than no benchmark.</p>
+  <p>The seventeen packaged business datasets are listed in full under <b>Sources and licences</b>, below the shelf, with the repository each was sampled from. Two of them measure work no task on the shelf matches closely enough to route to, so that table is the honest place to find them.</p>
 
   <div class="note">
     <p><b>Business claims are not measurements.</b> Some business cards include published figures from vendor customer stories: contract review reduced from 4 hours to 1, or product-content work reduced from 8 weeks to 8 hours. Those numbers are claims from cited company stories, not measurements by Prompt Playoff. What the application can measure is the row underneath: <em>Can your prompt perform work of that shape on data of that shape?</em></p>
@@ -144,11 +148,11 @@ Release</code></pre>
   <p>Each is a 50–60 row sample of a public Hugging Face repository bundled locally so a first run needs no network. The source repository and licence are shown in the application, and <code>scripts/fetch_business_datasets.py</code> can re-download them.</p>
 
   <div class="note warn">
-    <p><b>A warning about open prose.</b> Many business datasets are graded with <code>token_f1</code>. That is useful, but blunt: a reply, subject line, or meeting summary can have several correct wordings. If the corpus contains one human reference answer, another perfectly good answer may receive a low overlap score. Treat those measurements as a shape check, not a final verdict on writing quality. For open prose, use <b>Check → Pairwise judging</b> or evaluate on examples of your own.</p>
+    <p><b>A warning about open prose.</b> Many business datasets are graded with <code>token_f1</code>. That is useful, but blunt: a reply, subject line, or meeting summary can have several correct wordings. If the corpus contains one human reference answer, another perfectly good answer may receive a low overlap score. Treat those measurements as a shape check, not a final verdict on writing quality. For open prose, use <b>Evaluation → Answer judging</b> or evaluate on examples of your own.</p>
   </div>
 
   <h3>The task benchmarks</h3>
-  <p>Eleven task sets ship under <b>Datasets → Shipped with the tool</b>:</p>
+  <p>Eleven task sets ship under <b>Datasets → Dataset library → Built-in benchmarks</b>:</p>
   <div class="table-scroll">
   <table class="count">
     <tr><th>Set</th><th>Examples</th><th>What it checks</th><th>Source</th></tr>
@@ -181,7 +185,7 @@ Release</code></pre>
     <tr><td><b>MBPP</b><span class="sub">Google Research</span></td><td>Small Python programming tasks with executable tests</td><td>CC-BY-4.0</td></tr>
   </table>
   </div>
-  <p>Import more from <b>Datasets → Import from Hugging Face</b> or via <code>prompt-playoff import-hf</code>. The licence and paper citation are shown on every import.</p>
+  <p>Import more from <b>Datasets → Add dataset → Hugging Face</b> or via <code>prompt-playoff import-hf</code>. The licence and paper citation are shown on every import.</p>
 
   <h3>How imported data stays honest</h3>
   <ul>
@@ -234,8 +238,8 @@ Release</code></pre>
   </div>
 
   <h3>Open-ended prose needs a different workflow</h3>
-  <p>For open-ended text, use <b>Check → Pairwise judging</b>. The application presents two answers, one rubric, and hides the answer order from the judge. The judge must be a different model from the one being evaluated.</p>
-  <p>A model verdict is not automatically promoted into a measured release result. Every verdict waits for human review under <b>Production → Reviews</b>: the model helps prioritize judgement, but humans retain final release authority.</p>
+  <p>For open-ended text, use <b>Evaluation → Answer judging</b>. The application presents two answers, one rubric, and hides the answer order from the judge. The judge must be a different model from the one being evaluated.</p>
+  <p>A model verdict is not automatically promoted into a measured release result. Every verdict waits for human review under <b>Production → Reviews</b>: the model helps prioritize judgement, but a person decides what the verdict is worth.</p>
 
   <h2>The two headline numbers</h2>
   <span class="num"><code>quality</code> — meaning and correctness</span>
@@ -246,7 +250,7 @@ Release</code></pre>
 
   <h2>Five rules without which the number means nothing</h2>
   <div class="note warn">
-    <p><b>1. Use at least one hundred examples.</b> On six examples, a 5% change can mean one row flipped. On tiny datasets, apparent improvements are often noise. <b>Check → Significance</b> exists to test that.</p>
+    <p><b>1. Use at least one hundred examples.</b> On six examples, a 5% change can mean one row flipped. On tiny datasets, apparent improvements are often noise. <b>Evaluation → Results → Significance</b> exists to test that.</p>
   </div>
   <div class="note warn">
     <p><b>2. Run each example more than once.</b> Three runs per example is the default rule. With one pass, stability is 1.000 by definition because there is nothing to compare against — that is not evidence of stability.</p>
@@ -258,11 +262,11 @@ Release</code></pre>
     <p><b>4. Optimize on one split, judge on another.</b> Prompt search sees the optimization split. The gain only counts on the held-out split; otherwise you are measuring how well the optimizer memorized the benchmark.</p>
   </div>
   <div class="note warn">
-    <p><b>5. A result belongs to one model-plus-examples pair.</b> A score measured on Model A is not evidence about Model B. The application marks assumptions as <span class="pill prior">prior only</span> and actual runs as <span class="pill measured">measured</span>. Use <b>Check → Model matrix</b> to measure transfer instead of assuming it.</p>
+    <p><b>5. A result belongs to one model-plus-examples pair.</b> A score measured on Model A is not evidence about Model B. The application marks assumptions as <span class="pill prior">prior only</span> and actual runs as <span class="pill measured">measured</span>. Use <b>Evaluation → Test lab → Models</b> to measure transfer instead of assuming it.</p>
   </div>
 
   <h2>From a number to a release</h2>
-  <p>A benchmark result is evidence about one exact prompt. Every run stores a fingerprint of the text it measured. <b>Production → Releases</b> checks that fingerprint against the prompt being frozen:</p>
+  <p>A benchmark result is evidence about one exact prompt. Every run stores a fingerprint of the text it measured. <b>Production → Ship</b> checks that fingerprint against the prompt being frozen, and writes the answer into the exported manifest:</p>
   <ul>
     <li><span class="pill measured">measured</span> — The prompt being released exactly matches the prompt in the cited run.</li>
     <li><strong>indirect</strong> — The cited run measured something related (e.g. the optimization pass), but not the exact release text.</li>
@@ -302,7 +306,7 @@ Release</code></pre>
   <p>Only <code>id</code> and <code>input</code> are required. When <code>expected</code> is present, graders are inferred from its shape or can be supplied explicitly. For extraction: the gold answer should appear in the source text word-for-word, and keep rows where the correct answer is empty.</p>
 
   <h3>If you have no dataset yet</h3>
-  <p><b>Datasets → Build datasets</b> can generate candidate rows along a fixed taxonomy of failure modes (typos, irrelevant debris around input, reordered fields, missing data, conflicting instructions, injection attempts, filler). Deterministic checks run first to reject duplicates or broken rows before human review. Generated rows do not become ground truth until approved.</p>
+  <p><b>Datasets → Add dataset → Generate</b> can generate candidate rows along a fixed taxonomy of failure modes (typos, irrelevant debris around input, reordered fields, missing data, conflicting instructions, injection attempts, filler). Deterministic checks run first to reject duplicates or broken rows before human review. Generated rows do not become ground truth until approved.</p>
 
   <h3>Build from what the model got wrong</h3>
   <p>Once you have a benchmark run, the most useful new examples are usually not random difficult examples: they are mutations around the failures your current prompt actually made. The dataset builder can seed from missed rows, keeping the original failure and mutating around it to target unresolved edge cases.</p>
@@ -317,7 +321,7 @@ Release</code></pre>
     <li>Observe live production traffic.</li>
     <li>Call arbitrary tools that have not been registered in the environment.</li>
     <li>Export every stage of a multi-stage method to promptfoo (first stage only).</li>
-    <li>Assume a result transfers to another model without measuring in <b>Model matrix</b>.</li>
+    <li>Assume a result transfers to another model without measuring in <b>Test lab → Models</b>.</li>
     <li>Decide whether your benchmark examples truly resemble your production users (input drift measures difference, but relevance remains human judgement).</li>
   </ul>
 
@@ -331,7 +335,7 @@ Release</code></pre>
   <p>That is what the measurement is for.</p>
 
   <div class="doc-foot">
-    How to read the numbers once you have them: <a href="/help">Help</a>. Per-set detail is in <code>docs/datasets/</code>; run reports are in <code>docs/benchmarks/</code>.
+    How to read the numbers once you have them: <a href="/#guides/user" target="_top">Guides → User guide</a>. Per-set detail is in <code>docs/datasets/</code>; run reports are in <code>docs/benchmarks/</code>.
   </div>
   </div>
   </div>

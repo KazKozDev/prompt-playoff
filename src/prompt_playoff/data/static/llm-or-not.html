@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Do You Need an LLM · Prompt Playoff</title>
+  <meta name="description" content="Eight solution classes, from a regular expression to a person, and the checks that decide which one a task actually needs.">
+  <script>
+    // The same two decisions the app makes before its first paint, made here
+    // too: the document is shown inside the app, so it follows the app's theme
+    // instead of flashing the other one, and it drops its own title when the
+    // screen around it is already carrying one.
+    try {
+      var choice = localStorage.getItem('pp-theme') || 'dark';
+      if (choice !== 'auto') document.documentElement.setAttribute('data-theme', choice);
+    } catch (error) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    if (location.search.indexOf('embed') !== -1) document.documentElement.classList.add('embed');
+    // Inside the frame the other language has to stay inside the frame, or the
+    // reader lands on a bare document with the app's chrome gone.
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!document.documentElement.classList.contains('embed')) return;
+      document.querySelectorAll('a.lang').forEach(function (link) {
+        if (link.search.indexOf('embed') === -1) link.search += (link.search ? '&' : '') + 'embed';
+      });
+    });
+  </script>
+  <link rel="stylesheet" href="/assets/docs.css">
+  <script src="/assets/docs.js" defer></script>
+</head>
+<body>
+<main class="page">
+  <nav class="toc" aria-label="On this page"><strong>Contents</strong></nav>
+  <div class="article">
+  <header class="hero">
+    <a class="lang" href="/llm-or-not/ru">Русский</a>
+    <h1>Do you need an LLM at all?</h1>
+    <p class="lede">Everything else in this workspace assumes the answer is yes. This guide is the question before it: which of eight solution classes the task actually needs, and what it costs to pick one too high.</p>
+  </header>
+  <div class="content">
+
+  <h2>What this decides</h2>
+  <p>A prompt that scores 0.91 on a task that a lookup table solves exactly is not a good result. It is a slower, less reliable, more expensive way to be right slightly less often, and no measurement taken inside this tool will ever say so, because the tool starts after the choice has been made.</p>
+  <p>So make the choice deliberately. The rule is one line: <b>pick the lowest class that solves the task, not the highest class that could.</b> The classes are a ladder, each rung strictly more capable and strictly more expensive to build, run and keep working.</p>
+  <p>This guide is the sibling of <b>Prompt vs Fine-Tuning</b>. That one answers "the prompt is not enough — now what"; this one answers "is a prompt more than enough".</p>
+
+  <h2>The ladder</h2>
+  <p>Walk the checks in order. Stop at the first that applies, and take that rung. Do not look further down the list for something that would also work — everything below the stop is something that would also work, and that is exactly the trap.</p>
+  <table>
+    <thead><tr><th>Class</th><th>Stop here when</th></tr></thead>
+    <tbody>
+      <tr><td><b>0 — Script / rules</b></td><td>An explicit rule does it: a regular expression, a lookup table, a SQL query, an <code>if</code></td></tr>
+      <tr><td><b>1 — Classic ML</b></td><td>There is labelled history, the schema is stable, and the volume is high</td></tr>
+      <tr><td><b>2 — Single LLM call</b></td><td>No knowledge from outside the model is needed</td></tr>
+      <tr><td><b>3 — LLM + retrieval</b></td><td>Private or live knowledge is needed, and one retrieval step answers it</td></tr>
+      <tr><td><b>4 — Fixed pipeline</b></td><td>The steps are known before the run and do not change with the input</td></tr>
+      <tr><td><b>5 — Single agent</b></td><td>There are external actions, and the next step is decided at runtime</td></tr>
+      <tr><td><b>6 — Multi-agent</b></td><td>Parallel independent inputs, mandatory context isolation, or different tool permissions per role</td></tr>
+      <tr><td><b>7 — Human only</b></td><td>There is no verifiable ground truth and the cost of an error is high</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">Class 7 is a real answer, not a failure. A task with nothing to check an answer against and a serious penalty for a wrong one has no measurement that would tell you the system is working, which means it has no way to stop being wrong.</div>
+
+  <h2>Establish the features first</h2>
+  <p>The checks above read features of the task, so settle those before walking the ladder. Each is a property of the work, answerable without knowing what you intend to build.</p>
+  <table>
+    <thead><tr><th>Feature</th><th>Values</th><th>What it decides</th></tr></thead>
+    <tbody>
+      <tr><td>Input structure</td><td>structured · semi-structured · free text · multimodal · conversation</td><td>Whether a rule can parse it at all</td></tr>
+      <tr><td>Output space</td><td>closed label · schema · open text · action · ranking</td><td>Closed spaces are where classes 0 and 1 live</td></tr>
+      <tr><td>Knowledge source</td><td>none · private docs · live systems · public web · labelled history</td><td>The boundary between class 2 and class 3</td></tr>
+      <tr><td>Path known</td><td>yes · no · partly</td><td>The boundary between class 4 and class 5</td></tr>
+      <tr><td>Side effects</td><td>none · read · write · irreversible</td><td>Writes and irreversible actions are what makes an agent expensive</td></tr>
+      <tr><td>Volume</td><td>low · medium · high</td><td>High volume repays training a model; low volume does not</td></tr>
+      <tr><td>Latency budget</td><td>seconds · minutes · overnight batch</td><td>A batch window makes several classes affordable that a live one does not</td></tr>
+      <tr><td>Error cost</td><td>low · medium · high · regulated</td><td>Regulated pushes towards a person in the loop regardless of the rung</td></tr>
+      <tr><td>Ground truth</td><td>available · proxy · none</td><td>No ground truth means no score, and no score means class 7</td></tr>
+    </tbody>
+  </table>
+  <p>The last one is where this tool connects. Every number the workspace produces is computed against examples whose answers are known. If the task has no ground truth and no usable proxy, there is nothing here for the tool to measure, and that is worth finding out before writing the prompt rather than after.</p>
+
+  <h2>Pipeline or agent</h2>
+  <p>This is the boundary that is misdrawn most often, in both directions, and almost always in public write-ups that have something to sell.</p>
+  <div class="callout">If the sequence of steps can be drawn before the run, it is a <b>fixed pipeline</b> — class 4 — even when it contains five model calls, a retrieval step and a formatter.</div>
+  <p>An agent is not "a system with several LLM calls in it". An agent is a system where the next step is not known until the previous one returns. Transcript → summary → action items → draft email → CRM record is five steps in one order every time; nothing decides anything. It is a pipeline, and it should be built as one, because a pipeline can be tested step by step, retried at the step that failed, and reasoned about when it breaks at three in the morning.</p>
+  <p>The cost of getting this wrong is not the model bill. It is that an agent's control flow is decided by a model, so a pipeline dressed as an agent has replaced a <code>for</code> loop you can read with one you have to evaluate.</p>
+
+  <h2>Agent or multi-agent</h2>
+  <p>Class 6 requires one of exactly three conditions. Decomposition on its own is not one of them.</p>
+  <ul>
+    <li><b>Parallel independent inputs.</b> Twenty documents that do not need to know about each other, processed at once.</li>
+    <li><b>Mandatory context isolation.</b> One role must not see what another role saw — a reviewer that must not be shown the author's reasoning, a grader that must not know which answer is the incumbent.</li>
+    <li><b>Different tool permissions per role.</b> One part may write to the CRM and another may only read, and the boundary has to be enforced somewhere other than in the instructions.</li>
+  </ul>
+  <p>Splitting one job into "a researcher, a writer and an editor" that run in a fixed order and share everything is class 4 with the steps given names. It costs more, fails in more places, and the hand-off order was fixed the whole time.</p>
+
+  <h2>Name what it did not need</h2>
+  <p>Once you have a class, write down two things and keep them next to the system.</p>
+  <p><b>The heavier thing you nearly built.</b> Name it concretely: "an agent with write access to the CRM", "a multi-agent review board", not "something more complicated". If the honest answer is that the task genuinely sits at the top of what it needs, write that instead.</p>
+  <p><b>Why it would not have paid.</b> Ground this in the features, not in taste: the path was known, the output space was closed, the error cost was low, there were four actions and they were all reads. A generic sentence here is the same as no sentence.</p>
+  <p>These two lines are what makes the decision reviewable a year later, when the person asking why it is "only" a pipeline is not you.</p>
+
+  <h2>Six tasks and where they land</h2>
+  <p>Deployments that have been described publicly, read against the ladder. Every figure below is what the company or its vendor published about itself; none of it has been verified here, and a result without a stated baseline is a number without a claim in it.</p>
+  <table>
+    <thead><tr><th>Task</th><th>Class</th><th>Why not a rung higher</th></tr></thead>
+    <tbody>
+      <tr><td>Route a support email by domain and tag</td><td><b>0</b></td><td>The rule is expressible. A model adds a probability of being wrong to a task that currently has none</td></tr>
+      <tr><td>Score a card transaction for fraud</td><td><b>1</b></td><td>Labelled history, a stable schema, and volume that no per-call model price survives</td></tr>
+      <tr><td>An internal assistant for drafting and rewriting</td><td><b>2</b></td><td>There is no workflow. It is an interface to a model, and calling it a pipeline would not add a step</td></tr>
+      <tr><td>Answer questions from internal HR policy</td><td><b>3</b></td><td>Retrieval and synthesis, no action taken in any system. An agent would be given tools it never calls</td></tr>
+      <tr><td>Meeting transcript to summary, action items and a CRM record</td><td><b>4</b></td><td>The five steps are the same five steps every time. Nothing is decided at runtime</td></tr>
+      <tr><td>Second-line support: delivery status, refunds, address changes</td><td><b>5</b></td><td>Genuinely dynamic — when to call tracking, when to ask the customer, when to refund — but one conversation with no independent workstreams, so not class 6</td></tr>
+    </tbody>
+  </table>
+  <p>The pattern in the last column is worth more than the rows. In five of six, the reason the heavier class was wrong is one feature: the path was known, the output space was closed, or nothing was written anywhere.</p>
+
+  <h2>Where this leaves the rest of the workspace</h2>
+  <p>The class you land on says what this tool can do for you.</p>
+  <table>
+    <thead><tr><th>Class</th><th>What to do here</th></tr></thead>
+    <tbody>
+      <tr><td>0 — 1</td><td>Nothing. There is no prompt to optimise. Close this and write the rule</td></tr>
+      <tr><td>2 — 4</td><td>This is what the workspace is for. One prompt per model call, measured against examples, gated in your repository</td></tr>
+      <tr><td>5 — 6</td><td>The agent's control flow is not measured here, but every prompt inside it is. Measure them one at a time; Spot checks will tell you whether the tools were called as intended</td></tr>
+      <tr><td>7</td><td>There is no score to produce. What a model can do is prepare material for the person who decides</td></tr>
+    </tbody>
+  </table>
+  <p>Class 3 and above always contain at least one class 2 problem inside them: a single call, with a prompt, that either does its job or does not. That call is what this workspace measures, and improving it does not require agreeing about the architecture around it.</p>
+
+  <h2>The catalogue behind this</h2>
+  <p>The ladder and the two boundary tests come from a separate catalogue of recorded deployments, kept outside this repository because it changes on its own schedule and carries obligations this tool does not: every row cites a source and an evidence tier, results are self-reported until shown otherwise, and rows that cite nothing are counted rather than hidden.</p>
+  <p>That separation is deliberate. A guide is stable and can ship inside a versioned tool; a catalogue of what companies published last quarter cannot, and a stale row served from inside an application reads as the application's own claim.</p>
+
+  </div>
+  </div>
+</main>
+</body>
+</html>

@@ -498,7 +498,10 @@ def build_dataset(payload: DatasetBuildRequest) -> DatasetProject:
 
 class ReviewItem(BaseModel):
     id: str
-    kind: Literal["dataset", "judge", "regression", "release"]
+    #: What asked for a person. Registering a release no longer does: it was
+    #: the one kind where the author approved their own work, and the committed
+    #: thresholds decide that instead.
+    kind: Literal["dataset", "judge", "regression"]
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: str
     title: str
@@ -545,6 +548,27 @@ class ReleaseCreateRequest(BaseModel):
 
 class ReleaseActionRequest(BaseModel):
     action: Literal["test", "approve", "release", "deprecate", "rollback"]
+
+
+#: Kinds this store has held in the past and no longer does. A file written by
+#: an older version is still the user's file: refusing to parse it would take
+#: the whole queue down over rows that are simply obsolete.
+RETIRED_REVIEW_KINDS = frozenset({"release"})
+
+
+def _readable_reviews(raw: list[dict[str, Any]]) -> list[ReviewItem]:
+    """Parse what is still a review, and drop what stopped being one.
+
+    Releases used to raise an approval item asking their author to approve their
+    own work. They no longer do, and the rows those left behind are dropped on
+    read rather than migrated: nothing depends on them, and rewriting a user's
+    file to delete history is a heavier promise than skipping it.
+    """
+    return [
+        ReviewItem.model_validate(item)
+        for item in raw
+        if item.get("kind") not in RETIRED_REVIEW_KINDS
+    ]
 
 
 class QualityStore:
@@ -613,7 +637,7 @@ class QualityStore:
         with advisory_lock(self.lock_path):
             raw = self._load_unlocked()["reviews"]
         return sorted(
-            (ReviewItem.model_validate(item) for item in raw),
+            _readable_reviews(raw),
             key=lambda item: item.created_at,
             reverse=True,
         )
@@ -628,13 +652,18 @@ class QualityStore:
     def decide_review(self, item_id: str, decision: ReviewDecision) -> ReviewItem:
         with advisory_lock(self.lock_path):
             data = self._load_unlocked()
-            items = [ReviewItem.model_validate(item) for item in data["reviews"]]
+            items = _readable_reviews(data["reviews"])
             item = next((entry for entry in items if entry.id == item_id), None)
             if item is None:
                 raise ValueError("Unknown review item")
             item.status = "approved" if decision.action == "approve" else "rejected"
             item.reviewer_note = decision.note
-            data["reviews"] = [entry.model_dump(mode="json") for entry in items]
+            # Rows of a retired kind are skipped on read, not deleted on write:
+            # answering one review is not consent to drop the rest of the file.
+            retired = [
+                entry for entry in data["reviews"] if entry.get("kind") in RETIRED_REVIEW_KINDS
+            ]
+            data["reviews"] = [entry.model_dump(mode="json") for entry in items] + retired
             self._save_unlocked(data)
             return item
 

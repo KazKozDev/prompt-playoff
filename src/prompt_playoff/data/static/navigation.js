@@ -1,16 +1,14 @@
 // The prompt and the three measurements taken on it: they share the composer
 // column, which every other screen hides.
 const resultTabs = ['prompt', 'report', 'comparison', 'optimization'];
-const platformTabs = ['dataset-builder', 'context-lab', 'judge', 'model-matrix', 'analysis', 'reviews', 'regressions', 'releases', 'production', 'dataset-library', 'dataset-bundled'];
+const platformTabs = ['dataset-add', 'dataset-library', 'results', 'test-lab', 'ship', 'judge', 'reviews'];
 const sectionTabs = ['s-prompt', 's-examples', 's-check', 's-ship', 's-reference'];
 // Screens whose body is already several surfaces beside one another: the panel
 // they sit in carries no plate of its own, or the parts would read as one.
-const unplatedScreens = new Set(['dataset-upload', 'dataset-hub', 'dataset-builder', 'techniques', 'dataset-bundled',
-  'judge', 'model-matrix', 'context-lab', 'analysis',
-  'regressions', 'reviews', 'releases', 'production', 'logs',
-  'prompt-vs-finetuning', 'help', 'evaluation']);
-const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization', 'techniques', 'logs', 'history', 'settings', 'help', 'evaluation', 'prompt-vs-finetuning', 'dataset-hub', 'dataset-upload', ...platformTabs];
-const docPages = { help: ['/help', 'User Guide'], evaluation: ['/evaluation', 'Evaluation Guide'], 'prompt-vs-finetuning': ['/prompt-vs-finetuning', 'Prompt vs Fine-Tuning'] };
+const unplatedScreens = new Set(['dataset-add', 'dataset-library', 'results', 'test-lab', 'ship', 'guides',
+  'techniques', 'judge', 'reviews', 'logs']);
+const detailPanels = ['home', ...sectionTabs, 'prompt', 'report', 'comparison', 'optimization',
+  'techniques', 'logs', 'settings', 'guides', ...platformTabs];
 const GUIDE_TOC = {
   en: { label:'On this page', title:'Contents', items:[
     ['#split','1. The core distinction'], ['#test','2. A simple test'], ['#prompt','3. When prompting wins'],
@@ -32,43 +30,52 @@ const GUIDE_TOC = {
 // the third entry, the one line that says what the screen is for. Screens no
 // longer carry a heading of their own — the context bar is already showing it.
 const screenMeta = {
-  prompt:['Prompt', 'Prompt text'], report:['Prompt', 'Measurement'], comparison:['Prompt', 'Method comparison'], optimization:['Prompt', 'Optimization'],
+  prompt:['Prompt Studio', 'Prompt text'], report:['Prompt Studio', 'Measurement'], comparison:['Prompt Studio', 'Technique comparison'], optimization:['Prompt Studio', 'Optimization'],
   'dataset-library':['Datasets', 'Dataset library', 'All the example sets on this server: ready-made ones grouped by the kind of work, then the sets you brought yourself. This is where you pick what a score will be computed against.'],
-  'dataset-upload':['Datasets', 'Upload your own', 'Upload your own examples as a JSONL file, one row per line. Scores on your own rows are the only ones that say anything about your task.'],
-  'dataset-hub':['Datasets', 'Import from Hugging Face', 'Search Hugging Face for a public dataset that looks like your task and import the rows you pick. Use it when you have no examples of your own. This screen needs the internet.'],
+  'dataset-add':['Datasets', 'Add dataset', 'Upload your own rows, import a public set, or generate examples for the gaps you still need to test.'],
   'dataset-builder':['Datasets', 'Build datasets', 'Generate example rows from your task description, or around the ones the last run got wrong. Use it when you have nothing of your own and nothing to import. You approve every row before it counts.'],
   'dataset-bundled':['Datasets', 'Shipped with the tool', 'The benchmark sets that ship inside the package. They are what the tool tests itself with, so use them to try the workflow out — a good score here describes the tool, not your prompt.'],
-  history:['Check', 'Results', 'Every run this server has finished, newest first, with the numbers it produced. Come here to compare two versions or export the history. Prompts and raw answers are not stored.'],
-  judge:['Check', 'Pairwise judging', 'Have a model compare two answers against a rubric without knowing which is which. Use it for work no grader can score, like tone or clarity. Every verdict goes to Reviews for a person to confirm.'],
-  'model-matrix':['Check', 'Model matrix', 'Run the same prompt and the same examples on several models. It tells you whether the prompt works anywhere else, or only on the model you wrote it for.'],
-  'context-lab':['Check', 'Context lab', 'Run the same prompt with different context in front of it — a document, a summary, retrieval results. It tells you whether the extra text is worth the tokens it costs.'],
-  analysis:['Check', 'Significance', 'Check whether a difference between two runs is real or just noise. Paste the per-example scores and you get a confidence interval, plus the score broken down by tag.'],
-  regressions:['Production', 'Regressions', 'Compare two recorded runs and fail the newer one if quality dropped, or latency rose, by more than you allow. Run it before shipping a change.'],
+  history:['Evaluation', 'Results', 'Every run this server has finished, newest first, with the numbers it produced. Come here to compare two versions or export the history. Prompts and raw answers are not stored.'],
+  results:['Evaluation', 'Results', 'Read the run history, compare versions, check whether a difference is larger than the noise in the examples, and gate a new run against the last one.'],
+  judge:['Evaluation', 'Answer judging', 'Have a model compare two answers against a rubric without knowing which is which. Use it for work no grader can score, like tone or clarity. Every verdict goes to Reviews for a person to confirm.'],
+  'model-matrix':['Evaluation', 'Model matrix', 'Run the same prompt and the same examples on several models. It tells you whether the prompt works anywhere else, or only on the model you wrote it for.'],
+  'context-lab':['Evaluation', 'Context lab', 'Run the same prompt with different context in front of it — a document, a summary, retrieval results. It tells you whether the extra text is worth the tokens it costs.'],
+  analysis:['Evaluation', 'Significance', 'Check whether a difference between two runs is real or just noise. Paste the per-example scores and you get a confidence interval, plus the score broken down by tag.'],
+  'test-lab':['Evaluation', 'Test lab', 'Challenge the same prompt by changing one condition at a time: the model that runs it or the context placed in front of it.'],
+  regressions:['Evaluation', 'Regressions', 'Compare two recorded runs and fail the newer one if quality dropped, or latency rose, by more than you allow. Run it before shipping a change.'],
   reviews:['Production', 'Reviews', 'The queue of things waiting for your yes or no: generated rows, judge verdicts, failed gates and registered releases. Nothing in it proceeds until you answer.'],
   releases:['Production', 'Releases', 'A register of prompt versions, moved by hand from draft to tested, approved and production. Use it to freeze the exact text you shipped, and to roll back to the previous one.'],
+  ship:['Production', 'Ship', 'Freeze a prompt against the run that measured it, export the manifest and the check block your repository enforces, and spot-check what production is really sending.'],
   // Named for what it does rather than for what the word "monitoring" promises:
   // nothing here is connected to live traffic. Each of the three checks works on
   // material you paste in, and the screen says so before it offers a box.
   production:['Production', 'Spot checks', 'Three checks you run by hand on text you paste in: whether real inputs still look like your examples, whether an agent called the tools it should, and whether the prompt holds when the input attacks it. It does not watch live traffic.'],
   techniques:['Docs', 'Techniques', 'The catalogue of every method in the registry, each with a real prompt compiled for a task that suits it. Read it to see what the selector chose from, or to pick a method yourself.'],
-  logs:['System', 'Jobs & logs', 'What is running right now and what each finished job did, step by step. Come here when a run is slow or failed. The numbers those runs produced are in Check → Results.'],
+  logs:['System', 'Jobs & logs', 'What is running right now and what each finished job did, step by step. Come here when a run is slow or failed. The numbers those runs produced are in Evaluation → Results.'],
   settings:['System', 'Models & keys', 'Where you set the three models and their keys. The prompt engine writes prompts and generated rows, the evaluation model runs them and produces every number you see, and the judge compares two answers — it must never be the model being judged.'],
+  'llm-or-not':['Docs', 'Do you need an LLM?', 'Eight solution classes, from a regular expression to a person, and the checks that decide which one a task needs. The question before the prompt.'],
   evaluation:['Docs', 'Evaluation guide'], help:['Docs', 'User Guide'], 'prompt-vs-finetuning':['Docs', 'Prompt vs Fine-Tuning', 'When to fine-tune a model — and when prompting is enough. A research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents.'],
+  guides:['Docs', 'Guides', 'Read the end-to-end workflow, the evaluation contract, and the two decision boundaries: whether the task needs a model at all, and whether it needs fine-tuning.'],
   home:['Workspace', 'Prompt Playoff', 'Five sections, in the order a prompt goes through them, and one button that runs the whole path for you. Everything here runs on your machine.'],
-  's-prompt':['Prompt', 'Prompt', 'The prompt itself and everything measured on it: one run over your examples, the methods scored side by side, and the search for better wording. Start here.'],
+  's-prompt':['Prompt Studio', 'Prompt Studio', 'The prompt itself and everything measured on it: one run over your examples, the techniques scored side by side, and the search for better wording. Start here.'],
   's-examples':['Datasets', 'Datasets', 'The example rows every score is computed against. Bring your own, import public ones, or generate them — a score describes your task only if these look like your real inputs.'],
-  's-check':['Check', 'Check', 'Ways to test whether a number holds up: on other models, with other context, against another answer, or against statistics. Use this before you trust a result. One plain measurement lives in Prompt.'],
-  's-ship':['Production', 'Production', 'What stands between a good score here and a prompt in front of real users: a version register, a regression gate, a review queue, and checks you run by hand.'],
+  's-check':['Evaluation', 'Evaluation', 'Ways to test whether a number holds up: on other models, with other context, against another answer, or against statistics. Use this before you trust a result. One plain measurement lives in Prompt Studio.'],
+  's-ship':['Production', 'Production', 'How a prompt measured here becomes something outside here: frozen against the run behind it, exported as files your repository holds and CI enforces, and spot-checked against what production is really sending.'],
   's-reference':['Docs', 'Docs', 'Guides, evaluation methodology, and architectural decisions. Everything you need to understand prompt engineering and model trade-offs.']
 };
+
+function displayMeta(tab) {
+  if (tab === 'results' && screenModes[tab] === 'regressions') return screenMeta.regressions;
+  return screenMeta[tab] || screenMeta.home;
+}
 
 // The one action a screen offers about itself lives in the same corner on every
 // screen, instead of somewhere inside its body.
 const screenActions = {
   // The file the server writes is the whole history, so when the screen is
   // showing one set the link says which of the two it is about to hand over.
-  history: () => state.experiments.length
-    ? `<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download CSV${showingOn('history') ? ' (all runs)' : ''}</a>`
+  results: () => state.experiments.length
+    ? `<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download CSV${showingOn('results') ? ' (all runs)' : ''}</a>`
     : '',
   logs: () => '<button type="button" class="ghost log-refresh">Refresh</button>'
 };
@@ -91,14 +98,12 @@ function showingBand(tab) {
 }
 
 function screenShell(tab, body) {
-  const [, title, lead] = screenMeta[tab] || screenMeta.home;
+  const [, title, lead] = displayMeta(tab);
   const actions = screenActions[tab]?.() || '';
   const gate = modelGatedScreens.has(tab) ? MODEL_GATE : '';
   // The name belongs to the screen, not to the chrome: the bar carries the path
   // you took, the screen carries what it is.
-  // This guide brings its own display title — a large article heading — so
-  // the plate must not print the screen name again on top of it.
-  const head = (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation') ? '' : `<div class="screen-head">
+  const head = `<div class="screen-head">
       <div><h1 class="screen-title">${esc(title)}</h1>${lead ? `<p class="screen-lead">${esc(lead)}</p>` : ''}</div>
       ${actions ? `<div class="screen-actions">${actions}</div>` : ''}
     </div>`;
@@ -108,6 +113,193 @@ function screenShell(tab, body) {
   // wrote it stands. So one place to look for the prompt, on all four screens
   // of this section.
   return `${head}${gate}${showingBand(tab)}${setup}${body}`;
+}
+
+/* One compact mode rail teaches the consolidated information architecture on
+ * every parent screen. The panels stay mounted, so text entered into a form and
+ * client-side results survive a mode switch. */
+const MODE_SPECS = {
+  'dataset-library': {
+    label:'Library mode', default:'library', modes:[
+      ['library', 'Library', 'Browse every set available for your own measurements.'],
+      ['built-in', 'Built-in benchmarks', 'Inspect the fixed reference benchmarks shipped with this tool.']
+    ]
+  },
+  'dataset-add': {
+    label:'Dataset source', default:'upload', modes:[
+      ['upload', 'Upload file', 'Your own rows are the closest measure of your task.'],
+      ['hugging-face', 'Hugging Face', 'Import public rows; this mode needs an internet connection.'],
+      ['generate', 'Generate', 'Create candidate rows from your task and approve each one before use.']
+    ]
+  },
+  results: {
+    label:'Results mode', default:'history', modes:[
+      ['history', 'Run history', 'Filter, compare, inspect, and export recorded runs.'],
+      ['significance', 'Significance', 'Test whether a measured difference is larger than sampling noise.'],
+      ['regressions', 'Regression gate', 'Compare two recorded runs against explicit quality and latency tolerances.']
+    ]
+  },
+  'test-lab': {
+    label:'Test lab mode', default:'models', modes:[
+      ['models', 'Models', 'Run the same prompt and examples across several models.'],
+      ['context', 'Context', 'Run the same prompt with different context in front of it.']
+    ]
+  },
+  ship: {
+    label:'Ship mode', default:'releases', modes:[
+      ['releases', 'Releases', 'Freeze a prompt against the run that measured it, and export it to your repository.'],
+      ['spot-checks', 'Spot checks', 'Run the three by-hand checks on text you paste in.']
+    ]
+  },
+  guides: {
+    label:'Guide', default:'user', modes:[
+      ['user', 'User guide', 'Follow the complete Prompt Playoff workflow from prompt to release.'],
+      ['evaluation', 'Evaluation', 'See where every number comes from and when to trust it.'],
+      ['llm-or-not', 'Do you need an LLM?', 'Pick the lowest solution class that solves the task, from a rule to a person.'],
+      ['fine-tuning', 'Prompt vs Fine-Tuning', 'Choose prompting, retrieval, fine-tuning, distillation, or agents.']
+    ]
+  }
+};
+const screenModes = Object.fromEntries(Object.entries(MODE_SPECS).map(([tab, spec]) => [tab, spec.default]));
+
+const modeSpec = (tab, mode) => MODE_SPECS[tab]?.modes.find(item => item[0] === mode);
+const normalizedMode = (tab, mode) => modeSpec(tab, mode) ? mode : MODE_SPECS[tab]?.default;
+
+function parentForLegacyTab(tab) {
+  return ({
+    'dataset-builder':'dataset-add', 'dataset-bundled':'dataset-library', history:'results', analysis:'results',
+    regressions:'results', 'model-matrix':'test-lab', 'context-lab':'test-lab',
+    releases:'ship', 'release-center':'ship', production:'ship',
+    help:'guides', evaluation:'guides', 'prompt-vs-finetuning':'guides', 'llm-or-not':'guides'
+  })[tab] || tab;
+}
+
+function legacyMode(tab) {
+  return ({
+    'dataset-upload':'upload', 'dataset-hub':'hugging-face', 'dataset-builder':'generate',
+    'dataset-bundled':'built-in', history:'history', analysis:'significance', regressions:'regressions',
+    'model-matrix':'models', 'context-lab':'context',
+    releases:'releases', 'release-center':'releases', production:'spot-checks',
+    help:'user', evaluation:'evaluation', 'prompt-vs-finetuning':'fine-tuning', 'llm-or-not':'llm-or-not'
+  })[tab] || null;
+}
+
+function canonicalModePath(tab, mode, showing=null) {
+  const omitDefault = tab === 'dataset-library' || tab === 'dataset-add';
+  const segment = omitDefault && mode === MODE_SPECS[tab].default ? '' : `/${mode}`;
+  return `#${tab}${segment}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
+}
+
+function renderModeRail(tab, bodies) {
+  const spec = MODE_SPECS[tab];
+  const selected = normalizedMode(tab, screenModes[tab]);
+  const buttons = spec.modes.map(([mode, label]) => `<button type="button" class="mode-rail-option"
+      id="${tab}-mode-${mode}" role="tab" aria-selected="${mode === selected}"
+      aria-controls="${tab}-panel-${mode}" tabindex="${mode === selected ? '0' : '-1'}"
+      data-mode-tab="${tab}" data-mode="${mode}">${esc(label)}</button>`).join('');
+  const panels = spec.modes.map(([mode]) => `<section class="mode-panel" id="${tab}-panel-${mode}"
+      role="tabpanel" aria-labelledby="${tab}-mode-${mode}" data-mode-panel="${mode}"${mode === selected ? '' : ' hidden'}>
+      ${bodies[mode] || ''}</section>`).join('');
+  return `<div class="mode-rail">
+      <div class="mode-rail-intro"><strong>${esc(spec.label)}</strong><span data-mode-note>${esc(modeSpec(tab, selected)[2])}</span></div>
+      <div class="mode-rail-switch" role="tablist" aria-label="${esc(spec.label)}">${buttons}</div>
+    </div>${panels}`;
+}
+
+function renderGuideMode(mode) {
+  const pages = {
+    user:['/help', 'User Guide'], evaluation:['/evaluation', 'Evaluation Guide'],
+    'llm-or-not':['/llm-or-not', 'Do you need an LLM?'],
+    'fine-tuning':['/prompt-vs-finetuning', 'Prompt vs Fine-Tuning']
+  };
+  const [src, title] = pages[mode];
+  const toc = mode === 'fine-tuning' ? renderGuideToc('en')
+    : '<nav class="toc guide-toc" data-guide-toc aria-label="On this page"><strong>Contents</strong></nav>';
+  return `<div class="guide-split">${toc}<iframe class="doc-frame" src="${src}?embed" title="${title}"></iframe></div>`;
+}
+
+function renderConsolidatedScreen(tab) {
+  if (tab === 'dataset-library') return renderModeRail(tab, {library:renderDatasetLibrary(), 'built-in':renderDatasetBundled()});
+  if (tab === 'dataset-add') return renderModeRail(tab, {upload:renderDatasetUpload(), 'hugging-face':renderDatasetHub(), generate:renderDatasetBuilder()});
+  if (tab === 'results') return renderModeRail(tab, {history:renderHistory(), significance:renderAnalysis(), regressions:renderRegressions()});
+  if (tab === 'test-lab') return renderModeRail(tab, {models:renderModelMatrix(), context:renderContextLab()});
+  if (tab === 'ship') return renderModeRail(tab, {releases:renderReleases(), 'spot-checks':renderProduction()});
+  if (tab === 'guides') return renderModeRail(tab, {
+    user:renderGuideMode('user'), evaluation:renderGuideMode('evaluation'),
+    'llm-or-not':renderGuideMode('llm-or-not'), 'fine-tuning':renderGuideMode('fine-tuning')
+  });
+  return '<div class="empty">Unknown screen.</div>';
+}
+
+function applyMode(tab, panel, mode) {
+  if (!MODE_SPECS[tab] || !panel) return;
+  mode = normalizedMode(tab, mode);
+  screenModes[tab] = mode;
+  panel.querySelectorAll('[data-mode-tab]').forEach(button => {
+    const selected = button.dataset.mode === mode;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
+  panel.querySelectorAll('[data-mode-panel]').forEach(modePanel => { modePanel.hidden = modePanel.dataset.modePanel !== mode; });
+  const note = panel.querySelector('[data-mode-note]');
+  if (note) note.textContent = modeSpec(tab, mode)[2];
+  const [, title, lead] = displayMeta(tab);
+  const screenTitle = panel.querySelector('.screen-title');
+  const screenLead = panel.querySelector('.screen-lead');
+  if (screenTitle) screenTitle.textContent = title;
+  if (screenLead && lead) screenLead.textContent = lead;
+  if (tab === 'guides') {
+    const active = panel.querySelector(`[data-mode-panel="${mode}"]`);
+    const frame = active?.querySelector('.doc-frame');
+    if (frame?.contentDocument?.body) wireGuideToc(active, frame);
+  }
+}
+
+function wireConsolidatedScreen(tab, panel) {
+  if (!MODE_SPECS[tab]) return;
+  const buttons = [...panel.querySelectorAll('[data-mode-tab]')];
+  // The first platform pass can intentionally be only a loading placeholder;
+  // its async refresh will replace it with the mounted mode panels.
+  if (!buttons.length) return;
+  const choose = button => selectTab(tab, {mode:button.dataset.mode, focusMode:true});
+  buttons.forEach((button, index) => {
+    button.addEventListener('click', () => choose(button));
+    button.addEventListener('keydown', event => {
+      let next = null;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + buttons.length) % buttons.length;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % buttons.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = buttons.length - 1;
+      if (next == null) return;
+      event.preventDefault(); choose(buttons[next]);
+    });
+  });
+  if (tab === 'dataset-library') {
+    wirePlatformTab('dataset-library', panel.querySelector('[data-mode-panel="library"]'));
+    wirePlatformTab('dataset-bundled', panel.querySelector('[data-mode-panel="built-in"]'));
+  }
+  if (tab === 'dataset-add') {
+    wireDatasetUpload(panel.querySelector('[data-mode-panel="upload"]'));
+    wireDatasetHub(panel.querySelector('[data-mode-panel="hugging-face"]'));
+    wirePlatformTab('dataset-builder', panel.querySelector('[data-mode-panel="generate"]'));
+  }
+  if (tab === 'results') {
+    wireHistoryControls(panel.querySelector('[data-mode-panel="history"]'));
+    wirePlatformTab('analysis', panel.querySelector('[data-mode-panel="significance"]'));
+    wirePlatformTab('regressions', panel.querySelector('[data-mode-panel="regressions"]'));
+  }
+  if (tab === 'test-lab') {
+    wirePlatformTab('model-matrix', panel.querySelector('[data-mode-panel="models"]'));
+    wirePlatformTab('context-lab', panel.querySelector('[data-mode-panel="context"]'));
+  }
+  if (tab === 'ship') {
+    wirePlatformTab('releases', panel.querySelector('[data-mode-panel="releases"]'));
+    wirePlatformTab('production', panel.querySelector('[data-mode-panel="spot-checks"]'));
+  }
+  if (tab === 'guides') panel.querySelectorAll('.doc-frame').forEach(frame => frame.addEventListener('load', () => {
+    fitDocFrame(frame); wireGuideToc(frame.closest('.mode-panel'), frame);
+  }));
+  applyMode(tab, panel, screenModes[tab]);
 }
 
 document.addEventListener('click', event => {
@@ -162,18 +354,21 @@ document.querySelectorAll('.bottom-nav a[data-screen]').forEach(link => {
 const sectionArt = (section, size) =>
   `<img class="section-art" src="/assets/section-${section}.webp" alt="" width="${size}" height="${size}" decoding="async">`;
 /* Which section a screen belongs to. It is read off the rail, so the rail and
- * the path can never disagree — except for the screens the rail does not list.
- * Models & keys is one: its door is the model in the corner, not a row in a
- * section, and read off the rail alone it came back sectionless. The path then
- * lost its middle step and, worse, arriving there collapsed every section in
- * the rail, because "no section is the current one" and "close them all" are
- * the same instruction. Every screen has a row now, so the rail is the only
- * place this is written down. */
+ * the path can never disagree. Two screens sit outside the five: Models & keys
+ * and Jobs & logs live in the rail's foot, because their door is the model in
+ * the corner rather than a step in the life of a prompt. They answer `system`,
+ * which is a real answer and not a blank one — a blank was being read as "close
+ * every section", so arriving at Models & keys used to collapse the whole rail
+ * on the way in. */
 const sectionOf = screen => screen.startsWith('s-') ? screen.slice(2)
   : [...document.querySelectorAll('.sidebar-group[data-section]')]
-      .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section || '';
+      .find(group => group.querySelector(`a[data-screen="${screen}"]`))?.dataset.section
+  || (document.querySelector(`.sidebar-system a[data-screen="${screen}"]`) ? 'system' : '');
 
 function openSection(section) {
+  // A section with no group of its own — `system`, or nothing at all — is not
+  // an instruction to close the five. The rail stays as the reader left it.
+  if (!document.querySelector(`.sidebar-group[data-section="${section}"]`)) return;
   document.querySelectorAll('.sidebar-group[data-section]').forEach(group => {
     const open = group.dataset.section === section;
     group.classList.toggle('open', open);
@@ -253,7 +448,7 @@ async function loadSectionFacts(section) {
  * missing and links to the one place that fixes it, and the buttons it would
  * have enabled go quiet at the same time.
  * -------------------------------------------------------------------------- */
-const modelGatedScreens = new Set(['prompt', 'report', 'comparison', 'optimization', 'judge', 'model-matrix', 'context-lab']);
+const modelGatedScreens = new Set(['prompt', 'report', 'comparison', 'optimization', 'judge', 'test-lab']);
 const MODEL_GATE = '<div class="gate" data-model-gate hidden>No model is set, so nothing on this screen can run yet.<button type="button" class="ghost" data-action="open-model-settings">Models &amp; keys</button></div>';
 
 function modelIsSet() { return Boolean(state.settings.evaluation.model_id.trim()); }
@@ -359,7 +554,13 @@ function wireSmartStart(button, status) {
   });
 }
 
-const routeAliases = {selector:'prompt'};
+const routeAliases = {
+  selector:'prompt', 'dataset-upload':'dataset-add', 'dataset-hub':'dataset-add',
+  'dataset-builder':'dataset-add', 'dataset-bundled':'dataset-library', history:'results', analysis:'results',
+  regressions:'results', 'model-matrix':'test-lab', 'context-lab':'test-lab',
+  releases:'ship', 'release-center':'ship', production:'ship',
+  help:'guides', evaluation:'guides', 'prompt-vs-finetuning':'guides', 'llm-or-not':'guides'
+};
 let drawerTrigger = null;
 const mobileDrawerQuery = window.matchMedia('(max-width: 900px)');
 
@@ -372,24 +573,54 @@ function normalizedTab(tab) {
  * thing on that screen you came to look at. Anything else in the hash — a
  * technique anchor, say — is a position on the page and not a route at all,
  * which `known` is what tells the listeners apart. */
+/* Two of the old addresses cannot be resolved from their first segment alone.
+ * `#release-center` split in half: its versions became Ship, its regression gate
+ * became a mode of Results, where the runs it compares already live. So the
+ * whole path is looked up before the head is, or a bookmarked gate would open
+ * the register instead — the same screen name, the wrong screen. */
+const legacyPaths = {
+  'release-center/versions':['ship', 'releases'],
+  'release-center/regressions':['results', 'regressions'],
+  'production/drift':['ship', 'spot-checks']
+};
+
 function routeFromLocation() {
   const raw = decodeURIComponent(window.location.hash.slice(1));
   const [head, ...rest] = raw.split('/');
+  const paired = legacyPaths[`${head}/${rest[0]}`];
+  if (paired) {
+    const [tab, mode] = paired;
+    return {tab, showing:rest.slice(1).join('/') || null, mode, legacy:true, known:true};
+  }
+  const tab = normalizedTab(head || 'home');
+  const spec = MODE_SPECS[tab];
+  const aliasMode = legacyMode(head);
+  const explicitMode = spec && modeSpec(tab, rest[0]) ? rest[0] : null;
+  const mode = spec ? normalizedMode(tab, aliasMode || explicitMode) : null;
+  const consumed = explicitMode ? 1 : 0;
+  const showing = spec ? rest.slice(consumed).join('/') : rest.join('/');
   return {
-    tab: normalizedTab(head || 'home'),
-    showing: rest.join('/') || null,
+    tab,
+    showing: showing || null,
+    mode,
+    legacy: Boolean(head && routeAliases[head]),
     known: !head || detailPanels.includes(routeAliases[head] || head)
   };
 }
 
 /* Which of the mobile bar's five is lit. It used to be four hand-written lists,
- * which meant a screen missing from all of them — Techniques, Jobs & logs, Help,
- * Models & keys — lit nothing at all, and the bar stopped answering "where am I"
- * on exactly the screens a reader is most likely to be lost on. It is one
- * question, so it is asked once: which section is this screen in, and which
- * destination stands for that section. */
+ * which meant a screen missing from all of them lit nothing at all, and the bar
+ * stopped answering "where am I" on exactly the screens a reader is most likely
+ * to be lost on. It is one question, so it is asked once: which section is this
+ * screen in, and which destination stands for that section.
+ *
+ * `system` deliberately has no entry. Models & keys and Jobs & logs are under
+ * none of the five, and lighting one of them would mark a destination as the
+ * current page when tapping it goes somewhere else. The bar goes quiet there
+ * and the rail's own foot, which is in the drawer beside it, says where you
+ * are instead. */
 const sectionDestinations = {
-  prompt:'prompt', examples:'dataset-library', check:'history', ship:'regressions', reference:'s-reference'
+  prompt:'prompt', examples:'dataset-library', check:'results', ship:'ship', reference:'guides'
 };
 
 function primaryDestination(tab) {
@@ -458,7 +689,7 @@ document.addEventListener('keydown', event => {
 document.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
   event.preventDefault();
   closeDrawer(false);
-  selectTab(link.dataset.globalTab, {focus:true, showing:link.dataset.showing});
+  selectTab(link.dataset.globalTab, {focus:true, focusMode:Boolean(link.dataset.mode), showing:link.dataset.showing, mode:link.dataset.mode});
 }));
 
 /* --------------------------------------------------------------------------
@@ -470,16 +701,16 @@ function sectionTiles() {
   const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
   const technique = state.program?.technique_id || state.chosen;
   return [
-    ['s-prompt', 'Prompt', 'Write the prompt, measure it on your examples, compare methods, and search for better wording. Start here.',
+    ['s-prompt', 'Prompt Studio', 'Write the prompt, measure it on your examples, compare techniques, and search for better wording. Start here.',
       technique ? ['ok', 'Prompt ready'] : ['idle', 'Not written yet']],
     ['s-examples', 'Datasets', 'The rows every score is computed against. Bring your own, import public ones, or generate them.',
       state.datasetSizes.size ? ['ok', `${plural(state.datasetSizes.size, 'set')}`] : ['idle', 'Loading…']],
-    ['s-check', 'Check', 'Test whether a good score holds up — on other models, with other context, or against statistics.',
+    ['s-check', 'Evaluation', 'Test whether a good score holds up — on other models, with other context, or against statistics.',
       state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')} recorded`] : ['idle', 'Nothing measured yet']],
-    ['s-ship', 'Production', 'Freeze the version you ship, gate changes against the last run, and answer what is waiting for you.',
+    ['s-ship', 'Production', 'Freeze the version you ship, export it to your repository, and answer what is waiting for you.',
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
     ['s-reference', 'Docs', 'Evaluation methodology, fine-tuning trade-offs, and guides to understanding every score.',
-      ['idle', '3 guides']]
+      ['idle', `${MODE_SPECS.guides.modes.length} guides`]]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
       <span class="tile-top">${sectionArt(tab.slice(2), 34)}<strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
@@ -496,25 +727,29 @@ const tileDesc = {
   comparison:'Score every recommended method on the same examples, so the ranking is measured and not assumed.',
   optimization:'Rewrite the prompt over several rounds and keep whichever version scores best.',
   'dataset-library':'All example sets on this server: ready-made ones by kind of work, then your own.',
-  'dataset-upload':'Upload your own rows as JSONL. Scores on them are the ones that describe your task.',
-  'dataset-hub':'Import a public dataset that looks like your task, for when you have no examples of your own.',
+  'dataset-add':'Upload your own rows, import a public set, or generate cases to review.',
   'dataset-builder':'Generate rows from your task, or around what the last run got wrong. You approve every one.',
   'dataset-bundled':'The benchmarks inside the package, for trying the workflow out rather than judging your prompt.',
   history:'Every finished run, newest first, with a version-to-version diff and a CSV export.',
+  results:'Run history and statistical significance in one results workspace.',
   judge:'Have a model compare two answers against a rubric, blind, for work no grader can score.',
   'model-matrix':'Run the same prompt on several models, to see whether it works anywhere but yours.',
   'context-lab':'Run the same prompt with different context, to see whether the extra text pays for its tokens.',
   analysis:'Check whether a difference between two runs is real or just noise, before acting on it.',
+  'test-lab':'Challenge the prompt across models or with different context.',
   regressions:'Compare two runs and fail the new one if it got worse or slower than you allow.',
-  reviews:'Everything waiting for your yes or no: generated rows, verdicts, failed gates, releases.',
+  reviews:'Everything waiting for your yes or no: generated rows, judge verdicts, breached gates.',
   releases:'Freeze the exact prompt you shipped, move it from draft to production, roll back when needed.',
+  ship:'Freeze a prompt against the run that measured it, export it to your repository, and spot-check real inputs.',
   production:'Three checks you run by hand on pasted text: input drift, agent tool calls, injection attempts.',
   techniques:'The catalogue of methods, each with a real prompt compiled from the live registry.',
   logs:'What is running right now, and what each finished job did, step by step.',
   settings:'Set the three models and keys: one writes prompts, one runs them, one compares answers.',
   evaluation:'Where every number comes from, and when it is worth trusting.',
   help:'How the whole thing fits together, start to finish.',
-  'prompt-vs-finetuning':'When to fine-tune a model — and when prompting is enough. A research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents.'
+  'prompt-vs-finetuning':'When to fine-tune a model — and when prompting is enough. A research-backed guide to choosing between prompting, few-shot ICL, RAG, fine-tuning, distillation, and tools/agents.',
+  'llm-or-not':'Which of eight solution classes the task needs, from a rule to a person, and what a rung too high costs.',
+  guides:'The user guide, the evaluation contract, and the two decision guides: whether to use a model, and whether to fine-tune one.'
 };
 
 /* A section screen is where "where am I" is answered, so its tiles carry state
@@ -541,45 +776,44 @@ function screenState(tab) {
       const unreviewed = rows.filter(item => item.status === 'unreviewed').length;
       return unreviewed ? ['wait', `${plural(unreviewed, 'example')} unreviewed`] : ['idle', 'Nothing generated'];
     }
-    case 'history': return state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')}`] : ['idle', 'No runs yet'];
+    case 'history': case 'results': return state.experiments.length ? ['ok', `${plural(state.experiments.length, 'run')}`] : ['idle', 'No runs yet'];
     case 'analysis': return state.report ? ['idle', 'Ready'] : ['wait', 'Needs a run'];
     case 'regressions': return state.experiments.length > 1 ? ['idle', 'Ready'] : ['wait', 'Needs 2 runs'];
     case 'reviews': {
       const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
       return pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting'];
     }
-    case 'releases': return state.quality.releases.length ? ['ok', `${plural(state.quality.releases.length, 'release')}`] : ['idle', 'None yet'];
+    case 'releases': case 'ship': return state.quality.releases.length ? ['ok', `${plural(state.quality.releases.length, 'release')}`] : ['idle', 'None yet'];
     case 'techniques': return state.techniqueCatalog.size ? ['idle', `${state.techniqueCatalog.size}`] : ['idle', 'Loading…'];
     case 'settings': return [state.settings.evaluation.model_id.trim() ? 'ok' : 'wait', state.settings.evaluation.model_id.trim() || 'No model set'];
-    case 'dataset-upload': {
+    case 'dataset-add': {
       const mine = [...state.datasetSizes.keys()].filter(name => name.startsWith('uploaded:')).length;
-      return mine ? ['ok', `${plural(mine, 'set')} of yours`] : ['idle', 'Nothing uploaded'];
+      return mine ? ['ok', `${plural(mine, 'set')} of yours`] : ['idle', '2 sources'];
     }
-    case 'dataset-hub': return ['idle', 'Needs internet'];
     case 'dataset-bundled': {
       const bundled = [...state.datasetSizes.keys()].filter(name => !name.includes(':')).length;
       // Same rule as the screen itself: a prefix means it came from somewhere.
       return bundled ? ['idle', `${plural(bundled, 'benchmark')}`] : ['idle', 'Loading…'];
     }
     case 'judge': return screenResultState('judge');
-    case 'model-matrix': return screenResultState('model-matrix');
+    case 'model-matrix': case 'test-lab': return screenResultState('model-matrix');
     case 'context-lab': return screenResultState('context-lab');
     case 'production': return ['idle', '3 checks'];
     case 'logs': {
       const running = state.jobs.filter(job => job.status === 'running').length;
       return running ? ['wait', `${plural(running, 'job')} running`] : ['idle', 'Idle'];
     }
-    case 'evaluation': case 'help': case 'prompt-vs-finetuning': return ['idle', 'Reading'];
+    case 'evaluation': case 'help': case 'prompt-vs-finetuning': case 'llm-or-not': case 'guides': return ['idle', 'Reading'];
     default: return null;
   }
 }
 
 const screenActionLabels = {
   prompt:'Open Editor', report:'Measure Now', comparison:'Compare', optimization:'Optimize',
-  'dataset-library':'Browse Sets', 'dataset-upload':'Upload', 'dataset-hub':'Import Hub', 'dataset-builder':'Generate', 'dataset-bundled':'Browse',
-  history:'View Results', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', analysis:'Analyze',
-  regressions:'Check Diff', reviews:'Review', releases:'Manage', production:'Run a check',
-  techniques:'Browse', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', 'prompt-vs-finetuning':'Read Guide', settings:'Set Models'
+  'dataset-library':'Browse Sets', 'dataset-add':'Add', 'dataset-builder':'Generate', 'dataset-bundled':'Browse',
+  history:'View Results', results:'View Results', judge:'Run Judge', 'model-matrix':'Matrix', 'context-lab':'Test Context', 'test-lab':'Open Lab', analysis:'Analyze',
+  regressions:'Check Diff', reviews:'Review', releases:'Manage', ship:'Ship it', production:'Run a check',
+  techniques:'Browse', guides:'Read Guides', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', 'prompt-vs-finetuning':'Read Guide', 'llm-or-not':'Read Guide', settings:'Set Models'
 };
 
 const sectionSpotlights = {
@@ -636,12 +870,17 @@ const sectionSpotlights = {
   }
 };
 
-function renderSectionTile(tab) {
-  const [, name] = screenMeta[tab] || ['', tab];
-  const lead = tileDesc[tab] || screenMeta[tab]?.[2] || '';
-  const actionLabel = screenActionLabels[tab] || 'Learn More';
+function renderSectionTile(entry) {
+  const {tab, mode:requestedMode, label} = typeof entry === 'string' ? {tab:entry} : entry;
+  const [, defaultName] = screenMeta[tab] || ['', tab];
+  const name = label || defaultName;
+  const contentKey = tab === 'results' && requestedMode === 'regressions' ? 'regressions' : tab;
+  const lead = tileDesc[contentKey] || screenMeta[contentKey]?.[2] || '';
+  const actionLabel = screenActionLabels[contentKey] || 'Learn More';
+  const mode = requestedMode || MODE_SPECS[tab]?.default;
+  const href = mode ? canonicalModePath(tab, mode) : `#${tab}`;
 
-  return `<a class="section-tile-card" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
+  return `<a class="section-tile-card" href="${href}" data-global-tab="${tab}" data-screen="${tab}"${mode ? ` data-mode="${mode}"` : ''}>
     <div class="section-tile-info">
       <strong>${esc(name)}</strong>
       <p>${esc(lead)}</p>
@@ -710,7 +949,7 @@ const sectionStock = {
   check() {
     const items = tally(state.experiments, record => record.dataset || 'unnamed');
     return {
-      title:'Where you have measured', legend:'One circle per set you ran on, sized by how many runs it holds.', unit:'runs', tab:'history', items,
+      title:'Where you have measured', legend:'One circle per set you ran on, sized by how many runs it holds.', unit:'runs', tab:'results', items,
       caption: state.experiments.length
         ? `${plural(state.experiments.length, 'run')} over ${plural(items.length, 'set')}`
         : '',
@@ -724,7 +963,7 @@ const sectionStock = {
     // what is still unanswered, which is a different screen entirely.
     if (pending) items.push({label:'waiting for you', value:pending, tone:'wait', tab:'reviews', showing:'pending'});
     return {
-      title:'What is in flight', legend:'One circle per stage, sized by how many releases sit in it.', unit:'', tab:'releases', items,
+      title:'What is in flight', legend:'One circle per stage, sized by how many releases sit in it.', unit:'', tab:'ship', items,
       caption: state.quality.releases.length
         ? `${plural(state.quality.releases.length, 'release')}${pending ? ` · ${pending} waiting` : ''}`
         : (pending ? `${pending} waiting for you` : ''),
@@ -769,32 +1008,32 @@ const sectionNextStep = {
   examples() {
     const rows = state.quality.projects.flatMap(project => project.examples);
     const flagged = rows.filter(item => item.checks?.length).length;
-    if (flagged) return ['dataset-builder', `Settle ${plural(flagged, 'flagged row')}`, 'A rule objected to these without needing a model; they are the only rows that need you.'];
+    if (flagged) return ['dataset-add', `Settle ${plural(flagged, 'flagged row')}`, 'A rule objected to these without needing a model; they are the only rows that need you.', null, 'generate'];
     const unreviewed = rows.filter(item => item.status === 'unreviewed').length;
-    if (unreviewed) return ['dataset-builder', `Approve ${plural(unreviewed, 'example')}`, 'Generated rows are not benchmark truth until you say so.'];
+    if (unreviewed) return ['dataset-add', `Approve ${plural(unreviewed, 'example')}`, 'Generated rows are not benchmark truth until you say so.', null, 'generate'];
     if (![...state.datasetSizes.keys()].some(name => name.startsWith('uploaded:'))) {
-      return ['dataset-upload', 'Upload your own rows', 'A score speaks loudest about examples from your own traffic.'];
+      return ['dataset-add', 'Add your own rows', 'A score speaks loudest about examples from your own traffic.'];
     }
     // With a run behind you, the useful next rows are not the awkward ones in
     // general — they are the ones this prompt has already been caught on.
-    if (state.report) return ['dataset-builder', 'Build from what it got wrong', 'Seed a new set from the rows the last run did not score full marks on.'];
-    return ['dataset-builder', 'Build the edge cases', 'Generate the awkward rows your uploads do not cover.'];
+    if (state.report) return ['dataset-add', 'Build from what it got wrong', 'Seed a new set from the rows the last run did not score full marks on.', null, 'generate'];
+    return ['dataset-add', 'Build the edge cases', 'Generate the awkward rows your uploads do not cover.', null, 'generate'];
   },
   check() {
     if (!state.experiments.length) return ['report', 'Take the first measurement', 'Nothing here can compare runs until one exists.'];
-    if (state.experiments.length === 1) return ['model-matrix', 'Try it on another model', 'Wording that only works on one model shows up here first.'];
-    return ['analysis', 'Ask whether it is real', 'Confidence intervals, so a noisy sample does not become a release.'];
+    if (state.experiments.length === 1) return ['test-lab', 'Try it on another model', 'Wording that only works on one model shows up here first.', null, 'models'];
+    return ['results', 'Ask whether it is real', 'Confidence intervals, so a noisy sample does not become a release.', null, 'significance'];
   },
   ship() {
     const pending = state.quality.reviews.filter(item => item.status === 'pending').length;
     // Advice lands where the circle for the same thing lands: on the unanswered
     // ones, not on the whole history of decisions.
-    if (pending) return ['reviews', `Clear ${pending} waiting`, 'Nothing moves past this gate while something is unanswered.', 'pending'];
-    if (!state.quality.releases.length) return ['releases', 'Register a release', 'A named, hashed version is what a rollback puts back.'];
+    if (pending) return ['reviews', `Clear ${pending} waiting`, 'A generated row or a verdict is waiting for a person to read it.', 'pending'];
+    if (!state.quality.releases.length) return ['ship', 'Register a release', 'A named, hashed version is what a rollback puts back.', null, 'releases'];
     if (state.quality.releases.some(release => release.status === 'production')) {
-      return ['production', 'Check for drift', 'Paste the inputs you have seen since, and see how far they have moved from the ones you tested on.'];
+      return ['ship', 'Check for drift', 'Paste the inputs you have seen since, and see how far they have moved from the ones you tested on.', null, 'spot-checks'];
     }
-    return ['releases', 'Move the release along', 'Draft → tested → approved → production, one explicit step at a time.'];
+    return ['ship', 'Export the manifest', 'The release becomes two files your repository holds and CI enforces.', null, 'releases'];
   },
   reference() {
     return ['techniques', 'Browse techniques catalogue', 'Explore prompt methods with live compiled examples.'];
@@ -874,7 +1113,7 @@ function stockBubbles(items) {
 function renderSectionMap(section) {
   const stock = sectionStock[section]?.();
   if (!stock) return '';
-  const [nextTab, nextLabel, nextHint, nextShowing] = sectionNextStep[section]();
+  const [nextTab, nextLabel, nextHint, nextShowing, nextMode] = sectionNextStep[section]();
   const bubbles = stockBubbles(stock.items);
   const packed = packCircles(bubbles.map(item => item.value));
   // The tally of everything that did not fit can outweigh any single thing in
@@ -899,13 +1138,14 @@ function renderSectionMap(section) {
         // small to draw stands for no single thing, and opens the screen whole.
         const target = item.tab || stock.tab;
         const showing = item.tone === 'rest' ? null : (item.showing ?? item.label);
+        const targetMode = item.mode || MODE_SPECS[target]?.default;
         // Spoken aloud and hovered over, so the number is exact and the unit
         // agrees with it: one run, not 1 runs.
         const reading = `${item.label} — ${stock.unit
           ? plural(item.value, stock.unit.replace(/s$/, ''))
           : compactNumber(item.value)}`;
-        return `<a class="map-bubble ${tone} ${room}" href="#${target}${showing ? `/${encodeURIComponent(showing)}` : ''}"
-          data-global-tab="${target}" data-screen="${target}"${showing ? ` data-showing="${esc(showing)}"` : ''}
+        return `<a class="map-bubble ${tone} ${room}" href="${targetMode ? canonicalModePath(target, targetMode, showing) : `#${target}${showing ? `/${encodeURIComponent(showing)}` : ''}`}"
+          data-global-tab="${target}" data-screen="${target}"${targetMode ? ` data-mode="${targetMode}"` : ''}${showing ? ` data-showing="${esc(showing)}"` : ''}
           style="left:${((margin + circle.x * inset) * 100).toFixed(2)}%;top:${((margin + circle.y * inset) * 100).toFixed(2)}%;width:${diameter.toFixed(2)}%"
           title="${esc(reading)}"><span class="sr-only">${esc(reading)}</span>
           <span class="map-bubble-text" aria-hidden="true"><b>${esc(compactNumber(item.value))}</b><i>${esc(item.label)}</i></span></a>`;
@@ -919,8 +1159,8 @@ function renderSectionMap(section) {
       </div>
       ${plot}
       ${bubbles.length ? `<p class="map-legend">${esc(stock.legend)}</p>` : ''}
-      <a class="map-next" href="#${nextTab}${nextShowing ? `/${encodeURIComponent(nextShowing)}` : ''}"
-        data-global-tab="${nextTab}" data-screen="${nextTab}"${nextShowing ? ` data-showing="${esc(nextShowing)}"` : ''}>
+      <a class="map-next" href="${nextMode ? canonicalModePath(nextTab, nextMode, nextShowing) : `#${nextTab}${nextShowing ? `/${encodeURIComponent(nextShowing)}` : ''}`}"
+        data-global-tab="${nextTab}" data-screen="${nextTab}"${nextMode ? ` data-mode="${esc(nextMode)}"` : ''}${nextShowing ? ` data-showing="${esc(nextShowing)}"` : ''}>
         <span class="map-next-kicker">Next step</span>
         <strong>${esc(nextLabel)}</strong>
         <small>${esc(nextHint)}</small>
@@ -933,7 +1173,11 @@ function renderSection(tab) {
   const group = document.querySelector(`.sidebar-group[data-section="${section}"]`);
   // The rail's rows, and nothing else: a section screen claims to list what is
   // under it, so the two lists have to be the same list.
-  const screens = group ? [...group.querySelectorAll('.sidebar-links a')].map(link => link.dataset.screen) : [];
+  const screens = group ? [...group.querySelectorAll('.sidebar-links a')].map(link => ({
+    tab:link.dataset.screen,
+    mode:link.dataset.mode || null,
+    label:link.textContent.trim()
+  })) : [];
   const spotlight = sectionSpotlights[section];
 
   if (!spotlight) {
@@ -987,25 +1231,11 @@ function detailBody(tab) {
   if (tab === 'report' && state.report) body = renderReport(state.report);
   if (tab === 'comparison' && state.comparison) body = renderComparison(state.comparison);
   if (tab === 'optimization' && state.optimization) body = renderOptimization(state.optimization);
-  if (tab === 'dataset-upload') body = renderDatasetUpload();
-  if (tab === 'dataset-hub') body = renderDatasetHub();
   if (tab === 'techniques') body = renderTechniqueCatalog();
   if (tab === 'logs') body = renderLogs();
-  if (tab === 'history') body = renderHistory();
   if (tab === 'settings') body = renderSettings();
-  if (platformTabs.includes(tab)) body = renderPlatformTab(tab);
-  if (docPages[tab]) {
-    const [src, title] = docPages[tab];
-    // ?embed is the documents' own switch for "the screen around me is already
-    // carrying my name": without it the panel header and the page's title say
-    // the same words twice.
-    const frame = `<iframe class="doc-frame" src="${src}?embed" title="${title}"></iframe>`;
-    // The guide's contents live beside the frame, not inside it: the frame is
-    // as tall as the article, so a sticky nav in there would never stick.
-    body = (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation')
-      ? `<div class="guide-split">${tab === 'prompt-vs-finetuning' ? renderGuideToc('en') : '<nav class="toc guide-toc" data-guide-toc aria-label="On this page"><strong>Contents</strong></nav>'}${frame}</div>`
-      : frame;
-  }
+  if (MODE_SPECS[tab]) body = renderConsolidatedScreen(tab);
+  else if (platformTabs.includes(tab)) body = renderPlatformTab(tab);
   return body;
 }
 
@@ -1127,15 +1357,6 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
     ['engine', 'judge', 'similarity', 'evaluation'].forEach(loadInstalledModels);
     wireProfileControls(panel);
   }
-  if (docPages[tab]) {
-    const frame = panel.querySelector('.doc-frame');
-    if (frame) {
-      frame.addEventListener('load', () => {
-        fitDocFrame(frame);
-        if (tab === 'prompt-vs-finetuning' || tab === 'help' || tab === 'evaluation') wireGuideToc(panel, frame);
-      });
-    }
-  }
   if (tab === 'logs') {
     const refreshBtn = panel.querySelector('.log-refresh');
     if (refreshBtn) refreshBtn.addEventListener('click', () => refreshLogs(true));
@@ -1153,7 +1374,7 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   // it is: the map's circles, the home tiles, and a run's example blocks all go
   // through one handler rather than each screen inventing its own.
   panel.querySelectorAll('[data-global-tab]').forEach(link => link.addEventListener('click', event => {
-    event.preventDefault(); selectTab(link.dataset.globalTab, {focus:true, showing:link.dataset.showing});
+    event.preventDefault(); selectTab(link.dataset.globalTab, {focus:true, focusMode:Boolean(link.dataset.mode), showing:link.dataset.showing, mode:link.dataset.mode});
   }));
   if (sectionTabs.includes(tab)) loadSectionFacts(tab.slice(2));
   if (tab === 'dataset-library' && showingOn(tab)) loadDatasetRows(showingOn(tab));
@@ -1185,10 +1406,13 @@ function renderDetailPanel(tab, body=detailBody(tab)) {
   // show, so the bands they render must be judged again once they are here.
   applyModelGate();
   if (RUN_SETUP[tab]) wireRunSetup(panel);
-  if (tab === 'dataset-upload') wireDatasetUpload(panel);
-  if (tab === 'dataset-hub') wireDatasetHub(panel);
-  if (tab === 'history') wireHistoryControls(panel);
-  if (platformTabs.includes(tab)) wirePlatformTab(tab, panel);
+  if (MODE_SPECS[tab]) wireConsolidatedScreen(tab, panel);
+  else if (platformTabs.includes(tab)) wirePlatformTab(tab, panel);
+  const pendingFocus = state.pendingModeFocus;
+  if (pendingFocus?.tab === tab) {
+    const target = panel.querySelector(`[data-mode-tab="${tab}"][data-mode="${pendingFocus.mode}"]`);
+    if (target) { target.focus({preventScroll:true}); state.pendingModeFocus = null; }
+  }
 }
 
 function activateDetailTab() {
@@ -1243,7 +1467,10 @@ function renderHeaderActions() {
   document.querySelectorAll('[data-global-tab]').forEach(link => {
     const tab = normalizedTab(link.dataset.globalTab);
     const isBottom = link.closest('.bottom-nav');
-    const active = isBottom ? tab === primary : tab === state.tab || (tab === 'prompt' && resultTabs.includes(state.tab));
+    const modeMatches = !link.dataset.mode || screenModes[tab] === link.dataset.mode;
+    const active = isBottom
+      ? tab === primary
+      : (tab === state.tab && modeMatches) || (tab === 'prompt' && resultTabs.includes(state.tab));
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -1255,9 +1482,11 @@ function renderHeaderActions() {
 function crumbTrail(tab) {
   const trail = [['home', 'Prompt Playoff']];
   if (tab === 'home') return trail;
+  // A section is a step of the path only when it has a screen of its own to
+  // land on; `system` names the rail's foot, which is not somewhere you go.
   const section = sectionOf(tab);
-  if (section) trail.push([`s-${section}`, screenMeta[`s-${section}`][1]]);
-  if (!sectionTabs.includes(tab)) trail.push([tab, (screenMeta[tab] || screenMeta.home)[1]]);
+  if (sectionTabs.includes(`s-${section}`)) trail.push([`s-${section}`, screenMeta[`s-${section}`][1]]);
+  if (!sectionTabs.includes(tab)) trail.push([tab, displayMeta(tab)[1]]);
   // The thing you opened the screen on is a step of the path like any other, so
   // the screen it sits on becomes something you can click back to, and the back
   // button widens the screen instead of leaving it.
@@ -1280,7 +1509,7 @@ function renderCrumbs(tab) {
 }
 
 function updateWorkspaceContext() {
-  const [, title] = screenMeta[state.tab] || screenMeta.home;
+  const [, title] = displayMeta(state.tab);
   const value = showingOn(state.tab);
   renderCrumbs(state.tab);
   document.title = `${value ? `${value} · ` : ''}${title} · Prompt Playoff`;
@@ -1319,7 +1548,12 @@ function updateWorkspaceContext() {
 }
 
 function selectTab(tab, options={}) {
+  const requestedTab = tab;
   tab = normalizedTab(tab);
+  const mode = MODE_SPECS[tab]
+    ? normalizedMode(tab, options.mode || legacyMode(requestedTab) || screenModes[tab])
+    : null;
+  if (mode) screenModes[tab] = mode;
   // Arriving anywhere without naming a thing means the whole screen: a
   // narrowing never outlives the click that asked for it.
   // A narrowing is a statement about something that exists. A measurement is
@@ -1330,7 +1564,7 @@ function selectTab(tab, options={}) {
   const showing = (options.showing && !nothingToShow) ? options.showing : null;
   const arrived = state.tab !== tab && options.syncUrl !== false;
   state.showing = showing ? {tab, value:showing} : null;
-  const targetHash = `#${tab}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
+  const targetHash = mode ? canonicalModePath(tab, mode, showing) : `#${tab}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
   if (options.syncUrl !== false && window.location.hash !== targetHash) {
     window.history[options.replace ? 'replaceState' : 'pushState']({screen:tab, showing}, '', targetHash);
   }
@@ -1351,6 +1585,7 @@ function selectTab(tab, options={}) {
     renderDetailPanel(tab, platformNeedsLoad ? '<div class="empty">Loading…</div>' : detailBody(tab));
   }
   activateDetailTab();
+  if (mode) applyMode(tab, panel, mode);
   // A new screen starts at its own beginning. Without this you land halfway
   // down it, at whatever height the screen you left happened to be scrolled to
   // — and the deeper the path gets, the further from the top that is. Going
@@ -1358,15 +1593,19 @@ function selectTab(tab, options={}) {
   // that has a part to point at overrides this a frame later.
   if (arrived) window.scrollTo({top:0, behavior:'auto'});
   if (tab === 'logs') refreshLogs();
-  if (tab === 'history') refreshHistory();
+  if (tab === 'results') refreshHistory();
   if (platformNeedsLoad) refreshPlatformTab(tab);
-  if (options.focus) $('main-content')?.focus({preventScroll:true});
+  if (options.focusMode && mode) {
+    const target = panel?.querySelector(`[data-mode-tab="${tab}"][data-mode="${mode}"]`);
+    if (target) target.focus({preventScroll:true});
+    else state.pendingModeFocus = {tab, mode};
+  } else if (options.focus) $('main-content')?.focus({preventScroll:true});
 }
 
 function initializeNavigation() {
   const route = routeFromLocation();
   if (!route.known) window.history.replaceState({screen:route.tab}, '', `#${route.tab}`);
-  selectTab(route.tab, {syncUrl:false, showing:route.showing});
+  selectTab(route.tab, {syncUrl:route.legacy, replace:route.legacy, showing:route.showing, mode:route.mode, focusMode:route.legacy});
 }
 
 /* A hash that names no screen is a position on the current one — the technique
@@ -1375,13 +1614,13 @@ function initializeNavigation() {
 window.addEventListener('popstate', () => {
   const route = routeFromLocation();
   if (!route.known) return;
-  selectTab(route.tab, {syncUrl:false, showing:route.showing});
+  selectTab(route.tab, {syncUrl:route.legacy, replace:route.legacy, showing:route.showing, mode:route.mode, focusMode:route.legacy});
 });
 window.addEventListener('hashchange', () => {
   const route = routeFromLocation();
   if (!route.known) return;
-  if (route.tab !== state.tab || route.showing !== showingOn(route.tab)) {
-    selectTab(route.tab, {syncUrl:false, showing:route.showing});
+  if (route.legacy || route.tab !== state.tab || route.showing !== showingOn(route.tab) || (route.mode && route.mode !== screenModes[route.tab])) {
+    selectTab(route.tab, {syncUrl:route.legacy, replace:route.legacy, showing:route.showing, mode:route.mode, focusMode:route.legacy});
   }
 });
 
@@ -1530,7 +1769,7 @@ function renderLogs() {
 async function refreshHistory() {
   try { state.experiments = await api('/v1/experiments'); }
   catch (e) { state.experiments = []; state.experimentComparison = {error:e.message}; }
-  if (state.tab === 'history') renderDetailPanel('history');
+  if (state.tab === 'results') renderDetailPanel('results');
 }
 
 function experimentMetric(record) {
@@ -1571,7 +1810,7 @@ function renderHistory() {
   // the line you came to read is not one point among eleven.
   // Arrived on a set, or on one run: a release names the run that justified it,
   // and the link has to land on that row rather than on the whole file.
-  const only = showingOn('history');
+  const only = showingOn('results');
   const records = only
     ? state.experiments.filter(item => item.dataset === only || item.id === only)
     : state.experiments;
@@ -1597,7 +1836,7 @@ function wireHistoryControls(panel) {
   panel.querySelector('.history-compare')?.addEventListener('click', async () => {
     try { state.experimentComparison = await api('/v1/experiments/compare', {before_id:before.value, after_id:after.value}); }
     catch (e) { state.experimentComparison = {error:e.message}; }
-    renderDetailPanel('history');
+    renderDetailPanel('results');
   });
 }
 

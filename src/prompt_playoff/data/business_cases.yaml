@@ -32,6 +32,130 @@
 
 version: 1
 
+# The packaged benchmarks outside the business shelf that a taxonomy task is
+# allowed to route to.  A task's `dataset` has to name either one of these or
+# one of the `sets` below, so a mistyped name is refused at load time instead of
+# quietly rendering as "No dataset".
+benchmark_sets:
+  - entity-extraction
+  - grounded-qa
+  - mbpp
+  - summarization
+  - translation
+
+# The Dataset Library's primary navigation contract.  Every task in the
+# approved business directory stays visible; `dataset` is present only when a
+# packaged set measures the same input -> output shape closely enough to be an
+# honest route.  Availability is added by business_catalog.py at request time.
+taxonomy:
+  - id: customer-support
+    name: Customer Support
+    summary: Improve support efficiency and customer satisfaction
+    tasks:
+      - {id: ticket-classification, name: Ticket classification, dataset: "business:support-intent"}
+      - {id: ticket-routing, name: Ticket routing, dataset: "business:retail-support"}
+      - {id: reply-drafting, name: Reply drafting, dataset: "business:support-reply"}
+      - {id: intent-detection, name: Intent detection, dataset: "business:banking-intent"}
+      - {id: conversation-summary, name: Conversation summary, dataset: "business:meeting-summary"}
+  - id: marketing
+    name: Marketing
+    summary: Create, analyze and optimize content & campaigns
+    tasks:
+      - {id: ad-copy-generation, name: Ad copy generation, dataset: "business:marketing-email"}
+      - {id: brand-voice-rewriting, name: Brand voice rewriting}
+      - {id: review-analysis, name: Review analysis, dataset: "business:review-signal"}
+      - {id: campaign-brief-generation, name: Campaign brief generation}
+      - {id: seo-content-generation, name: SEO content generation, dataset: "business:product-description"}
+  - id: sales-crm
+    name: Sales & CRM
+    summary: Qualify leads and improve sales productivity
+    tasks:
+      - {id: lead-qualification, name: Lead qualification}
+      - {id: outreach-personalization, name: Outreach personalization}
+      - {id: call-insights-extraction, name: Call insights extraction}
+      - {id: crm-note-generation, name: CRM note generation, dataset: "business:meeting-summary"}
+      - {id: objection-detection, name: Objection detection}
+  - id: operations
+    name: Operations
+    summary: Automate workflows and streamline processes
+    tasks:
+      - {id: document-processing, name: Document processing, dataset: "business:invoice-fields"}
+      - {id: workflow-classification, name: Workflow classification}
+      - {id: data-extraction, name: Data extraction, dataset: entity-extraction}
+      - {id: internal-request-routing, name: Internal request routing}
+      - {id: email-prioritization, name: Email prioritization}
+  - id: finance-accounting
+    name: Finance & Accounting
+    summary: Extract, classify and analyze financial data
+    tasks:
+      - {id: invoice-extraction, name: Invoice extraction, dataset: "business:invoice-fields"}
+      - {id: expense-classification, name: Expense classification}
+      - {id: financial-document-qa, name: Financial document QA, dataset: "business:financial-qa"}
+      - {id: financial-summary-generation, name: Financial summary generation, dataset: summarization}
+      - {id: budget-variance-explanation, name: Budget variance explanation}
+  - id: legal-compliance
+    name: Legal & Compliance
+    summary: Review contracts and ensure compliance
+    tasks:
+      - {id: contract-review, name: Contract review, dataset: "business:contract-risk"}
+      - {id: clause-extraction, name: Clause extraction, dataset: "business:contract-clause"}
+      - {id: compliance-check, name: Compliance check}
+      - {id: pii-detection, name: PII detection}
+      - {id: policy-qa, name: Policy Q&A, dataset: "business:legal-reasoning"}
+  - id: hr-recruiting
+    name: HR & Recruiting
+    summary: Attract talent and streamline HR processes
+    tasks:
+      - {id: resume-screening, name: Resume screening, dataset: "business:resume-fit"}
+      - {id: job-description-generation, name: Job description generation}
+      - {id: interview-summary, name: Interview summary, dataset: "business:meeting-summary"}
+      - {id: candidate-matching, name: Candidate matching, dataset: "business:resume-fit"}
+      - {id: employee-qa, name: Employee Q&A}
+  - id: product
+    name: Product
+    summary: Understand users and build better products
+    tasks:
+      - {id: feedback-classification, name: Feedback classification, dataset: "business:review-signal"}
+      - {id: feature-request-clustering, name: Feature request clustering}
+      - {id: research-synthesis, name: Research synthesis, dataset: summarization}
+      - {id: prd-spec-generation, name: PRD / spec generation}
+      - {id: user-story-generation, name: User story generation}
+  - id: engineering-it
+    name: Engineering & IT
+    summary: Build, maintain and support systems
+    tasks:
+      - {id: code-generation, name: Code generation, dataset: mbpp}
+      - {id: code-explanation, name: Code explanation}
+      - {id: bug-triage, name: Bug triage}
+      - {id: incident-summary, name: Incident summary, dataset: summarization}
+      - {id: technical-qa, name: Technical Q&A, dataset: grounded-qa}
+  - id: data-analytics
+    name: Data & Analytics
+    summary: Query data, generate reports and extract insights
+    tasks:
+      - {id: text-to-sql, name: Text-to-SQL}
+      - {id: report-generation, name: Report generation}
+      - {id: insight-extraction, name: Insight extraction, dataset: grounded-qa}
+      - {id: data-explanation, name: Data explanation, dataset: grounded-qa}
+      - {id: metric-commentary, name: Metric commentary}
+  - id: knowledge-internal-search
+    name: Knowledge & Internal Search
+    summary: Find information and answer questions across your org
+    tasks:
+      - {id: internal-qa-rag, name: Internal Q&A (RAG), dataset: grounded-qa}
+      - {id: policy-lookup, name: Policy lookup, dataset: grounded-qa}
+      - {id: document-search, name: Document search}
+      - {id: knowledge-base-summarization, name: Knowledge base summarization, dataset: summarization}
+      - {id: onboarding-assistant, name: Onboarding assistant, dataset: grounded-qa}
+  - id: localization
+    name: Localization
+    summary: Translate and adapt content for global markets
+    tasks:
+      - {id: translation, name: Translation, dataset: "business:meeting-translation"}
+      - {id: localization-adaptation, name: Localization / adaptation}
+      - {id: terminology-consistency, name: Terminology consistency, dataset: translation}
+      - {id: multilingual-content-qa, name: Multilingual content QA}
+
 groups:
   - id: email
     name: Email

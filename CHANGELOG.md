@@ -39,7 +39,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   many are reconstructions. Records made before this land under `unrecorded` and behave as they
   always did.
 
+- The dataset library is browsed by the work, not by the file. `business_cases.yaml` carries a
+  `taxonomy` beside its recorded cases: categories of business work, each listing the tasks under
+  it, and every task is shown whether or not a packaged set measures it. The shelf used to be the
+  sets it happened to have, so a task nothing measured was not a gap — it was invisible. A task
+  routes to a business set or to one of the packaged benchmarks; anything else is a typo, and the
+  loader now refuses the file instead of letting it degrade into a "No dataset" the screen states
+  as though it were deliberate.
+- **Do you need an LLM?** — a guide, in English and Russian, on the eight solution classes between a
+  regular expression and a person, and the checks that decide which one a task needs. It is the
+  question that comes before the prompt, and a tool that only ever answers "prompt" was not going to
+  ask it. It is a mode inside Guides, not a fourteenth destination.
+- `GET /v1/releases/{id}/manifest` freezes a release into two files a repository can hold: the whole
+  provenance of the shipped prompt — exact text, fingerprint, the run that measured it, whether the
+  two fingerprints agree, the rows it was measured on and whether they have moved since — and the
+  same release expressed as the `checks:` block `prompt-playoff check` reads, so a project with no
+  gate can acquire one by pasting rather than by learning the schema.
+
 ### Changed
+- Registering a release no longer raises a review item. It asked the author to approve their own
+  work, which is a click that establishes nothing: one user cannot be two, and the committed
+  thresholds already decide the question. Reviews now holds only what a model asked a person to
+  settle — generated rows, judge verdicts, breached gates. Files written by an older version keep
+  their `release` rows; they are skipped on read rather than migrated, because rewriting a user's
+  file to delete history is a heavier promise than ignoring rows nothing depends on.
+- The rail's five sections have landing screens of their own — Prompt Studio, Evaluation,
+  Production — and Model matrix and Context lab are two modes of one Test lab. They were one thing
+  seen with one condition changed, filed as two destinations.
+- The README said thirty-two techniques over a registry of sixty-one, and "25+ more" over
+  fifty-seven. `tests/test_doc_numbers.py` now compares every count the prose states out loud
+  against the registry and the catalogue, so a document can no longer render perfectly while lying.
 
 - Prompt vs Fine-Tuning no longer paints a grey sheet behind the article. The
   page sits in a frame on a panel, and that grey `--bg` ignored the Light/Dark

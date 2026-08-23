@@ -50,13 +50,13 @@ Input:          plain language description
 Output:         ranked techniques, compiled prompt, measured quality
 ```
 
-Chain-of-thought, self-consistency, ReAct, schema-first extraction and 25+ more — ranked on your data, not on a blog post's opinion.
+Chain-of-thought, self-consistency, ReAct, schema-first extraction and 57 more — ranked on your data, not on a blog post's opinion.
 
 Click **→ 1 DESCRIBE** to parse your task. **→ 2 RECOMMEND** ranks techniques with reasons. **→ 3 COMPILE** builds the actual prompt. **→ 4 BENCHMARK** measures quality and reliability on your Ollama model.
 
 The optimization is saved locally, so you can revisit it later. A full benchmark can take minutes to hours depending on dataset size and model speed.
 
-## Thirty-two prompting techniques out of the box
+## Sixty-one prompting techniques out of the box
 
 Prompt Playoff ships with techniques from research papers, ready to use. Click a thumbnail for the full technique card.
 

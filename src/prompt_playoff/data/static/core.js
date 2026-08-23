@@ -29,18 +29,19 @@ const ICONS = {
   shield:'<path d="M12 3.2 20 6v6.1c0 4.4-3.2 7.5-8 8.7-4.8-1.2-8-4.3-8-8.7V6Z"/><path d="M12 8.8v3.6M12 15.8h.01"/>',
   chevron:'<path d="m9.5 5 7 7-7 7"/>',
   chevronLeft:'<path d="m14.5 5-7 7 7 7"/>',
+  search:'<circle cx="10.8" cy="10.8" r="6.6"/><path d="m16 16 4.2 4.2"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
   upload:'<path d="M12 15V4"/><path d="m8 7.5 4-4 4 4"/><path d="M4 16.5v3A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-3"/>',
   download:'<path d="M12 3v11"/><path d="m8 10.5 4 4 4-4"/><path d="M4 16.5v3A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-3"/>'
 };
 const icon = name => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
-// Which mark belongs to which screen. The sidebar is static HTML, so the marks
-// are put in from here rather than repeated sixteen times in the markup.
+// Which mark belongs to which screen. Only the mobile bar carries marks — the
+// rail alongside it carries none, because there the name is the whole row — so
+// this is the bar's five destinations and nothing else. It used to list every
+// screen, including the ones the merge folded away, which read as a promise
+// that some other surface was drawing them.
 const screenIcons = {
-  prompt:'pencil', 'dataset-library':'rows', 'dataset-upload':'upload', 'dataset-hub':'download', 'dataset-builder':'rowsAdd',
-  history:'clock', judge:'scale', 'model-matrix':'grid', 'context-lab':'columns', analysis:'target',
-  regressions:'diff', reviews:'checkCircle', releases:'package', production:'pulse',
-  techniques:'sparkle', logs:'play', settings:'sliders', evaluation:'book', help:'help'
+  prompt:'pencil', 'dataset-library':'rows', results:'clock', ship:'package', guides:'book'
 };
 
 const $ = id => document.getElementById(id);
@@ -56,11 +57,15 @@ const state = {
   comparison:null, optimization:null, inputSource:'task',
   techniqueCatalog:new Map(), catalogStatus:'loading', catalogError:'', copyPayloads:new Map(),
   datasetSizes:new Map(), datasetFacts:new Map(), hub:null,
-  // The business catalogue: fifty jobs a model is paid to do and the public set
-  // that measures each. Fetched once per visit to the library, and null until
-  // then. `catalogGroup` is which of the ten categories is open — one at a time,
-  // because fifty cases at once is a document, not a screen.
+  // The business catalogue: the categories of work a model is paid to do, the
+  // tasks under each, and the public set that measures a task where one honestly
+  // does. Fetched once per visit to the library, and null until then.
+  // `catalogGroup` is which category is open — one at a time, because every
+  // category's tasks and cases at once is a document, not a screen.
   catalog:null, catalogError:'', catalogGroup:null,
+  // Library browsing is deliberately transient: search, scope and sort help
+  // find a set in this visit, but are not part of a dataset or run contract.
+  catalogBrowse:{query:'', scope:'all', availability:'all', sort:'relevance'},
   // The rows of a set, fetched only when the library is opened on that one set.
   // Name → {status, rows, error}.
   datasetRows:new Map(),

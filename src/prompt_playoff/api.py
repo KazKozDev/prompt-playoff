@@ -21,7 +21,12 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from prompt_playoff import __version__
 from prompt_playoff.business_catalog import CatalogError, catalog
 from prompt_playoff.checks import ReleaseGate, release_gate
-from prompt_playoff.deployment import DeploymentBundle, export_runtime
+from prompt_playoff.deployment import (
+    DeploymentBundle,
+    ReleaseManifest,
+    export_runtime,
+    release_manifest,
+)
 from prompt_playoff.domain import (
     AdoptOptimizedRequest,
     AuthorRequest,
@@ -392,6 +397,22 @@ def evaluation_page_ru() -> str:
     )
 
 
+@app.get("/llm-or-not", response_class=HTMLResponse, include_in_schema=False)
+def llm_or_not_page() -> str:
+    return (
+        files("prompt_playoff").joinpath("data/static/llm-or-not.html").read_text(encoding="utf-8")
+    )
+
+
+@app.get("/llm-or-not/ru", response_class=HTMLResponse, include_in_schema=False)
+def llm_or_not_page_ru() -> str:
+    return (
+        files("prompt_playoff")
+        .joinpath("data/static/llm-or-not.ru.html")
+        .read_text(encoding="utf-8")
+    )
+
+
 @app.get("/prompt-vs-finetuning", response_class=HTMLResponse, include_in_schema=False)
 def prompt_vs_finetuning_page() -> str:
     return (
@@ -588,17 +609,17 @@ def datasets(request: Request) -> list[dict[str, Any]]:
 # name of a set nobody has.
 @app.get("/v1/datasets/catalog")
 def dataset_catalog(request: Request) -> dict[str, Any]:
-    """Fifty business cases, the set that measures each, and which ones are here.
+    """The business taxonomy and cases, joined to the sets this server can read.
 
-    Counting examples means reading every bundled file, and the catalogue is a
-    browsing screen — so the count comes from a name-only pass, and a set that
-    fails to parse is reported as absent rather than taking the screen down.
+    Every registered set is counted, not only the business ones: a taxonomy task
+    may route to a packaged benchmark, and a route the count skipped would be
+    reported as a gap. Counting means parsing each file, which this screen can
+    afford — and a set that fails to parse is reported as absent rather than
+    taking the whole catalogue down.
     """
     service = _service(request)
     available: dict[str, int] = {}
     for name in service.dataset_names:
-        if not name.startswith("business:"):
-            continue
         try:
             available[name] = len(service.dataset(name))
         except Exception:
@@ -1576,17 +1597,16 @@ def _release_evidence(payload: ReleaseCreateRequest, request: Request) -> Releas
 
 @app.post("/v1/releases", response_model=ReleaseRecord, status_code=status.HTTP_201_CREATED)
 def create_release(payload: ReleaseCreateRequest, request: Request) -> ReleaseRecord:
-    record = _quality(request).create_release(payload, _release_evidence(payload, request))
-    _quality(request).add_review(
-        ReviewItem(
-            id=f"review_{record.id}",
-            kind="release",
-            created_at=record.created_at,
-            title=f"Approve release {record.name} v{record.version}",
-            payload={"release_id": record.id, "prompt_hash": record.prompt_hash},
-        )
-    )
-    return record
+    """Register a prompt version against the run that measured it.
+
+    Registering used to also raise a review item asking the same person, at the
+    same keyboard, to approve what they had just registered — and advancing the
+    release was then refused until they did. One user cannot be two, so the
+    click proved nothing and the queue's own guide already said approving there
+    "does not promote a release". The bar that decides is the committed one in
+    `prompt-playoff.yaml`, applied to the cited run.
+    """
+    return _quality(request).create_release(payload, _release_evidence(payload, request))
 
 
 def _release_gate(release: ReleaseRecord, request: Request) -> ReleaseGate:
@@ -1663,6 +1683,48 @@ def cite_release(release_id: str, payload: ReleaseCiteRequest, request: Request)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@app.get("/v1/releases/{release_id}/manifest", response_model=ReleaseManifest)
+def read_release_manifest(release_id: str, request: Request) -> ReleaseManifest:
+    """The release as two files to commit, rather than a row kept in here.
+
+    A register that lives in one person's SQLite is not a system of record: no
+    colleague, no CI job and no future checkout can read it. The manifest hands
+    the provenance to the repository, and the checks file hands the bar to
+    `prompt-playoff check`, which is what actually guards anything.
+    """
+    release = next((item for item in _quality(request).releases() if item.id == release_id), None)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Unknown release")
+    record = (
+        _service(request).experiments.get(release.experiment_id) if release.experiment_id else None
+    )
+    return release_manifest(
+        release=release.model_dump(),
+        gate=_release_gate(release, request).model_dump(),
+        experiment=record.model_dump() if record is not None else None,
+        dataset_changed=_dataset_moved(record, request),
+        prompt_text=_release_prompt_text(release.prompt),
+    )
+
+
+def _release_prompt_text(prompt: dict[str, Any]) -> str:
+    """The frozen text, however the screen that registered it shaped the payload."""
+    for key in ("text", "prompt", "content"):
+        value = prompt.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    messages = prompt.get("messages")
+    if isinstance(messages, list):
+        parts = [
+            f"{item.get('role', 'user')}: {item.get('content', '')}"
+            for item in messages
+            if isinstance(item, dict)
+        ]
+        if parts:
+            return "\n\n".join(parts)
+    return json.dumps(prompt, indent=2, ensure_ascii=False)
+
+
 @app.post("/v1/releases/{release_id}/action", response_model=ReleaseRecord)
 def act_on_release(
     release_id: str, payload: ReleaseActionRequest, request: Request
@@ -1673,25 +1735,12 @@ def act_on_release(
         )
         if release is None:
             raise HTTPException(status_code=404, detail="Unknown release")
-        # The numbers first: it is the objective half, and refusing on it before
-        # a person is asked to sign off saves them signing off on something the
-        # bar will reject anyway.
+        # The committed thresholds are the whole gate. They are the numbers CI
+        # enforces on the same prompt, so a release that clears them here clears
+        # them there — which a second click by the same person never established.
         threshold_gate = _release_gate(release, request)
         if threshold_gate.blocks_approval:
             raise HTTPException(status_code=409, detail=threshold_gate.reason)
-        gate = next(
-            (
-                item
-                for item in _quality(request).reviews()
-                if item.kind == "release" and item.payload.get("release_id") == release_id
-            ),
-            None,
-        )
-        if gate is None or gate.status != "approved":
-            raise HTTPException(
-                status_code=409,
-                detail="Approve this release in Human Review before changing its lifecycle status",
-            )
     try:
         return _quality(request).act_on_release(release_id, payload.action)
     except ValueError as exc:

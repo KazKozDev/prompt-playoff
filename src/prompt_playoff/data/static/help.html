@@ -39,13 +39,13 @@
   <p>Everything below is that same path with the steps pulled apart, for when you want to see one of them or change it.</p>
 
   <h2>Five sections</h2>
-  <p>The rail has five, and they are the life of a prompt in order. Each opens to name its screens; the home screen shows the same five as tiles, each carrying the one fact that decides whether you need to go there.</p>
+  <p>The rail has five, and they are the life of a prompt in order. Each opens to name its screens; the home screen shows the same five as tiles, each carrying the one fact that decides whether you need to go there. Below them, in the rail's foot, sit the two screens that belong to no stage: <b>Models &amp; keys</b> and <b>Jobs &amp; logs</b>.</p>
   <div class="cards">
-    <div class="card"><b>Prompt</b><p>The prompt itself, the three measurements taken on it as it stands — one run over your examples, the methods that were in the running scored side by side, and the search for a better wording — and the catalogue of sixty-one methods it was written from.</p></div>
-    <div class="card"><b>Datasets</b><p>The rows every score is computed against. Bring your own, import a public set, or generate them here — and the library opens on a catalogue of fifty jobs businesses pay a model to do, each mapped to the set closest to it. A number only means something when these look like your real inputs.</p></div>
-    <div class="card"><b>Check</b><p>Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves.</p></div>
-    <div class="card"><b>Production</b><p>The gate between a prompt that scores well here and a prompt running in front of real users: regressions, reviews, releases, and the spot checks you run by hand.</p></div>
-    <div class="card"><b>Reference</b><p>The three models and their keys, the job log, and the reading. Nothing here changes your prompt.</p></div>
+    <div class="card"><b>Prompt Studio</b><p>The prompt itself, the three measurements taken on it as it stands — one run over your examples, the techniques that were in the running scored side by side, and the search for a better wording — and the catalogue of sixty-one techniques it was written from.</p></div>
+    <div class="card"><b>Datasets</b><p>The rows every score is computed against. Bring your own, import a public set, or generate them here — and the library opens on a shelf of twelve categories of business work, fifty-nine tasks between them, each task mapped to the set closest to its shape. A number only means something when these look like your real inputs.</p></div>
+    <div class="card"><b>Evaluation</b><p>Everything that compares across — runs, models, contexts, two answers — and everything that questions the numbers themselves.</p></div>
+    <div class="card"><b>Production</b><p>The gate between a prompt that scores well here and a prompt running in front of real users: spot checks, reviews, regressions, and releases.</p></div>
+    <div class="card"><b>Docs</b><p>The catalogue of techniques and the three guides — this one, the evaluation contract, and prompting versus fine-tuning. Nothing here changes your prompt.</p></div>
   </div>
 
   <h2>Three models, three jobs</h2>
@@ -60,13 +60,13 @@
   <h2>The path, step by step</h2>
   <div class="cards">
     <div class="card"><b><span class="step-no">1.</span> Describe the task</b><p>In the left column, in plain words: what the model should do, what comes out, and the constraints that matter. Choose whether you want a prompt ready for this one task or a reusable template with a placeholder, then press <b>Create my prompt</b>.</p></div>
-    <div class="card"><b><span class="step-no">2.</span> Read what was written</b><p><b>Prompt → Prompt text</b> shows the finished text — exactly what will be sent to the model — with the ranked methods and the reason each was suggested beside it. Any of them can be compiled instead.</p></div>
-    <div class="card"><b><span class="step-no">3.</span> Choose the examples</b><p><b>Datasets</b>. Twenty-eight sets ship with the app: eleven task benchmarks, and seventeen covering work businesses pay a model to do — email, meetings, support, invoices, contracts, marketing. Your own are one JSONL file away, public sets can be imported, and <b>Build datasets</b> generates rows when you have none. This is the choice that decides whether the number means anything.</p></div>
-    <div class="card"><b><span class="step-no">4.</span> Measure</b><p><b>Prompt → Measurement</b>. Set what to measure against and how many runs per example, then <b>Measure now</b>. This is the step that turns an opinion into a number.</p></div>
-    <div class="card"><b><span class="step-no">5.</span> Compare the methods</b><p><b>Prompt → Method comparison</b> scores every recommended method on the same examples, so the ranking is measured rather than assumed.</p></div>
-    <div class="card"><b><span class="step-no">6.</span> Push further</b><p><b>Prompt → Optimization</b> rewrites the prompt over several rounds, scores every version, and keeps the best. Read the held-out numbers only — see below. A winner stays on that screen until <b>Adopt optimized prompt</b> puts it on <b>Prompt text</b>.</p></div>
-    <div class="card"><b><span class="step-no">7.</span> Question the result</b><p><b>Check → Significance</b> puts an interval around the difference. <b>Model matrix</b> and <b>Context lab</b> ask whether it survives a different model or a different amount of context.</p></div>
-    <div class="card"><b><span class="step-no">8.</span> Ship it</b><p><b>Production → Regressions</b> compares two recorded runs against the quality and speed you are willing to lose; <b>Reviews</b> collects everything waiting for a yes or no; <b>Releases</b> carries the prompt from draft to production, with a rollback. A release can only be approved on a run that measured this exact text, against the bars in <code>prompt-playoff.yaml</code>.</p></div>
+    <div class="card"><b><span class="step-no">2.</span> Read what was written</b><p><b>Prompt Studio → Prompt text</b> shows the finished text — exactly what will be sent to the model — with the ranked techniques and the reason each was suggested beside it. Any of them can be compiled instead.</p></div>
+    <div class="card"><b><span class="step-no">3.</span> Choose the examples</b><p><b>Datasets</b>. Twenty-eight sets ship with the app: eleven task benchmarks, and seventeen covering work businesses pay a model to do — email, meetings, support, invoices, contracts, marketing. In <b>Add dataset</b>, upload your JSONL, import public rows, or use <b>Generate</b> when you have none. This is the choice that decides whether the number means anything.</p></div>
+    <div class="card"><b><span class="step-no">4.</span> Measure</b><p><b>Prompt Studio → Measurement</b>. Set what to measure against and how many runs per example, then <b>Measure now</b>. This is the step that turns an opinion into a number.</p></div>
+    <div class="card"><b><span class="step-no">5.</span> Compare the techniques</b><p><b>Prompt Studio → Technique comparison</b> scores every recommended technique on the same examples, so the ranking is measured rather than assumed.</p></div>
+    <div class="card"><b><span class="step-no">6.</span> Push further</b><p><b>Prompt Studio → Optimization</b> rewrites the prompt over several rounds, scores every version, and keeps the best. Read the held-out numbers only — see below. A winner stays on that screen until <b>Adopt optimized prompt</b> puts it on <b>Prompt text</b>.</p></div>
+    <div class="card"><b><span class="step-no">7.</span> Question the result</b><p><b>Results → Significance</b> puts an interval around the difference. <b>Test lab → Models</b> and <b>Test lab → Context</b> ask whether it survives a different model or a different amount of context.</p></div>
+    <div class="card"><b><span class="step-no">8.</span> Ship it</b><p><b>Production → Ship</b> freezes the prompt against the run that measured it, and <b>Export</b> writes two files for your repository: the manifest, carrying the exact text, its fingerprint and the run behind it, and a <code>checks:</code> block for <code>prompt-playoff.yaml</code>. From there <code>prompt-playoff check</code> enforces it in CI, which is where a gate actually guards something. A release advances only on a run that measured this exact text, against those same bars.</p></div>
   </div>
 
   <h2>The two numbers that matter</h2>
@@ -106,7 +106,7 @@
     <tr><td><code>failures</code> above zero</td><td>The model is too slow to answer in time. Use a faster one — a thinking model can spend forty seconds on one example.</td></tr>
     <tr><td>Good but expensive</td><td>Compare against a simpler method. Three model calls often do not pay for themselves in quality.</td></tr>
     <tr><td>Numbers jump between runs</td><td>Too few examples, or one run per example. Raise both.</td></tr>
-    <tr><td>Good here, wrong in production</td><td>Your examples do not look like your real inputs. <b>Production → Spot checks</b> measures exactly that gap: paste the inputs you have seen since against the ones you tested on.</td></tr>
+    <tr><td>Good here, wrong in production</td><td>Your examples do not look like your real inputs. <b>Ship → Spot checks</b> measures exactly that gap: paste the inputs you have seen since against the ones you tested on.</td></tr>
   </table>
   </div>
 
@@ -125,14 +125,14 @@
     <p><b>2. Few examples, worthless numbers.</b> On six examples a 5% difference is one example moving. Use a hundred or more if you intend to decide anything from the result.</p>
   </div>
   <div class="note warn">
-    <p><b>3. A number belongs to one model.</b> Measure on one model and it is a guess again for another. The app says <span class="pill measured">measured</span> where it measured and <span class="pill prior">prior only</span> where it is assuming. <b>Check → Model matrix</b> is how you find wording that only works on the model you wrote it for.</p>
+    <p><b>3. A number belongs to one model.</b> Measure on one model and it is a guess again for another. The app says <span class="pill measured">measured</span> where it measured and <span class="pill prior">prior only</span> where it is assuming. <b>Evaluation → Test lab → Models</b> is how you find wording that only works on the model you wrote it for.</p>
   </div>
   <div class="note warn">
-    <p><b>4. A model's verdict is not truth.</b> Pairwise judging is a model reading two answers. Every verdict goes to <b>Reviews</b> and waits for a person; nothing is promoted to a benchmark result on a model's say-so.</p>
+    <p><b>4. A model's verdict is not truth.</b> Answer judging uses a model to read two answers pairwise and blind. Every verdict goes to <b>Reviews</b> and waits for a person; nothing is promoted to a benchmark result on a model's say-so.</p>
   </div>
 
   <h2>Your own examples</h2>
-  <p>The bundled sets are for finding your way around. Draw conclusions from your own. A <code>.jsonl</code> file, one task per line, uploaded straight from <b>Datasets → Upload your own</b>:</p>
+  <p>The bundled sets are for finding your way around. Draw conclusions from your own. A <code>.jsonl</code> file, one task per line, uploaded straight from <b>Datasets → Add dataset → Upload file</b>:</p>
   <pre><code>{"id": "1", "input": "Mara entered Veyr with Captain Orin.",
  "expected": {"people": ["Mara", "Captain Orin"], "places": ["Veyr"]}}</code></pre>
   <p>Only <code>id</code> and <code>input</code> are required. The rest is worked out for you.</p>
@@ -167,7 +167,7 @@
 
     <h3>Where quality comes from</h3>
     <p>For extraction it is the <code>field_f1</code> grader: it counts both what the model missed and what it invented. In the <b>Graders</b> table it is marked headline. Next to it sits <code>exact_match</code> — did everything match outright, with no allowances. It is almost always far lower, and that is expected.</p>
-    <p>For prose — a reply, a subject line, minutes — it is <code>token_f1</code>, word overlap with the one answer the set records. Read it as a rough check, and settle wording with <b>Check → Pairwise judging</b>.</p>
+    <p>For prose — a reply, a subject line, minutes — it is <code>token_f1</code>, word overlap with the one answer the set records. Read it as a rough check, and settle wording with <b>Evaluation → Answer judging</b>.</p>
     <p>The format checks live there too: <code>json_validity</code> (did it parse), <code>json_schema</code> (did it match the schema fully), <code>no_prose</code> (no chatter around it). If <code>json_validity</code> is 1.00 while <code>field_f1</code> is low, the problem is comprehension, not format.</p>
 
     <h3>Where reliability comes from</h3>
@@ -190,11 +190,11 @@
     <p>Some methods split the prompt into several stages, which means several model calls in a row. Labels like <code>{previous}</code> mark where the previous stage's output gets inserted at run time.</p>
 
     <h3>Where the runs are recorded</h3>
-    <p><b>Check → Results</b> keeps every run this server has made, newest first, with a version-to-version diff and a CSV export. Aggregate numbers only: prompts and raw model answers are not stored there. <b>Reference → Jobs &amp; logs</b> shows what is running right now and what every finished run did.</p>
+    <p><b>Evaluation → Results</b> keeps every run this server has made, newest first, with a version-to-version diff and a CSV export. Aggregate numbers only: prompts and raw model answers are not stored there. <b>Jobs &amp; logs</b> shows what is running right now and what every finished run did.</p>
   </details>
 
   <div class="doc-foot">
-    Where the numbers come from, and when not to believe them: the <a href="/evaluation">Evaluation guide</a>. More depth in <code>README.md</code> and the <code>docs/</code> folder.
+    Where the numbers come from, and when not to believe them: <a href="/#guides/evaluation" target="_top">Guides → Evaluation</a>. More depth in <code>README.md</code> and the <code>docs/</code> folder.
   </div>
   </div>
   </div>

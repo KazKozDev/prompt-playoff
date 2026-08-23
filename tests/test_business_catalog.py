@@ -24,6 +24,116 @@ CATALOGUE = Path(__file__).parents[1] / "src/prompt_playoff/data/business_cases.
 BUSINESS = Path(__file__).parents[1] / "src/prompt_playoff/data/datasets/business"
 STATIC = Path(__file__).parents[1] / "src/prompt_playoff/data/static"
 
+EXPECTED_TAXONOMY = [
+    (
+        "Customer Support",
+        [
+            "Ticket classification",
+            "Ticket routing",
+            "Reply drafting",
+            "Intent detection",
+            "Conversation summary",
+        ],
+    ),
+    (
+        "Marketing",
+        [
+            "Ad copy generation",
+            "Brand voice rewriting",
+            "Review analysis",
+            "Campaign brief generation",
+            "SEO content generation",
+        ],
+    ),
+    (
+        "Sales & CRM",
+        [
+            "Lead qualification",
+            "Outreach personalization",
+            "Call insights extraction",
+            "CRM note generation",
+            "Objection detection",
+        ],
+    ),
+    (
+        "Operations",
+        [
+            "Document processing",
+            "Workflow classification",
+            "Data extraction",
+            "Internal request routing",
+            "Email prioritization",
+        ],
+    ),
+    (
+        "Finance & Accounting",
+        [
+            "Invoice extraction",
+            "Expense classification",
+            "Financial document QA",
+            "Financial summary generation",
+            "Budget variance explanation",
+        ],
+    ),
+    (
+        "Legal & Compliance",
+        ["Contract review", "Clause extraction", "Compliance check", "PII detection", "Policy Q&A"],
+    ),
+    (
+        "HR & Recruiting",
+        [
+            "Resume screening",
+            "Job description generation",
+            "Interview summary",
+            "Candidate matching",
+            "Employee Q&A",
+        ],
+    ),
+    (
+        "Product",
+        [
+            "Feedback classification",
+            "Feature request clustering",
+            "Research synthesis",
+            "PRD / spec generation",
+            "User story generation",
+        ],
+    ),
+    (
+        "Engineering & IT",
+        ["Code generation", "Code explanation", "Bug triage", "Incident summary", "Technical Q&A"],
+    ),
+    (
+        "Data & Analytics",
+        [
+            "Text-to-SQL",
+            "Report generation",
+            "Insight extraction",
+            "Data explanation",
+            "Metric commentary",
+        ],
+    ),
+    (
+        "Knowledge & Internal Search",
+        [
+            "Internal Q&A (RAG)",
+            "Policy lookup",
+            "Document search",
+            "Knowledge base summarization",
+            "Onboarding assistant",
+        ],
+    ),
+    (
+        "Localization",
+        [
+            "Translation",
+            "Localization / adaptation",
+            "Terminology consistency",
+            "Multilingual content QA",
+        ],
+    ),
+]
+
 
 @pytest.fixture(scope="module")
 def raw() -> dict:
@@ -160,6 +270,155 @@ def test_every_bundled_set_is_registered_under_its_catalogue_name(raw):
     # And nothing extra: a file dropped into the directory without a catalogue
     # entry would be measurable with no source, licence or business case on it.
     assert {name for name in registered if name.startswith("business:")} == named
+
+
+def test_business_taxonomy_has_every_reference_category_and_task_in_order():
+    result = catalog({})
+    assert [category["name"] for category in result["taxonomy"]] == [
+        name for name, _ in EXPECTED_TAXONOMY
+    ]
+    assert [[task["name"] for task in category["tasks"]] for category in result["taxonomy"]] == [
+        tasks for _, tasks in EXPECTED_TAXONOMY
+    ]
+    assert result["taxonomy_counts"] == {"categories": 12, "tasks": 59, "available": 0}
+
+
+def test_taxonomy_mappings_only_name_registered_packaged_datasets(raw):
+    registered = set(Registry.load().datasets)
+    mapped = {
+        task["dataset"]
+        for category in raw["taxonomy"]
+        for task in category["tasks"]
+        if task.get("dataset")
+    }
+    assert mapped <= registered
+
+
+def test_taxonomy_availability_and_routes_follow_a_partial_server_catalogue():
+    available = {"business:support-intent": 60, "translation": 120}
+    result = catalog(available)
+    tasks = {task["name"]: task for category in result["taxonomy"] for task in category["tasks"]}
+    assert tasks["Ticket classification"] == {
+        "id": "ticket-classification",
+        "name": "Ticket classification",
+        "mapped_dataset": "business:support-intent",
+        "dataset": "business:support-intent",
+        "available": True,
+        "examples": 60,
+        "route": "#dataset-library/business:support-intent",
+    }
+    # A task may route to a packaged benchmark rather than to a business set.
+    assert tasks["Terminology consistency"]["mapped_dataset"] == "translation"
+    assert tasks["Terminology consistency"]["available"] is True
+    assert tasks["Terminology consistency"]["route"] == "#dataset-library/translation"
+    assert tasks["Reply drafting"]["mapped_dataset"] == "business:support-reply"
+    assert tasks["Reply drafting"]["dataset"] is None
+    assert tasks["Reply drafting"]["route"] is None
+    assert tasks["Text-to-SQL"]["mapped_dataset"] is None
+    assert tasks["Text-to-SQL"]["available"] is False
+    assert tasks["Text-to-SQL"]["route"] is None
+
+
+def test_a_taxonomy_task_routing_to_an_unknown_dataset_is_refused(tmp_path, raw):
+    """A mistyped route does not raise — it renders as a gap that reads deliberate.
+
+    Every task is shown whether or not a set measures it, so `dataset: mbp` and
+    `dataset:` absent look identical on the shelf: both say "No dataset". The
+    only place the difference can still be seen is here.
+    """
+    broken = {
+        **raw,
+        "taxonomy": [
+            {
+                "id": "customer-support",
+                "name": "Customer Support",
+                "summary": "x",
+                "tasks": [{"id": "t", "name": "T", "dataset": "business:no-such-set"}],
+            }
+        ],
+    }
+    (tmp_path / "business_cases.yaml").write_text(yaml.safe_dump(broken), encoding="utf-8")
+    with pytest.raises(CatalogError, match="routes to unknown"):
+        catalog({}, root=str(tmp_path))
+
+
+def test_a_taxonomy_task_may_route_to_a_declared_packaged_benchmark(raw):
+    """The five names outside `sets` are declared, not tolerated."""
+    allowed = {spec["name"] for spec in raw["sets"]} | set(raw["benchmark_sets"])
+    mapped = {
+        task["dataset"]
+        for category in raw["taxonomy"]
+        for task in category["tasks"]
+        if task.get("dataset")
+    }
+    assert mapped <= allowed
+    # And the allowlist earns its keep: every name on it is really packaged.
+    assert set(raw["benchmark_sets"]) <= set(Registry.load().datasets)
+
+
+def test_every_packaged_business_set_is_reachable_from_the_library(raw):
+    """A set nothing links to is installed, measurable, and findable by nobody.
+
+    Not every set has a task whose shape it honestly matches, and forcing a
+    route would be the worse lie. So the sources table below the shelf lists
+    every packaged set, and it is filtered by the search alone — narrowing it to
+    the sets the open categories route to is what hid these in the first place.
+    """
+    javascript = (STATIC / "platform.js").read_text(encoding="utf-8")
+    assert "business.filter(visibleBusinessSet)" in javascript
+    assert "function visibleBusinessSet(name)" in javascript
+    # The taxonomy decides the shelf, never which packaged sets exist.
+    assert "catalogueNames" not in javascript
+
+    routed = {
+        task["dataset"]
+        for category in raw["taxonomy"]
+        for task in category["tasks"]
+        if task.get("dataset")
+    }
+    listed = {spec["name"] for spec in catalog({})["sets"]}
+    assert {spec["name"] for spec in raw["sets"]} <= listed | routed
+
+
+def test_a_category_takes_its_cases_from_the_sets_its_tasks_route_to(raw):
+    """The file's two halves are joined by derivation, not by a hand-kept map.
+
+    A category listing cases from a mapping written down separately drifts the
+    first time a task is remapped, and drifts silently: the panel still fills.
+    """
+    javascript = (STATIC / "platform.js").read_text(encoding="utf-8")
+    assert "function categoryCases(group)" in javascript
+    assert "${cases.length ? renderCatalogCases(cases) : ''}" in javascript
+
+    by_set: dict[str, list[int]] = {}
+    for group in raw["groups"]:
+        for case in group["cases"]:
+            for name in case.get("sets", []):
+                by_set.setdefault(name, []).append(case["number"])
+    for category in raw["taxonomy"]:
+        routed = {task["dataset"] for task in category["tasks"] if task.get("dataset")}
+        drawn = {number for name in routed for number in by_set.get(name, [])}
+        # A category routing to a business set has cases; one routing only to
+        # task benchmarks honestly has none, and the panel omits the block.
+        if routed & {spec["name"] for spec in raw["sets"]}:
+            assert drawn, f"{category['id']} routes to business sets but draws no case"
+
+
+def test_dataset_library_renders_links_and_unfocusable_disabled_task_rows():
+    javascript = (STATIC / "platform.js").read_text(encoding="utf-8")
+    styles = (STATIC / "styles.css").read_text(encoding="utf-8")
+    assert 'class="cat-row cat-row-ready" href="${esc(task.route)}"' in javascript
+    assert 'class="cat-row cat-row-off" aria-disabled="true"' in javascript
+    assert (
+        "tabindex"
+        not in javascript[
+            javascript.index("function renderCatalogZone()") : javascript.index(
+                "function renderOpenGroup"
+            )
+        ]
+    )
+    assert ".cat-row-off" in styles
+    assert ".cat-panel-task.off" in styles
 
 
 def test_catalog_reports_only_the_sets_this_server_actually_has(raw):

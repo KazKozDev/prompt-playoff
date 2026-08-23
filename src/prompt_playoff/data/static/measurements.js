@@ -344,7 +344,7 @@ function measurementNote(tab) {
         sent as it stands.</li>
       <li><b>Grade.</b> Every answer is scored from 0 to 1 by code — a rule you can read, not a model marking a model.
         The same answer always gets the same score. Open prose is judged separately, on
-        <a href="#judge" data-global-tab="judge" data-screen="judge">Pairwise judging</a>, and never enters a
+        <a href="#judge" data-global-tab="judge" data-screen="judge">Answer judging</a>, and never enters a
         benchmark number without a human saying so.</li>
       <li><b>Fold.</b> <strong>Quality</strong> is the mean of the one grader that stands for a right answer.
         <strong>Reliability</strong> is the share of correctly shaped answers times stability — how often repeats of
@@ -360,7 +360,7 @@ function measurementNote(tab) {
       ${measurementGraders(name)}
     </div>
     <p class="how-note">A number belongs to one prompt, one model and one set: change any of the three and it is a
-      guess again. The <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">Evaluation guide</a>
+      guess again. The <a href="#guides/evaluation" data-global-tab="guides" data-screen="guides" data-mode="evaluation">Evaluation guide</a>
       has every grader, where each bundled set comes from, and the five rules a number depends on.</p>
   </section>`;
 }
@@ -405,7 +405,7 @@ function ownRowsInvitation(tab) {
       <p class="field-hint">Paste inputs you have actually seen — tickets, emails, documents — one per line. The run
         reports shape, repeatability, time and cost. It cannot report whether an answer is <em>right</em>: that needs
         rows with the right answer in them, which is what
-        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload">Upload your own</a> takes.</p>
+        <a href="#dataset-add" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="upload">Upload your own</a> takes.</p>
       <label for="own-rows-input" class="sr-only">Your inputs, one per line</label>
       <textarea id="own-rows-input" rows="6" placeholder="Card payment failed twice this morning, third attempt went through&#10;Where do I change the billing address on my account?"></textarea>
       <div class="own-rows-actions">
@@ -414,7 +414,7 @@ function ownRowsInvitation(tab) {
       </div>
       <p class="field-hint">They become a set of your own, selected straight away, with runs per example at 3 so
         repeatability has something to compare. Held for this session only — the
-        <a href="#dataset-upload" data-global-tab="dataset-upload" data-screen="dataset-upload">upload screen</a> can
+        <a href="#dataset-add" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="upload">Add dataset screen</a> can
         keep a set on this machine.</p>
     </div>
   </details>`;

@@ -104,6 +104,30 @@ def test_the_prompt_vs_finetuning_guide_is_served_in_both_languages(client):
     assert "/prompt-vs-finetuning" in client.get("/prompt-vs-finetuning/ru").text
 
 
+def test_the_llm_or_not_guide_is_served_in_both_languages(client):
+    assert "/llm-or-not/ru" in client.get("/llm-or-not").text
+    assert "/llm-or-not" in client.get("/llm-or-not/ru").text
+    assert 'lang="en"' in client.get("/llm-or-not").text
+    assert 'lang="ru"' in client.get("/llm-or-not/ru").text
+
+
+def test_the_guide_rail_offers_every_guide_the_server_serves(client):
+    # A document served at a path nothing links to is a document nobody reads,
+    # and a rail entry pointing at a path the server does not answer is a blank
+    # frame. The two lists are written in different files, so they are compared
+    # here rather than trusted.
+    navigation = client.get("/assets/navigation.js").text
+    rail = re.search(r"guides: \{.*?\n  \}", navigation, re.S)
+    assert rail, "the guides mode rail was renamed"
+    modes = set(re.findall(r"\['([a-z-]+)', '[^']+', '[^']+'\]", rail.group(0)))
+    pages = re.search(r"function renderGuideMode.*?\n  \};", navigation, re.S)
+    assert pages
+    routes = dict(re.findall(r"'?([a-z-]+)'?:\['(/[a-z-]+)',", pages.group(0)))
+    assert modes == set(routes), f"rail offers {modes}, renderGuideMode knows {set(routes)}"
+    for path in routes.values():
+        assert client.get(path).status_code == 200, f"the rail points at {path}, which 404s"
+
+
 def test_the_prompt_vs_finetuning_guide_follows_the_app_theme(client):
     # Same stylesheet as Help and the Evaluation guide, so a token cannot drift
     # to a second copy inside this page. The large title and two-plate layout
@@ -150,6 +174,8 @@ def test_documents_reference_reachable_packaged_assets(client):
         "/evaluation/ru",
         "/prompt-vs-finetuning",
         "/prompt-vs-finetuning/ru",
+        "/llm-or-not",
+        "/llm-or-not/ru",
     ):
         assets = re.findall(r'(?:href|src)="(/assets/[^"]+)"', client.get(path).text)
         assert assets == ["/assets/docs.js", "/assets/docs.css"] or assets == [
@@ -195,10 +221,11 @@ def test_home_references_reachable_packaged_assets(client):
 
 def test_home_exposes_stable_lifecycle_shell_destinations(client):
     html = client.get("/").text
+    lifecycle = html.split('<nav class="lifecycle-nav"', 1)[1].split("</nav>", 1)[0]
     sidebar_destinations = re.findall(
-        r'<a href="#[^"]+" data-global-tab="([^"]+)" data-screen="([^"]+)" '
-        r'data-testid="nav-[^"]+">',
-        html,
+        r'<a href="#[^"]+" data-global-tab="([^"]+)" data-screen="([^"]+)"'
+        r'[^>]*data-testid="nav-[^"]+">',
+        lifecycle,
     )
 
     assert set(sidebar_destinations) == {
@@ -209,51 +236,244 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
         ("comparison", "comparison"),
         ("optimization", "optimization"),
         ("dataset-library", "dataset-library"),
-        ("dataset-upload", "dataset-upload"),
-        # Importing from the Hub is one of the three answers to "where do
-        # examples come from", so it is a destination, not a button in a panel.
-        ("dataset-hub", "dataset-hub"),
-        ("dataset-builder", "dataset-builder"),
-        # The benchmarks inside the package answer a different question from the
-        # library — what this tool measures itself against, not what you measure
-        # your prompt against — so they are a destination of their own.
-        ("dataset-bundled", "dataset-bundled"),
-        ("history", "history"),
+        # Upload and Hugging Face are sources for one outcome, so the rail has
+        # one destination and the screen carries the source switch.
+        ("dataset-add", "dataset-add"),
+        ("results", "results"),
         ("judge", "judge"),
-        ("model-matrix", "model-matrix"),
-        ("context-lab", "context-lab"),
-        ("analysis", "analysis"),
-        ("regressions", "regressions"),
+        ("test-lab", "test-lab"),
+        # Production is two things: turning a measured prompt into files a
+        # repository holds, and the decisions a model asked a person to make.
+        # The regression gate is neither — it compares recorded runs, so it is
+        # a mode of Results, where the runs are.
+        ("ship", "ship"),
         ("reviews", "reviews"),
-        ("releases", "releases"),
-        ("production", "production"),
         ("techniques", "techniques"),
-        # Models & keys is the setup every screen depends on, so it stays in the
-        # corner of the rail and behind the model chip, both visible from
-        # everywhere. It is a row under Reference as well: the section screen
-        # lists what is under it, and a rail that named three of those four
-        # screens sent anyone who opened Reference looking for the fourth.
-        ("settings", "settings"),
-        ("logs", "logs"),
-        ("evaluation", "evaluation"),
-        ("prompt-vs-finetuning", "prompt-vs-finetuning"),
-        ("help", "help"),
+        ("guides", "guides"),
     }
+    # Thirteen rows for thirteen destinations. A screen with modes gets one row,
+    # pointing at its default mode; the mode rail on the screen carries the rest.
+    # Results used to be listed twice, once on its history and once on the
+    # regression gate, and it was the only screen in the rail that was.
+    assert len(sidebar_destinations) == 13
+    assert sidebar_destinations.count(("results", "results")) == 1
+    assert 'data-testid="nav-settings"' in html
+    assert 'data-testid="nav-logs"' in html
     assert 'data-testid="rail-model"' in html
     assert 'data-testid="model-chip"' in html
     assert 'data-testid="lifecycle-nav"' in html
     assert 'data-testid="drawer-toggle"' in html
-    # One entry per section of the rail, Reference included. With four, every
-    # screen under Reference — Jobs & logs, the guide, Help and Models & keys —
-    # lit nothing at all on a phone, and the bar stopped answering "where am I"
-    # on the screens a reader is most likely to be lost on.
+    # One entry per approved lifecycle section, including the canonical Docs
+    # destination rather than the old Reference section route.
     assert html.count('data-testid="bottom-') == 5
-    assert 'data-testid="bottom-reference"' in html
-    assert ">Evaluation guide<" in html
+    assert 'data-testid="bottom-docs"' in html
+    assert 'href="#guides/user"' in html
+    assert ">Docs</a>" in html
+    assert 'data-testid="bottom-reference"' not in html
+    assert ">Guides<" in html
     # The sidebar used to repeat the prompt/dataset/model line that the context
     # bar already carries; one of the two had to go, and the header kept it.
     assert 'id="sidebar-prompt"' not in html
     assert 'id="context-prompt"' in html
+
+
+def test_add_dataset_unifies_sources_and_keeps_legacy_hash_aliases(client):
+    html = client.get("/").text
+    navigation = client.get("/assets/navigation.js").text
+
+    assert html.count('data-testid="nav-dataset-add"') == 1
+    assert 'data-testid="nav-dataset-upload"' not in html
+    assert 'data-testid="nav-dataset-hub"' not in html
+    assert "'dataset-upload':'dataset-add'" in navigation
+    assert "'dataset-hub':'dataset-add'" in navigation
+    assert "['upload', 'Upload file'" in navigation
+    assert "['hugging-face', 'Hugging Face'" in navigation
+    assert "['generate', 'Generate'" in navigation
+    assert "renderDatasetUpload()" in navigation
+    assert "renderDatasetHub()" in navigation
+    assert "renderDatasetBuilder()" in navigation
+    assert "focusMode:route.legacy" in navigation
+
+
+def test_the_section_map_is_one_column_at_the_width_it_actually_gets(client):
+    """A rule outlived the layout it was written for, and squeezed the words.
+
+    The map used to run the full width of a section screen, so between 1100 and
+    1480 it turned on its side: words in one column, drawing in the other. A
+    later rule made it a fixed side column of about 340px at every width above
+    1100 — and splitting 340px in two left the words in a column of zero, so
+    every caption wrapped one word per line on all five section screens.
+    """
+    styles = client.get("/assets/styles.css").text
+
+    assert 'grid-template-areas:"head plot"' not in styles
+    assert "@media (min-width:1100px) and (max-width:1479px)" not in styles
+    # It stays a flex column, which is what the narrow panel can actually hold.
+    # The first `.section-map {` is a grid-column placement inside a media
+    # query; the block that sets its own display is the one that matters.
+    assert "\n    .section-map {\n      display:flex; flex-direction:column;" in styles
+
+
+def test_ship_replaces_the_release_register_with_an_export(client):
+    """The UI produces the file CI enforces; it does not re-implement the gate.
+
+    `prompt-playoff check` reads committed thresholds and fails the build. The
+    old Production section drove a hand-moved version register beside it — the
+    same job, done worse, in a place no colleague or CI job can read.
+    """
+    navigation = client.get("/assets/navigation.js").text
+    platform = client.get("/assets/platform.js").text
+
+    assert "['releases', 'Releases'" in navigation
+    assert "['spot-checks', 'Spot checks'" in navigation
+    assert "ship:['Production', 'Ship'," in navigation
+    # The register exports rather than only advancing labels.
+    assert 'data-release-action="export"' in platform
+    assert "downloadText(manifest.filename, manifest.content" in platform
+    assert "downloadText(manifest.checks_filename, manifest.checks" in platform
+    # And the merge left no screen behind under its old name.
+    assert "release-center" not in platform
+    assert "'release-center':'ship'" in navigation
+
+
+def test_a_path_that_split_in_two_still_resolves_to_the_right_half(client):
+    """`#release-center` became two screens, so its head no longer decides.
+
+    Versions became Ship; the regression gate became a mode of Results, where
+    the runs it compares live. Resolving on the first segment alone would open
+    the register for a bookmarked gate — the right screen name, the wrong
+    screen — so the whole path is looked up first.
+    """
+    navigation = client.get("/assets/navigation.js").text
+
+    assert "const legacyPaths = {" in navigation
+    assert "'release-center/versions':['ship', 'releases']" in navigation
+    assert "'release-center/regressions':['results', 'regressions']" in navigation
+    assert "const paired = legacyPaths[`${head}/${rest[0]}`];" in navigation
+
+
+def test_the_merged_screens_left_no_second_implementation_behind(client):
+    """Two ways to draw one screen is one way too many, and the dead one rots.
+
+    Merging the source screens produced a mode rail in navigation.js and a
+    two-source switch in datasets.js that did the same job. Only the rail is
+    reachable, so the switch was a screen nobody could open, styled by CSS
+    nobody could apply, wired to a `selectTab` option that does not exist.
+    """
+    datasets = client.get("/assets/datasets.js").text
+    navigation = client.get("/assets/navigation.js").text
+    styles = client.get("/assets/styles.css").text
+    html = client.get("/").text
+
+    for gone in ("renderDatasetAdd", "wireDatasetAdd", "applyDatasetSource", "datasetAddSource"):
+        assert gone not in datasets, f"{gone} is a second Add-dataset screen"
+    assert "dataset-source" not in styles
+    # One name for one thing: a link asks for a mode, never for a "source".
+    for text in (datasets, navigation, html, client.get("/assets/platform.js").text):
+        assert "data-dataset-source" not in text
+    assert "datasetSource" not in navigation
+
+    # The guides are reached through their own screen, so the three per-document
+    # panels that used to render them are unreachable.
+    assert "docPages" not in navigation
+    assert "renderGuideMode" in navigation
+
+
+def test_system_screens_keep_the_rail_open_and_claim_no_mobile_destination(client):
+    """Models & keys and Jobs & logs are under none of the five sections.
+
+    Read off the rail alone they came back sectionless, and a blank section is
+    the same instruction as "close every section" — so arriving at Models & keys
+    collapsed the whole rail on the way in.
+    """
+    navigation = client.get("/assets/navigation.js").text
+    html = client.get("/").text
+
+    assert '.sidebar-system a[data-screen="${screen}"]' in navigation
+    assert "? 'system' : ''" in navigation
+    guard = 'if (!document.querySelector(`.sidebar-group[data-section="${section}"]`))'
+    assert f"{guard} return;" in navigation
+    # No bucket claims them: aria-current on a destination you are not at is a
+    # worse answer than none.
+    destinations = navigation.split("const sectionDestinations = {", 1)[1].split("}", 1)[0]
+    assert "system" not in destinations
+    # And the crumb path skips a section that has no screen to land on.
+    assert "if (sectionTabs.includes(`s-${section}`)) trail.push(" in navigation
+    assert 'data-testid="nav-settings"' in html.split('class="sidebar-system"', 1)[1]
+
+
+def test_navigation_consolidates_destinations_and_keeps_every_old_hash(client):
+    navigation = client.get("/assets/navigation.js").text
+    html = client.get("/").text
+
+    for route, parent in {
+        "dataset-builder": "dataset-add",
+        "dataset-bundled": "dataset-library",
+        "history": "results",
+        "analysis": "results",
+        "model-matrix": "test-lab",
+        "context-lab": "test-lab",
+        "regressions": "results",
+        "releases": "ship",
+        "release-center": "ship",
+        "production": "ship",
+        "help": "guides",
+        "evaluation": "guides",
+        "prompt-vs-finetuning": "guides",
+        "llm-or-not": "guides",
+    }.items():
+        pattern = rf"(?:'{re.escape(route)}'|{re.escape(route)}):'{re.escape(parent)}'"
+        assert re.search(pattern, navigation)
+    for canonical in (
+        "#results/history",
+        "#test-lab/models",
+        "#ship/releases",
+        "#guides/user",
+    ):
+        assert canonical in html
+    # `#results/regressions` is a canonical route without a row in the shell:
+    # the rail links a screen's default mode, and the mode rail on Results syncs
+    # the URL to the other two.
+    assert "#results/regressions" not in html
+    assert "['regressions', 'Regression gate'," in navigation
+    assert 'role="tablist"' in navigation
+    assert "event.key === 'Home'" in navigation
+    assert "event.key === 'End'" in navigation
+    assert "syncUrl:route.legacy" in navigation
+    assert "replace:route.legacy" in navigation
+
+
+def test_navigation_uses_clear_labels_and_production_lifecycle_order(client):
+    html = client.get("/").text
+    navigation = client.get("/assets/navigation.js").text
+
+    assert '<span class="section-name">Prompt Studio</span>' in html
+    assert '<span class="section-name">Evaluation</span>' in html
+    assert 'data-testid="nav-comparison">Technique comparison</a>' in html
+    assert 'data-testid="nav-judge">Answer judging</a>' in html
+    assert 'data-testid="bottom-prompt">Prompt Studio</a>' in html
+    assert 'data-testid="bottom-evaluate">Evaluate</a>' in html
+    assert "comparison:['Prompt Studio', 'Technique comparison']" in navigation
+    assert "judge:['Evaluation', 'Answer judging'," in navigation
+
+    production = html.split('id="section-ship"', 1)[1].split("</div>", 1)[0]
+    assert re.findall(r'data-testid="nav-[^"]+">([^<]+)</a>', production) == ["Ship", "Reviews"]
+    assert (
+        'href="#ship/releases" data-global-tab="ship" '
+        'data-screen="ship" data-mode="releases" data-testid="nav-ship"' in production
+    )
+
+    # The regression gate compares two recorded runs, so it lives where the runs
+    # are rather than under the register of versions — as a mode of Results,
+    # reached from the mode rail there and not from a second row of its own.
+    evaluation = html.split('id="section-check"', 1)[1].split("</div>", 1)[0]
+    assert re.findall(r'data-testid="nav-[^"]+">([^<]+)</a>', evaluation) == [
+        "Results",
+        "Answer judging",
+        "Test lab",
+    ]
+    assert "nav-regressions" not in html
+    assert "['regressions', 'Regression gate'," in navigation
 
 
 @pytest.mark.parametrize("path", ["/assets/missing.js", "/assets/.hidden.js", "/assets/index.html"])

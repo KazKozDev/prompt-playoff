@@ -1,10 +1,18 @@
-"""The business catalogue: fifty paid-for jobs, and the set that measures each.
+"""The business catalogue: the work a model is paid to do, and what measures it.
 
 A number on its own does not say what will break. "0.71 on summarization"
 is a fact about a corpus; "0.71 on transcript-to-minutes, the job Ocado Retail
 runs on this" is a fact about work. This module reads data/business_cases.yaml
 and hands the API a shape the library screen can render without knowing how the
 mapping was made.
+
+The file says the same thing at two altitudes, and both are served. `taxonomy`
+is the directory the library is browsed by — categories of business work, each
+listing the tasks under it, every task visible whether or not a packaged set
+measures it. `groups` are the recorded cases underneath: named companies, what
+they pointed a model at, and what they say came of it. A category draws its
+cases from the sets its tasks route to, so the two halves never need a mapping
+between them kept by hand.
 
 What it adds to the file on disk is the one thing the file cannot know: which
 of the named sets this server actually has. A catalogue that lists rows the
@@ -50,6 +58,35 @@ def _check(payload: dict[str, Any], path: Path) -> None:
     """
     known = {item["name"] for item in payload["sets"]}
     referenced = {item["id"] for item in payload.get("references", [])}
+    # A task may route to a business set or to one of the packaged benchmarks
+    # named alongside them. Anything else is a typo, and a typo here degrades
+    # into "No dataset" — a gap the screen states as if it were deliberate.
+    routable = known | set(payload.get("benchmark_sets") or [])
+    taxonomy = payload.get("taxonomy")
+    if not isinstance(taxonomy, list) or not taxonomy:
+        raise CatalogError(f"{path}: business catalogue has no taxonomy")
+    category_ids: set[str] = set()
+    task_ids: set[str] = set()
+    for category in taxonomy:
+        for field in ("id", "name", "summary"):
+            if not str(category.get(field, "")).strip():
+                raise CatalogError(f"{path}: taxonomy category has no {field}")
+        if category["id"] in category_ids:
+            raise CatalogError(f"{path}: duplicate taxonomy category {category['id']}")
+        category_ids.add(category["id"])
+        if not category.get("tasks"):
+            raise CatalogError(f"{path}: taxonomy category {category['id']} has no tasks")
+        for task in category["tasks"]:
+            for field in ("id", "name"):
+                if not str(task.get(field, "")).strip():
+                    raise CatalogError(f"{path}: taxonomy task has no {field}")
+            qualified = f"{category['id']}:{task['id']}"
+            if qualified in task_ids:
+                raise CatalogError(f"{path}: duplicate taxonomy task {qualified}")
+            task_ids.add(qualified)
+            mapped = task.get("dataset")
+            if mapped and mapped not in routable:
+                raise CatalogError(f"{path}: taxonomy task {qualified} routes to unknown {mapped}")
     for group in payload["groups"]:
         # A category is a tile before it is a list, and a tile is a picture, a
         # line of large type and a line of small type. A group missing one of
@@ -92,6 +129,37 @@ def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any
     ]
     by_name = {spec["name"]: spec for spec in sets}
 
+    taxonomy = []
+    for index, category in enumerate(payload["taxonomy"], start=1):
+        tasks = []
+        for task in category["tasks"]:
+            mapped = task.get("dataset")
+            is_available = bool(mapped and mapped in available)
+            tasks.append(
+                {
+                    "id": task["id"],
+                    "name": task["name"],
+                    "mapped_dataset": mapped,
+                    "dataset": mapped if is_available else None,
+                    "available": is_available,
+                    "examples": available.get(mapped) if is_available else None,
+                    "route": f"#dataset-library/{mapped}" if is_available else None,
+                }
+            )
+        taxonomy.append(
+            {
+                "id": category["id"],
+                "index": index,
+                "name": category["name"],
+                "summary": " ".join(category["summary"].split()),
+                "tasks": tasks,
+                "counts": {
+                    "tasks": len(tasks),
+                    "available": sum(1 for task in tasks if task["available"]),
+                },
+            }
+        )
+
     groups = []
     for group in payload["groups"]:
         cases = [
@@ -128,6 +196,12 @@ def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any
 
     return {
         "version": payload.get("version", 1),
+        "taxonomy": taxonomy,
+        "taxonomy_counts": {
+            "categories": len(taxonomy),
+            "tasks": sum(item["counts"]["tasks"] for item in taxonomy),
+            "available": sum(item["counts"]["available"] for item in taxonomy),
+        },
         "groups": groups,
         "sets": sets,
         "references": payload.get("references", []),

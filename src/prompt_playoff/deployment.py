@@ -1,4 +1,11 @@
-"""Generate small, complete clients for deploying a selected prompt workflow."""
+"""What leaves this machine: a client for a prompt, and a manifest for a release.
+
+Both answer the same question in different shapes — how does the thing measured
+here become the thing running somewhere else — and both do it by producing a
+file rather than by holding a record. A register kept inside a localhost app is
+a system of record nobody else can read; a file in the repository is one that
+git, CI and a colleague can all read without this server running at all.
+"""
 
 from __future__ import annotations
 
@@ -140,3 +147,136 @@ export async function runPromptPlayoff(userInput: string): Promise<string> {{
   return result.output;
 }}
 """
+
+
+class ReleaseManifest(BaseModel):
+    """A release, as two files to commit rather than a row to maintain.
+
+    `content` is the whole provenance of a shipped prompt: the exact text, its
+    fingerprint, the run that measured it, whether the fingerprints agree, the
+    rows it was measured on and whether they have moved since, and the verdict
+    of the committed bar. `checks` is the same release expressed as the block
+    `prompt-playoff check` reads, so a project with no gate can acquire one by
+    pasting rather than by learning the schema.
+    """
+
+    filename: str
+    content: str
+    checks_filename: str
+    checks: str
+    notes: list[str]
+
+
+def _yaml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return repr(value)
+    text = str(value)
+    return text if text and all(ch.isalnum() or ch in "-_.:/" for ch in text) else json.dumps(text)
+
+
+def release_manifest(
+    *,
+    release: dict[str, Any],
+    gate: dict[str, Any],
+    experiment: dict[str, Any] | None,
+    dataset_changed: bool,
+    prompt_text: str,
+) -> ReleaseManifest:
+    """Freeze a release into the two files a repository can hold."""
+    slug = "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in release["name"].lower())
+    slug = "-".join(part for part in slug.split("-") if part) or "release"
+    evidence = release.get("evidence", "unverified")
+
+    document = {
+        "version": 1,
+        "release": {
+            "id": release["id"],
+            "name": release["name"],
+            "version": release["version"],
+            "status": release["status"],
+            "technique": release["technique_id"],
+            "created_at": release["created_at"],
+            "updated_at": release["updated_at"],
+        },
+        "prompt": {"text": prompt_text, "fingerprint": release["prompt_hash"]},
+        "evidence": {
+            "verdict": evidence,
+            "experiment_id": release.get("experiment_id"),
+            "measured_prompt_fingerprint": (experiment or {}).get("authored_hash"),
+            "dataset": (experiment or {}).get("dataset"),
+            "dataset_revision": (experiment or {}).get("dataset_revision"),
+            "dataset_changed_since": dataset_changed,
+            "model": {
+                "provider": (experiment or {}).get("provider"),
+                "model_id": (experiment or {}).get("model_id"),
+            },
+        },
+        "gate": {
+            "status": gate.get("status"),
+            "config": gate.get("config"),
+            "checks": gate.get("checks", []),
+            "reason": gate.get("reason"),
+            "thresholds": gate.get("thresholds", []),
+        },
+    }
+
+    notes: list[str] = []
+    # "No run at all" and "the wrong run" are different failures, and a file
+    # that leaves the machine has to say which one it is: one is unfinished
+    # work, the other is a number describing something else.
+    if evidence == "unverified":
+        notes.append(
+            "This release cites no recorded run, so nothing here has been measured. "
+            "Measure the prompt, then cite the run before shipping it."
+        )
+    elif evidence == "indirect":
+        notes.append(
+            "The cited run measured a different prompt, so the numbers in this manifest "
+            "describe another text. Measure this one before shipping it."
+        )
+    if dataset_changed:
+        notes.append(
+            "The rows this run was measured on have changed since. Re-measure before relying "
+            "on the gate below."
+        )
+    if gate.get("status") == "not_configured":
+        notes.append(
+            "This project commits no thresholds for the technique. Paste the checks file "
+            "beside your prompt-playoff.yaml and `prompt-playoff check` will enforce it."
+        )
+
+    # `require` is keyed by field and bound together — quality_min, not quality —
+    # which is how the check file spells it and how `_compare` takes it apart.
+    thresholds = {
+        f"{item['field']}_{item['bound']}": item["required"]
+        for item in gate.get("thresholds", [])
+        if isinstance(item, dict) and item.get("field") and item.get("bound")
+    }
+    lines = [
+        f"# {release['name']} v{release['version']} — generated by Prompt Playoff.",
+        "# Merge the `checks:` entry below into your prompt-playoff.yaml.",
+        "checks:",
+        f"  - name: {slug}-v{release['version']}",
+        f"    technique: {release['technique_id']}",
+    ]
+    dataset = (experiment or {}).get("dataset")
+    if dataset:
+        lines.append(f"    dataset: {_yaml_scalar(dataset)}")
+    lines.append("    repeats: 3")
+    if thresholds:
+        lines.append("    require:")
+        lines.extend(f"      {key}: {_yaml_scalar(value)}" for key, value in thresholds.items())
+    else:
+        lines.append("    # No thresholds were committed for this technique. Add them here, or")
+        lines.append("    # run `prompt-playoff check --update` to fill them from a measurement.")
+        lines.append("    require: {}")
+
+    return ReleaseManifest(
+        filename=f"{slug}-v{release['version']}.release.json",
+        content=json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+        checks_filename=f"{slug}-v{release['version']}.checks.yaml",
+        checks="\n".join(lines) + "\n",
+        notes=notes,
+    )

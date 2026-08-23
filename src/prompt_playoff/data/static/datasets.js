@@ -174,7 +174,7 @@ function renderDatasetUpload() {
       </ol>
       <p class="guide-note">UTF-8. A kept set is written as a JSONL file next to your measurements, where ordinary
         tools can read, copy or delete it.</p>
-      <p class="guide-note">No file of your own yet? <a href="#dataset-hub" data-global-tab="dataset-hub">Import one from Hugging Face</a> or <a href="#dataset-builder" data-global-tab="dataset-builder">build one from your task</a>.</p>
+      <p class="guide-note">No file of your own yet? <a href="#dataset-add/hugging-face" data-global-tab="dataset-add" data-mode="hugging-face">Import one from Hugging Face</a> or <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build one from your task</a>.</p>
     </aside>
   </div>`;
 }
@@ -314,7 +314,7 @@ function renderDatasetHub() {
       </ol>
       <p class="guide-note">Unlike an uploaded file, these rows are written to disk — the material is public, and re-importing would mean downloading it again and repeating your column choices.</p>
       <p class="guide-note">This screen needs the network: <code>huggingface.co</code> for the catalogue, <code>datasets-server.huggingface.co</code> for columns and rows. Nothing else in the app leaves your machine.</p>
-      <p class="guide-note">Rather use your own? <a href="#dataset-upload" data-global-tab="dataset-upload">Upload a JSONL file</a> or <a href="#dataset-builder" data-global-tab="dataset-builder">build a set from your task</a>.</p>
+      <p class="guide-note">Rather use your own? <a href="#dataset-add" data-global-tab="dataset-add" data-mode="upload">Upload a JSONL file</a> or <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build a set from your task</a>.</p>
     </aside>
   </div>`;
 }

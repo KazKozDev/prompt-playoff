@@ -336,7 +336,7 @@ function builderAdvice(project) {
     adviceGo('settings', 'Models & keys')));
   if (b.mode === 'description') notes.push(adviceNote('warn', 'This mode invents the inputs as well as the answers',
     'With no seed rows, your task text is the only material there is. It gets you something to measure on day one; it does not tell you how the prompt behaves on your traffic.',
-    adviceGo('dataset-upload', 'Upload rows of your own')));
+    adviceGo('dataset-add', 'Upload rows of your own')));
   if (!similarityProfile()) notes.push(adviceNote('idle', 'Nothing is checking for reworded rows',
     'Without a similarity model, only rows that match character for character count as duplicates. "Cancel my subscription" and "I would like to cancel my subscription" both go into the set, and the average is then computed over one case counted twice.',
     adviceGo('settings', 'Set one')));
@@ -354,7 +354,7 @@ function builderAdvice(project) {
     <p class="guide-note"><b>The empty cells are the finding.</b> Coverage counts every axis the mode can produce, not only the ones that got rows. Six full cells out of ten is the news; "sixty examples" is not.</p>
     <p class="guide-note"><b>Nothing is truth until you approve it.</b> Reviewed and flagged rows stay behind when the set is published — approval is the only step this screen will never take for you.</p>
     <p class="guide-note"><b>With the engine off, the set is reproducible.</b> The mutations are rules, so the same name, count and description give the same rows, and two sets can be diffed. With it on, every run is a different set.</p>
-    <p class="guide-note">A generated set is for finding where a prompt breaks. Once it breaks somewhere, the rows worth keeping are the ones you <a href="#dataset-upload" data-global-tab="dataset-upload">bring yourself</a>.</p>`;
+    <p class="guide-note">A generated set is for finding where a prompt breaks. Once it breaks somewhere, the rows worth keeping are the ones you <a href="#dataset-add" data-global-tab="dataset-add" data-mode="upload">bring yourself</a>.</p>`;
 }
 
 function renderDatasetBuilder() {
@@ -516,23 +516,26 @@ function renderReviews() {
   </div>`;
 }
 
-/* Zone three. Four things land here from four screens, and none of them are
- * carried out by approving them. */
+/* Zone three. Three things land here, each one a decision a model asked a
+ * person to make, and none of them are carried out by approving them. */
 function reviewsGuide() {
   return `<h2>What this queue is</h2>
     <p class="guide-lead">Every decision the tool refused to make on its own. Nothing arrives here because it went
       wrong — it arrives because a person is supposed to look, and that has to be written down to be known.</p>
     <dl class="guide-stack">
       <div><dt>Generated rows</dt><dd>A dataset written by a model is not truth until somebody reads it. The rows
-        are approved on <a href="#dataset-builder" data-global-tab="dataset-builder" data-screen="dataset-builder">Build datasets</a>; this is the note that a set is waiting.</dd></div>
+        are approved on <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">Build datasets</a>; this is the note that a set is waiting.</dd></div>
       <div><dt>Judge verdicts</dt><dd>A model's opinion about two answers is evidence, not a ruling, so every
         <a href="#judge" data-global-tab="judge" data-screen="judge">pairwise</a> verdict lands here pending.</dd></div>
-      <div><dt>Failed gates</dt><dd>A <a href="#regressions" data-global-tab="regressions" data-screen="regressions">regression</a> that breached its tolerance is filed with the metrics that
+      <div><dt>Failed gates</dt><dd>A <a href="#results/regressions" data-global-tab="results" data-screen="results" data-mode="regressions">regression</a> that breached its tolerance is filed with the metrics that
         breached it — a red screen somebody closed is still an open question tomorrow.</dd></div>
-      <div><dt>Registered releases</dt><dd>Registering a prompt on <a href="#releases" data-global-tab="releases" data-screen="releases">Releases</a> raises an approval item here.</dd></div>
-      <div><dt>A decision here decides only this</dt><dd>Approving records what you thought. It does not promote a
-        release, publish a dataset or clear a gate — each is an action on its own screen, so nothing ships as a side
-        effect of tidying a queue.</dd></div>
+      <div><dt>Releases do not land here</dt><dd>They used to: registering a prompt raised an item asking the same
+        person to approve what they had just registered, and advancing was refused until they clicked it. One user
+        cannot be two. A release is now gated by the thresholds in <code>prompt-playoff.yaml</code> — the ones
+        <code>prompt-playoff check</code> enforces in CI — applied to the run it cites.</dd></div>
+      <div><dt>A decision here decides only this</dt><dd>Approving records what you thought. It does not publish a
+        dataset or clear a gate — each is an action on its own screen, so nothing ships as a side effect of tidying
+        a queue.</dd></div>
     </dl>
     <p class="guide-note">Decisions are kept with your measurements on this machine, and stay after a restart.</p>`;
 }
@@ -634,7 +637,7 @@ function regressionGuide() {
         covers reliability. Latency fails on a rise bigger than the latency tolerance, on the mean and the p95.
         Everything else is shown and cannot fail the gate.</dd></div>
       <div><dt>A tolerance is not significance</dt><dd>The gate compares two averages; it cannot tell whether a drop
-        of 0.02 was the prompt or the sample. Take a fail worth arguing about to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a>, with the per-example
+        of 0.02 was the prompt or the sample. Take a fail worth arguing about to <a href="#results/significance" data-global-tab="results" data-screen="results" data-mode="significance">Significance</a>, with the per-example
         scores behind both runs.</dd></div>
       <div><dt>Rerun before you believe it</dt><dd>A failure that does not come back was one unlucky run. The button
         records the rerun as its own experiment, so the history keeps both.</dd></div>
@@ -722,7 +725,7 @@ function analysisGuide() {
       <div><dt>By tags is a different question</dt><dd>The second button splits your last benchmark by the tags on
         its examples, worst first. An average of 0.9 hiding one tag at 0.4 is the failure no single number shows.</dd></div>
     </dl>
-    <p class="guide-note">Scores to paste come from a run on <a href="#history" data-global-tab="history" data-screen="history">Results</a>; a whole-set comparison of two prompts is <a href="#regressions" data-global-tab="regressions" data-screen="regressions">Regressions</a>, which applies a tolerance instead.</p>`;
+    <p class="guide-note">Scores to paste come from a run on <a href="#results/history" data-global-tab="results" data-screen="results" data-mode="history">Results</a>; a whole-set comparison of two prompts is <a href="#results/regressions" data-global-tab="results" data-screen="results" data-mode="regressions">Regressions</a>, which applies a tolerance instead.</p>`;
 }
 
 function baseBenchmarkPayload() {
@@ -799,7 +802,7 @@ function modelMatrixGuide() {
       <div><dt>Latency and cost</dt><dd>Means per call, so they carry the price of a method that samples several
         answers before it votes. The cheapest row is only interesting if it can also do the work.</dd></div>
       <div><dt>A gap is not yet a decision</dt><dd>Two models a few thousandths apart are noise on a small set. Take
-        the pair to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a> first.</dd></div>
+        the pair to <a href="#results/significance" data-global-tab="results" data-screen="results" data-mode="significance">Significance</a> first.</dd></div>
       <div><dt>The ids have to be reachable</dt><dd>Spelled the way the provider spells them, and served by a backend
         this machine can reach. An unreachable id still gets a row — every answer is an error and it scores near
         nothing, which is why the failed-run count sits beside the score.</dd></div>
@@ -833,7 +836,7 @@ function renderContextLab() {
     <div class="table-scroll"><table><thead><tr><th>Context</th><th>Quality</th><th>Latency</th><th>Prompt tokens</th><th>Failed runs</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="meta">Prompt tokens are what the context costs on every single call, which is the price of the winning
       variant if you keep it. This run is not written into your history — nothing on
-      <a href="#history" data-global-tab="history" data-screen="history">Results</a> changes because of it.</p>
+      <a href="#results/history" data-global-tab="results" data-screen="results" data-mode="history">Results</a> changes because of it.</p>
   </div>` : '';
   const gate = state.chosen ? '' : prerequisite('Create a prompt before comparing context variants.', 'prompt', 'Create a prompt');
   return `<div class="screen-split work-wide">
@@ -874,7 +877,7 @@ function contextLabGuide() {
       <div><dt>It leaves no trace</dt><dd>These runs are not recorded: they are an experiment on material you are
         still choosing. Once a context is settled, put it in the prompt and measure that on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>.</dd></div>
       <div><dt>A win still has to be significant</dt><dd>Two variants a few thousandths apart on a small set are the
-        same variant. Take the pair to <a href="#analysis" data-global-tab="analysis" data-screen="analysis">Significance</a> first.</dd></div>
+        same variant. Take the pair to <a href="#results/significance" data-global-tab="results" data-screen="results" data-mode="significance">Significance</a> first.</dd></div>
     </dl>`;
 }
 
@@ -912,7 +915,7 @@ function releaseEvidenceCell(release) {
         title="Attach the run the prompt on your screen is carrying. It counts only if that run measured this exact text.">Cite current run</button>`
     : '';
   if (!release.experiment_id) return `<span class="status-chip ${esc(tone)}" title="${esc(title)}">${esc(word)}</span> ${cite}`;
-  return `<a href="#history" data-global-tab="history" data-screen="history" data-showing="${esc(release.experiment_id)}"><code>${esc(release.experiment_id)}</code></a>
+  return `<a href="#results/history" data-global-tab="results" data-screen="results" data-mode="history" data-showing="${esc(release.experiment_id)}"><code>${esc(release.experiment_id)}</code></a>
     <span class="status-chip ${esc(tone)}" title="${esc(title)}">${esc(word)}</span> ${cite}`;
 }
 
@@ -948,9 +951,9 @@ function releaseGateControl(release) {
 function renderReleases() {
   // Arrived on one stage of the funnel: the table keeps its columns and its
   // buttons, and holds only the releases sitting in that stage.
-  const only = showingOn('releases');
+  const only = showingOn('ship');
   const releases = only ? q.releases.filter(item => item.status === only) : q.releases;
-  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}</div></td></tr>`).join('');
+  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}<button class="ghost" data-release-action="export" title="Download the manifest and the checks block">Export</button></div></td></tr>`).join('');
   const gate = state.program ? '' : prerequisite('Author a prompt before registering a release.', 'prompt', 'Author a prompt');
   // A table of headings over nothing is a table that lost its rows. Say which
   // of the two it is.
@@ -978,6 +981,11 @@ function renderReleases() {
       <section class="screen-body">
         <h2>The register</h2>
         ${table}
+        <p class="field-hint">A register kept in here is not a system of record: no colleague, no CI job and no
+          future checkout can read it. <b>Export</b> writes two files to commit — the manifest, which carries the
+          exact text, its fingerprint, the run behind it and the verdict of the bar; and a <code>checks:</code>
+          block for <code>prompt-playoff.yaml</code>, which is what
+          <code>prompt-playoff check</code> enforces in CI.</p>
       </section>
     </div>
     <aside class="screen-guide" data-testid="releases-guide">${releasesGuide()}</aside>
@@ -989,8 +997,12 @@ function renderReleases() {
 function releasesGuide() {
   return `<h2>What a release is here</h2>
     <p class="guide-lead">A frozen copy of the prompt, with a SHA-256 of its text and a version number that counts
-      up per name. It is the register of what you decided to ship and when.</p>
+      up per name — and, on <em>Export</em>, two files your repository can hold.</p>
     <dl class="guide-stack">
+      <div><dt>The export is the point</dt><dd>A register kept in here is not a system of record: no colleague, no CI
+        job and no future checkout can read it. <em>Export</em> writes the manifest — exact text, fingerprint, the run
+        behind it, the verdict of the bar — and a <code>checks:</code> block for <code>prompt-playoff.yaml</code>.
+        Commit both, and <code>prompt-playoff check</code> enforces them where a gate actually guards something.</dd></div>
       <div><dt>Nothing here deploys anything</dt><dd>The buttons move a label along a line: draft, tested, approved,
         production, deprecated. "Production" means the version this register calls live; testing and shipping still
         happen where they happened before.</dd></div>
@@ -1009,9 +1021,12 @@ function releasesGuide() {
         keeps the run it was approved on.</dd></div>
       <div><dt>Approval is gated on the committed numbers</dt><dd>Where <code>prompt-playoff.yaml</code> sets a bar
         for this method, the cited run has to clear it — the same thresholds CI enforces. A bar that cannot be
-        applied refuses too: no run, a missing field, or examples that have changed since. No bar means the person
-        is the only gate.</dd></div>
-      <div><dt>Registering asks for a review</dt><dd>It raises an approval item in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a>. Promoting the release is still done here.</dd></div>
+        applied refuses too: no run, a missing field, or examples that have changed since.</dd></div>
+      <div><dt>Nobody is asked to approve their own work</dt><dd>Registering used to raise an item in Reviews asking
+        the same person, at the same keyboard, to approve what they had just registered — and advancing was refused
+        until they clicked it. One user cannot be two. The committed thresholds are the gate; where a method has
+        none, the release is recorded and the export hands you a <code>checks:</code> block to commit so that it
+        does.</dd></div>
     </dl>
     <p class="guide-note">What gets registered is the prompt currently authored on <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> — measure it first, so the version
       you freeze is one you have a number for.</p>`;
@@ -1020,8 +1035,8 @@ function releasesGuide() {
 /* Three unrelated checks used to sit on one screen as six blank fields in a
  * row. They are three tools, so they are three cards: each says what it answers
  * before it asks for anything, and only one is open at a time. */
-const subTool = (id, mark, title, question, body, open=false) => `<details class="sub-tool"${open ? ' open' : ''} data-sub-tool="${id}">
-  <summary><span class="sub-mark">${icon(mark)}</span><span class="sub-title"><strong>${esc(title)}</strong><small>${esc(question)}</small></span></summary>
+const subTool = (id, title, question, body, open=false) => `<details class="sub-tool"${open ? ' open' : ''} data-sub-tool="${id}">
+  <summary><span class="sub-title"><strong>${esc(title)}</strong><small>${esc(question)}</small></span></summary>
   <div class="sub-body">${body}</div>
 </details>`;
 
@@ -1117,19 +1132,19 @@ function renderProduction() {
   return `<div class="screen-split work-wide">
     <div class="build-work">
       ${qualityError()}
-      ${subTool('drift', 'wave', 'Input drift', 'Are real inputs still like the ones you tested on?', `
+      ${subTool('drift', 'Input drift', 'Are real inputs still like the ones you tested on?', `
         <div class="quality-form">
           <label>Baseline inputs, one per line<textarea id="drift-before" placeholder="the inputs your examples were built from"></textarea></label>
           <label>Current inputs, one per line<textarea id="drift-after" placeholder="inputs you have seen since"></textarea></label>
         </div>
         <div class="sub-actions"><button class="drift-run" type="button">Compare the two sets</button></div>`, true)}
-      ${subTool('trajectory', 'link', 'Agent runs', 'Did the agent call the tools it was supposed to?', `
+      ${subTool('trajectory', 'Agent runs', 'Did the agent call the tools it was supposed to?', `
         <div class="quality-form">
           <label class="wide">Trajectory JSON<textarea id="trajectory-json" placeholder='[{"tool":"search","success":true},{"tool":"browser","success":false,"recovered":true}]'></textarea></label>
           <label>Required tools, comma separated<input id="trajectory-tools" placeholder="search, browser"></label>
         </div>
         <div class="sub-actions"><button class="ghost trajectory-run" type="button">Evaluate trajectory</button></div>`)}
-      ${subTool('security', 'shield', 'Injection attempts', 'Does the prompt hold when the input fights it?', `
+      ${subTool('security', 'Injection attempts', 'Does the prompt hold when the input fights it?', `
         <div class="quality-form">
           <label class="wide">Input for the security suite<textarea id="security-input"></textarea></label>
         </div>
@@ -1159,7 +1174,7 @@ function productionGuide() {
       <div><dt>Two of the three need a prompt</dt><dd>Without one, the security tool shows the cases it built and
         stops. Drift and trajectories work on pasted material alone.</dd></div>
       <div><dt>None of this is recorded</dt><dd>Spot checks: run one, read it, act on it. Nothing enters your
-        history or moves a gate on <a href="#regressions" data-global-tab="regressions" data-screen="regressions">Regressions</a>.</dd></div>
+        history or moves a gate on <a href="#results/regressions" data-global-tab="results" data-screen="results" data-mode="regressions">Regressions</a>.</dd></div>
     </dl>`;
 }
 
@@ -1182,9 +1197,10 @@ function datasetSource(name) {
  * what are they standing in for — and the answers are different enough that one
  * table listing all of them tells you nothing:
  *
- *   the catalogue   fifty jobs businesses pay a model to do, each mapped to
- *                   the public set closest to its shape. Not rows: the reason
- *                   rows were chosen, including the ten cases with no match.
+ *   the catalogue   the work businesses pay a model to do, as categories of
+ *                   business tasks, each task mapped to the public set closest
+ *                   to its shape. Not rows: the reason rows were chosen, and
+ *                   the tasks no public set matches honestly enough to route.
  *   business sets   the rows that mapping resolved to, bundled and ready, each
  *                   still carrying its source repository and its licence.
  *   the rest        the task benchmarks that ship with the tool, and whatever
@@ -1227,7 +1243,37 @@ function citedBy(name) {
  * two tiles and make the shelf add up to more datasets than the server has. The
  * server already decides on one home per set, so that is what a tile counts. */
 function groupSetSpecs(group) {
-  return (state.catalog?.sets || []).filter(spec => spec.group === group.name);
+  const known = catalogSets();
+  const names = [...new Set((group.tasks || []).map(task => task.mapped_dataset).filter(Boolean))];
+  return names.map(name => known.get(name) || {
+    name,
+    title:name,
+    available:state.datasetSizes.has(name),
+    examples:state.datasetSizes.get(name),
+    shape:'Packaged evaluation dataset'
+  });
+}
+
+/* The recorded cases that belong to a category.
+ *
+ * The file says the same thing at two altitudes — a directory of business tasks
+ * to browse by, and fifty cases naming who does that work — and nothing joins
+ * them by hand. They do not need it: a case cites the sets that measure it, and
+ * a task routes to one. Where those meet is where the case belongs, so the two
+ * halves cannot drift out of step the way a written-down mapping would. */
+function categoryCases(group) {
+  const routed = new Set((group.tasks || []).map(task => task.mapped_dataset).filter(Boolean));
+  const seen = new Set();
+  const cases = [];
+  for (const shelf of state.catalog?.groups || []) {
+    for (const item of shelf.cases) {
+      if (seen.has(item.number)) continue;
+      if (!item.sets.some(name => routed.has(name))) continue;
+      seen.add(item.number);
+      cases.push(item);
+    }
+  }
+  return cases;
 }
 
 // What this server actually holds for a category: the datasets it can read and
@@ -1239,6 +1285,91 @@ function groupStock(group) {
     sets: here.length,
     rows: here.reduce((total, spec) => total + (state.datasetSizes.get(spec.name) || 0), 0)
   };
+}
+
+const catalogBrowse = () => state.catalogBrowse ||
+  (state.catalogBrowse = {query:'', scope:'all', availability:'all', sort:'relevance'});
+
+const browseNeedle = value => String(value || '').trim().toLocaleLowerCase();
+
+function groupBrowseText(group) {
+  const sets = groupSetSpecs(group).flatMap(spec => [spec.name, spec.title, spec.shape, spec.source]);
+  const tasks = (group.tasks || []).flatMap(item => [item.name, item.mapped_dataset]);
+  return browseNeedle([group.name, group.summary, ...sets, ...tasks].join(' '));
+}
+
+function visibleCatalogGroups() {
+  const browse = catalogBrowse();
+  if (browse.scope === 'yours') return [];
+  const needle = browseNeedle(browse.query);
+  const groups = (state.catalog?.taxonomy || []).filter(group => {
+    if (browse.availability === 'available' && !groupStock(group).sets) return false;
+    return !needle || groupBrowseText(group).includes(needle);
+  });
+  if (browse.sort === 'name') return groups.sort((a, b) => a.name.localeCompare(b.name));
+  if (browse.sort === 'examples') return groups.sort((a, b) => groupStock(b).rows - groupStock(a).rows);
+  return groups;
+}
+
+function visibleOwnSets(entries) {
+  const browse = catalogBrowse();
+  if (browse.scope === 'catalogue') return [];
+  const needle = browseNeedle(browse.query);
+  const own = entries.filter(([name]) => datasetIsMine(name) && (!needle || browseNeedle(name).includes(needle)));
+  if (browse.sort === 'name') return own.sort(([a], [b]) => a.localeCompare(b));
+  if (browse.sort === 'examples') return own.sort(([, a], [, b]) => Number(b || 0) - Number(a || 0));
+  return own;
+}
+
+// A packaged business set answers the search on its own words — its name, its
+// title, the shape it holds — rather than on whether a category happens to
+// route to it.
+function visibleBusinessSet(name) {
+  const browse = catalogBrowse();
+  const needle = browseNeedle(browse.query);
+  if (!needle) return true;
+  const spec = catalogSets().get(name);
+  return browseNeedle([name, spec?.title, spec?.shape, spec?.source, spec?.group].join(' ')).includes(needle);
+}
+
+function renderCatalogBrowseControls() {
+  const browse = catalogBrowse();
+  const option = (value, label, selected) =>
+    `<option value="${value}"${selected === value ? ' selected' : ''}>${label}</option>`;
+  return `<form class="catalog-browse" data-catalog-browse role="search" aria-label="Browse datasets">
+    <label class="catalog-search">
+      <span class="sr-only">Search datasets and business tasks</span>
+      ${icon('search')}
+      <input type="search" value="${esc(browse.query)}" data-catalog-query
+        placeholder="Search datasets, categories or business tasks…" autocomplete="off">
+    </label>
+    <div class="catalog-controls">
+      <label><span>Scope</span><select data-catalog-filter="scope" aria-label="Dataset scope">
+        ${option('all', 'All', browse.scope)}
+        ${option('catalogue', 'Business catalogue', browse.scope)}
+        ${option('yours', 'Your sets', browse.scope)}
+      </select></label>
+      <label><span>Availability</span><select data-catalog-filter="availability" aria-label="Dataset availability">
+        ${option('all', 'All catalogue', browse.availability)}
+        ${option('available', 'Dataset ready', browse.availability)}
+      </select></label>
+      <label class="catalog-sort"><span>Sort by</span><select data-catalog-filter="sort" aria-label="Sort datasets">
+        ${option('relevance', 'Relevance', browse.sort)}
+        ${option('name', 'Name', browse.sort)}
+        ${option('examples', 'Most examples', browse.sort)}
+      </select></label>
+    </div>
+  </form>`;
+}
+
+function catalogGroupRows(group) {
+  const browse = catalogBrowse();
+  const needle = browseNeedle(browse.query);
+  const groupHit = needle && browseNeedle([group.name, group.summary].join(' ')).includes(needle);
+  return (group.tasks || []).filter(task => {
+    if (browse.availability === 'available' && !task.available) return false;
+    return !needle || groupHit || browseNeedle([task.name, task.mapped_dataset].join(' ')).includes(needle);
+  });
 }
 
 /* Zone one: the shelf. Ten kinds of work, as tiles rather than as a list of
@@ -1260,34 +1391,42 @@ function groupStock(group) {
  * catalogue and not of the grid. Colour is not what tells them apart — the only
  * tinted tile is the one you have open. */
 function renderCatalogZone() {
-  const title = '<h3 class="zone-title">Ready-made data, by kind of work</h3>';
+  const title = '<h3 class="zone-title">Ready-made datasets by business task</h3>';
   if (state.catalogError) return `${title}
     <div class="error">The business catalogue could not be read: ${esc(state.catalogError)}</div>`;
   if (!state.catalog) return `${title}<div class="empty">Reading the catalogue…</div>`;
 
-  const {counts, groups} = state.catalog;
+  const counts = state.catalog.taxonomy_counts;
+  const groups = visibleCatalogGroups();
   const open = groups.find(group => group.id === state.catalogGroup);
   const cards = groups.map(group => {
-    const stock = groupStock(group);
     const shown = group.id === state.catalogGroup;
-    const held = stock.sets ? plural(stock.sets, 'set') : 'No sets yet';
-    return `<button type="button" class="cat-tile${shown ? ' open' : ''}"
-      data-catalog-group="${esc(group.id)}" aria-expanded="${shown}" aria-controls="catalog-open-panel">
-      <img class="cat-art" src="/assets/${esc(group.art)}.webp" alt="" width="72" height="72" loading="lazy" decoding="async">
-      <span class="cat-name">${esc(group.name)}</span>
-      <span class="cat-headline">${esc(group.headline)}</span>
-      <span class="cat-summary">${esc(group.summary)}</span>
-      <span class="cat-foot">
-        <span class="cat-held">${esc(held)}</span>
-        <span class="cat-open">${shown ? 'Hide' : 'Explore'}</span>
-      </span>
-    </button>`;
+    const rows = catalogGroupRows(group).map(task => task.available
+      ? `<a class="cat-row cat-row-ready" href="${esc(task.route)}" aria-label="${esc(task.name)} — dataset ready">
+          <span>${esc(task.name)}</span><small>Dataset ready</small></a>`
+      : `<span class="cat-row cat-row-off" aria-disabled="true">
+          <span>${esc(task.name)}</span><small>No dataset</small></span>`).join('');
+    return `<article class="cat-tile${shown ? ' open' : ''}">
+      <button type="button" class="cat-category-trigger" data-catalog-group="${esc(group.id)}"
+        aria-expanded="${shown}" aria-controls="catalog-open-panel" aria-label="${shown ? 'Hide' : 'Open'} ${esc(group.name)} category">
+        <span class="cat-index"><b>${String(group.index).padStart(2, '0')}</b><i aria-hidden="true"></i></span>
+        <span class="cat-count" aria-label="${esc(plural(group.counts.tasks, 'task'))}">${group.counts.tasks}</span>
+        <span class="cat-copy"><span class="cat-name">${esc(group.name)}</span>
+        <span class="cat-headline">${esc(group.summary)}</span></span>
+      </button>
+      <div class="cat-rows">${rows}</div>
+      <button type="button" class="cat-foot" data-catalog-group="${esc(group.id)}"
+        aria-expanded="${shown}" aria-controls="catalog-open-panel">
+        <span class="cat-held">${shown ? 'Hide category' : `View all ${plural(group.counts.tasks, 'task')}`}</span>
+        <span class="cat-arrow" aria-hidden="true">→</span>
+      </button>
+    </article>`;
   }).join('');
 
   return `${title}
-    <p class="meta catalog-lead">Open a category to see its sets; open a set to read its rows before you measure
-      against it. ${counts.available} of the ${plural(counts.sets, 'set')} named here are on this server.</p>
-    <div class="catalog-groups">${cards}</div>
+    <p class="meta catalog-lead">All ${counts.categories} categories stay visible. Active task rows open a packaged dataset;
+      gray rows mark honest gaps. ${counts.available} of ${plural(counts.tasks, 'task')} have a ready dataset.</p>
+    ${cards ? `<div class="catalog-groups">${cards}</div>` : ''}
     ${open ? renderOpenGroup(open) : ''}`;
 }
 
@@ -1297,11 +1436,12 @@ function renderCatalogZone() {
  * screen and leave the reader reading a column.
  *
  * The panel says which tile it belongs to and closes from its own corner. The
- * datasets come first because they are the thing you can pick up — each one a
- * click from its own rows — and the companies doing this work come after, as
- * background rather than as the point. */
+ * tasks come first because they are the thing you can pick up — each one that
+ * has a set is a click from its rows — and the companies doing this work come
+ * after, as background rather than as the point. */
 function renderOpenGroup(group) {
   const stock = groupStock(group);
+  const cases = categoryCases(group);
   const facts = stock.sets
     ? `${plural(stock.sets, 'dataset')} · ${stock.rows.toLocaleString('en-US')} examples`
     : 'No dataset for this kind of work is on this server';
@@ -1314,30 +1454,21 @@ function renderOpenGroup(group) {
       </div>
       <button type="button" class="ghost" data-catalog-close="1">Close</button>
     </div>
-    ${renderGroupSets(group)}
-    ${renderCatalogCases(group)}
+    <div class="cat-panel-label">Business tasks</div>
+    <div class="cat-panel-tasks">
+      ${(group.tasks || []).map(task => {
+        const body = `<span class="cat-panel-task-name">${esc(task.name)}</span>
+          <span class="cat-panel-task-data">${task.available
+            ? `${esc(task.mapped_dataset)} · ${esc(plural(task.examples || 0, 'example'))}`
+            : 'No matching packaged dataset'}</span>
+          <span class="cat-panel-task-status">${task.available ? 'Open dataset →' : 'Unavailable'}</span>`;
+        return task.available
+          ? `<a class="cat-panel-task ready" href="${esc(task.route)}">${body}</a>`
+          : `<span class="cat-panel-task off" aria-disabled="true">${body}</span>`;
+      }).join('')}
+    </div>
+    ${cases.length ? renderCatalogCases(cases) : ''}
   </section>`;
-}
-
-/* The datasets in a category, each a click from its own rows. A dataset the
- * catalogue names but this server does not have says so plainly instead of
- * linking somewhere empty. */
-function renderGroupSets(group) {
-  const label = '<div class="cat-panel-label">Datasets in this category</div>';
-  const cards = groupSetSpecs(group).map(spec => {
-    const rows = state.datasetSizes.get(spec.name) ?? spec.examples;
-    const body = `<span class="set-card-title">${esc(spec.title || spec.name)}</span>
-      <span class="set-card-facts">${spec.available
-        ? `${esc(plural(rows ?? 0, 'example'))} · ${esc(spec.shape || 'text in, text out')}`
-        : 'not on this server'}</span>
-      <code class="set-card-name">${esc(spec.name)}</code>`;
-    return spec.available
-      ? `<a class="set-card" href="#dataset-library/${encodeURIComponent(spec.name)}">${body}</a>`
-      : `<span class="set-card off">${body}</span>`;
-  }).join('');
-  if (!cards) return `${label}<div class="empty">Nothing here yet — for this kind of work your own examples are
-    the only way to measure anything. Upload them on the “Upload your own” screen.</div>`;
-  return `${label}<div class="set-cards">${cards}</div>`;
 }
 
 /* One card per case, rather than one row.
@@ -1349,14 +1480,14 @@ function renderGroupSets(group) {
  * where there is one, the left edge carries the match as colour so a group can
  * be read without reading it, and the dataset sits at the foot where a card
  * turns back into something you can run. */
-function renderCatalogCases(group) {
+function renderCatalogCases(cases) {
   const known = catalogSets();
   const references = new Map((state.catalog.references || []).map(item => [item.id, item]));
   // The ones that can be measured lead. A group read top to bottom then runs
   // from work you can put a number on today to work you cannot, which is the
   // order anybody reading it is looking for anyway.
   const rank = {direct:0, partial:1, none:2};
-  const ordered = [...group.cases].sort((a, b) => (rank[a.match] - rank[b.match]) || (a.number - b.number));
+  const ordered = [...cases].sort((a, b) => (rank[a.match] - rank[b.match]) || (a.number - b.number));
   const cards = ordered.map(item => {
     const measured = item.sets.map(name => {
       const spec = known.get(name);
@@ -1402,7 +1533,7 @@ function renderCatalogCases(group) {
 /* Zone two. The columns a business set has to carry that a bundled one does
  * not: which group of work it stands for, where the rows came from, and under
  * what licence — because these arrived from someone else's repository. */
-function renderBusinessZone(names, {collapsed = false} = {}) {
+function renderBusinessZone(names, {collapsed = false, open = false} = {}) {
   const known = catalogSets();
   const listed = names.filter(name => known.has(name));
   if (!listed.length) return '';
@@ -1427,11 +1558,14 @@ function renderBusinessZone(names, {collapsed = false} = {}) {
     <p class="meta">The repository it was sampled from and the licence that came with it. What is bundled here is a
       sample: the examples column is what this server holds, not what the source holds.</p>
     ${table}</section>`;
-  // On the full screen it is a second way to walk the same seventeen sets the
-  // tiles above already walk, by category and by name. What it alone can do is
-  // show every licence at once, which is a question asked rarely and answered
-  // completely — so it folds, and the browse path stays unobstructed.
-  return `<section class="library-zone"><details class="advanced-disclosure">
+  // On the full screen it is the complete list of packaged business sets, which
+  // is more than the tiles above route to: a set with no task whose shape it
+  // honestly matches is still here, still measurable, and this is where it is
+  // reachable from. What it alone can do is show every licence at once, which
+  // is a question asked rarely and answered completely — so it folds, and the
+  // browse path stays unobstructed — except when it is the only thing that
+  // answered the search, and a fold over the answer reads as no answer.
+  return `<section class="library-zone"><details class="advanced-disclosure"${open ? ' open' : ''}>
       <summary>Sources and licences<small class="meta"> — ${plural(listed.length, 'repository').replace('repositorys', 'repositories')} these rows were sampled from</small></summary>
       <div class="advanced-content">${table}</div>
     </details></section>`;
@@ -1508,9 +1642,9 @@ function renderYoursZone(entries) {
   if (!mine.length && showingOn('dataset-library')) return '';
   if (!mine.length) return `<section class="library-zone"><h3 class="zone-title">Your sets</h3>
     <p class="meta">Nothing of your own on this server yet. Rows you have seen in production are the only ones
-      a score truly speaks about — <a href="#dataset-upload" data-global-tab="dataset-upload">upload a JSONL file</a>,
-      <a href="#dataset-hub" data-global-tab="dataset-hub">import a public set</a>, or
-      <a href="#dataset-builder" data-global-tab="dataset-builder">build one from your task</a>.</p></section>`;
+      a score truly speaks about — <a href="#dataset-add" data-global-tab="dataset-add" data-mode="upload">upload a JSONL file</a>,
+      <a href="#dataset-add/hugging-face" data-global-tab="dataset-add" data-mode="hugging-face">import a public set</a>, or
+      <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build one from your task</a>.</p></section>`;
   const rows = mine.map(([name, count]) => `<tr>
     <td>${esc(name)}</td><td>${count}</td><td>${esc(datasetSource(name))}</td>
     <td class="row-actions">${deleteCell(name)}</td>
@@ -1539,7 +1673,7 @@ function renderBundledZone(entries, {heading = true} = {}) {
       <p class="meta">The tool's own test stand: its checks are written against these rows and its published numbers
         were measured on them. Good for trying the workflow, or comparing a method against a published result — but a
         good score here describes the tool, not your task. Shipped inside the package, and not deletable.
-        <a href="#evaluation" data-global-tab="evaluation">What each one contains</a>.</p>`
+        <a href="#guides/evaluation" data-global-tab="guides" data-screen="guides" data-mode="evaluation">What each one contains</a>.</p>`
     : '';
   return `<section class="library-zone">${head}
     <div class="table-scroll"><table class="dataset-list">
@@ -1632,7 +1766,7 @@ function renderDatasetBundled() {
           chose the material, which is the whole value of it: it cannot have been picked to produce a convenient
           result. The licence is the source repository's and travels with the rows — including into anything you
           publish from a score measured on them.
-          <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">How each import keeps the data
+          <a href="#guides/evaluation" data-global-tab="guides" data-screen="guides" data-mode="evaluation">How each import keeps the data
           honest</a>.`})}
       ${bundledShelf(built, {title:'Built here',
         lead:`Written by hand, or generated from fixed rules with a fixed seed so they rebuild byte for byte. They
@@ -1655,12 +1789,12 @@ function renderDatasetBundled() {
           <code>multiconer-en</code> and <code>few-nerd</code>.</dd></div>
         <div><dt>Where the detail is</dt><dd>What each set contains, which grader scores it, how the public ones were
           imported without flattering the model, and the five rules without which a number means nothing —
-          <a href="#evaluation" data-global-tab="evaluation" data-screen="evaluation">Evaluation guide</a>.</dd></div>
+          <a href="#guides/evaluation" data-global-tab="guides" data-screen="guides" data-mode="evaluation">Evaluation guide</a>.</dd></div>
       </dl>
       <p class="guide-note">A number about <em>your</em> work is computed from sets you
-        <a href="#dataset-upload" data-global-tab="dataset-upload">upload</a>,
-        <a href="#dataset-hub" data-global-tab="dataset-hub">import</a> or
-        <a href="#dataset-builder" data-global-tab="dataset-builder">build</a> — and the
+        <a href="#dataset-add" data-global-tab="dataset-add" data-mode="upload">upload</a>,
+        <a href="#dataset-add/hugging-face" data-global-tab="dataset-add" data-mode="hugging-face">import</a> or
+        <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build</a> — and the
         <a href="#dataset-library" data-global-tab="dataset-library">library</a> is where those live.</p>
     </aside>
   </div>`;
@@ -1684,7 +1818,7 @@ function renderCitations(name) {
 const bundledPointer = () => `<section class="library-zone">
   <h3 class="zone-title">Shipped with the tool</h3>
   <p class="meta">The task benchmarks inside the installed package now have
-    <a href="#dataset-bundled" data-global-tab="dataset-bundled">a screen of their own</a> — they are what this tool
+    <a href="#dataset-library/built-in" data-global-tab="dataset-library" data-screen="dataset-library" data-mode="built-in">a screen of their own</a> — they are what this tool
     measures itself against, not material for your task.</p>
 </section>`;
 
@@ -1705,11 +1839,38 @@ function renderDatasetLibrary() {
   const own = sets.filter(([name]) => !name.startsWith('business:'));
   // Narrowed to one set, the zones it does not live in would be six group
   // buttons and an empty table above the rows you came to read.
-  const zones = only
-    ? renderBusinessZone(business) + renderYoursZone(own) + renderBundledZone(own) + renderCitations(only)
-    : renderCatalogZone() + renderBusinessZone(business, {collapsed: true}) + renderYoursZone(own) + bundledPointer();
+  if (only) {
+    const zones = renderBusinessZone(business) + renderYoursZone(own) + renderBundledZone(own) + renderCitations(only);
+    return `${qualityError()}${note}${warning}${zones}${datasetPreview(only, sets[0][1])}`;
+  }
 
-  return `${qualityError()}${note}${warning}${zones}${only ? datasetPreview(only, sets[0][1]) : ''}`;
+  const browse = catalogBrowse();
+  const groups = visibleCatalogGroups();
+  const visibleOwn = visibleOwnSets(sets);
+  // A search that names a set and no category still has an answer: the sources
+  // table below the shelf. Reporting "nothing matches" over it was the same
+  // mistake as hiding the set — an answer on the screen, called absent.
+  const visibleBusiness = browse.scope === 'yours' ? [] : business.filter(visibleBusinessSet);
+  const hasCatalogue = browse.scope !== 'yours' && (groups.length > 0 || visibleBusiness.length > 0);
+  const hasYours = browse.scope !== 'catalogue' && visibleOwn.length > 0;
+  const controls = renderCatalogBrowseControls();
+  if (!hasCatalogue && !hasYours) return `${qualityError()}${note}${warning}${controls}
+    <div class="catalog-no-results" role="status">
+      <strong>Nothing matches these browse controls.</strong>
+      <span>Try a broader phrase, include catalogue entries that are not installed, or reset the view.</span>
+      <button type="button" class="ghost" data-catalog-reset>Clear search and filters</button>
+    </div>`;
+
+  const catalogueZones = hasCatalogue
+    ? (groups.length ? renderCatalogZone() : '') + renderBusinessZone(visibleBusiness, {collapsed: true, open: !groups.length})
+    : '';
+  const yourZone = browse.scope !== 'catalogue' && (visibleOwn.length || !browseNeedle(browse.query))
+    ? renderYoursZone(visibleOwn)
+    : '';
+  const pointer = browse.scope === 'all' && !browseNeedle(browse.query) ? bundledPointer() : '';
+  const zones = controls + catalogueZones + yourZone + pointer;
+
+  return `${qualityError()}${note}${warning}${zones}`;
 }
 
 async function deleteDataset(name) {
@@ -1728,6 +1889,34 @@ async function deleteDataset(name) {
 }
 
 function wireDatasetLibrary(tab, panel) {
+  const preserveOpenGroup = () => {
+    if (state.catalogGroup && !visibleCatalogGroups().some(group => group.id === state.catalogGroup)) {
+      state.catalogGroup = null;
+    }
+  };
+  panel.querySelector('[data-catalog-browse]')?.addEventListener('submit', event => event.preventDefault());
+  panel.querySelector('[data-catalog-query]')?.addEventListener('input', event => {
+    catalogBrowse().query = event.currentTarget.value;
+    preserveOpenGroup();
+    renderDetailPanel(tab);
+    const search = document.querySelector('[data-catalog-query]');
+    if (search) {
+      search.focus();
+      search.setSelectionRange(search.value.length, search.value.length);
+    }
+  });
+  panel.querySelectorAll('[data-catalog-filter]').forEach(control => control.addEventListener('change', event => {
+    catalogBrowse()[event.currentTarget.dataset.catalogFilter] = event.currentTarget.value;
+    preserveOpenGroup();
+    renderDetailPanel(tab);
+    document.querySelector(`[data-catalog-filter="${CSS.escape(event.currentTarget.dataset.catalogFilter)}"]`)?.focus();
+  }));
+  panel.querySelector('[data-catalog-reset]')?.addEventListener('click', () => {
+    state.catalogBrowse = {query:'', scope:'all', availability:'all', sort:'relevance'};
+    state.catalogGroup = null;
+    renderDetailPanel(tab);
+    document.querySelector('[data-catalog-query]')?.focus();
+  });
   panel.querySelectorAll('[data-catalog-group]').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.catalogGroup;
     state.catalogGroup = state.catalogGroup === id ? null : id;
@@ -1767,8 +1956,9 @@ function renderPlatformTab(tab) {
 }
 
 async function refreshPlatformTab(tab) {
+  const parentTab = parentForLegacyTab(tab);
   try {
-    if (tab === 'dataset-builder') {
+    if (tab === 'dataset-builder' || tab === 'dataset-add') {
       q.projects = await api('/v1/dataset-projects');
       // Two modes seed from rows this screen does not own: the set being
       // measured, and the set the last run scored. Fetch both, once.
@@ -1776,7 +1966,7 @@ async function refreshPlatformTab(tab) {
       if (state.run.dataset) await loadDatasetRows(state.run.dataset);
     }
     if (tab === 'reviews') q.reviews = await api('/v1/reviews');
-    if (tab === 'releases') {
+    if (tab === 'releases' || tab === 'ship') {
       q.releases = await api('/v1/releases');
       // Only where Approve is the next move. The verdict has to be readable
       // before the button is pressed, or the committed bar is something you
@@ -1786,7 +1976,7 @@ async function refreshPlatformTab(tab) {
           [item.id, await api(`/v1/releases/${item.id}/gate`).catch(e => ({status:'unenforceable', reason:e.message}))])
       ));
     }
-    if (tab === 'regressions' && !state.experiments.length) state.experiments = await api('/v1/experiments');
+    if ((tab === 'regressions' || tab === 'results') && !state.experiments.length) state.experiments = await api('/v1/experiments');
     if (tab === 'dataset-library') {
       await loadDatasets();
       await loadBusinessCatalog();
@@ -1795,7 +1985,8 @@ async function refreshPlatformTab(tab) {
     q.error = '';
   } catch (error) { q.error = error.message; }
   q.loaded.add(tab);
-  if (state.tab === tab) renderDetailPanel(tab);
+  q.loaded.add(parentTab);
+  if (state.tab === parentTab) renderDetailPanel(parentTab);
 }
 
 function values(text) { return text.split(/[\s,;]+/).filter(Boolean).map(Number).filter(Number.isFinite); }
@@ -1896,7 +2087,17 @@ function wirePlatformTab(tab, panel) {
   panel.querySelector('.release-create')?.addEventListener('click', () => qualityAction(tab, async () => api('/v1/releases', {name:panel.querySelector('#release-name').value, technique_id:state.program.technique_id, prompt:state.program, experiment_id:state.provenance?.experiment_id || null})));
 
   panel.querySelectorAll('[data-cite-release]').forEach(button => button.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/releases/${button.closest('tr').dataset.releaseId}/cite`, {experiment_id:button.dataset.citeRelease}))));
-  panel.querySelectorAll('[data-release-action]').forEach(button => button.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/releases/${button.closest('tr').dataset.releaseId}/action`, {action:button.dataset.releaseAction}))));
+  panel.querySelectorAll('[data-release-action]').forEach(button => button.addEventListener('click', () => {
+    const id = button.closest('tr').dataset.releaseId;
+    // Export is not a lifecycle move: it takes the release out of here rather
+    // than along the line, so it neither posts an action nor redraws the table.
+    if (button.dataset.releaseAction === 'export') return qualityAction(tab, async () => {
+      const manifest = await api(`/v1/releases/${id}/manifest`);
+      downloadText(manifest.filename, manifest.content, 'application/json');
+      downloadText(manifest.checks_filename, manifest.checks, 'text/yaml');
+    });
+    return qualityAction(tab, async () => api(`/v1/releases/${id}/action`, {action:button.dataset.releaseAction}));
+  }));
   panel.querySelector('.drift-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/drift', {baseline_inputs:panel.querySelector('#drift-before').value.split('\n').filter(Boolean), current_inputs:panel.querySelector('#drift-after').value.split('\n').filter(Boolean)}); setScreenResult(tab, {kind:'production', tool:'drift', value:result}); }));
   panel.querySelector('.trajectory-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api('/v1/trajectories/evaluate', {steps:JSON.parse(panel.querySelector('#trajectory-json').value), required_tools:panel.querySelector('#trajectory-tools').value.split(',').map(x=>x.trim()).filter(Boolean)}); setScreenResult(tab, {kind:'production', tool:'trajectory', value:result}); }));
   panel.querySelector('.security-run')?.addEventListener('click', () => qualityAction(tab, async () => { const source={id:'security-source', input:panel.querySelector('#security-input').value}; if (state.chosen) { const job=await api('/v1/security-evaluate', {...baseBenchmarkPayload(), task:await taskProfile(), source}); setScreenResult(tab, {kind:'production', tool:'security', value:await pollJob(job.id, ()=>{})}); } else { setScreenResult(tab, {kind:'production', tool:'security', value:await api('/v1/datasets/security-suite', source)}); } }));
@@ -1905,6 +2106,6 @@ function wirePlatformTab(tab, panel) {
 async function qualityAction(tab, operation) {
   q.error=''; q.loading=true;
   try { await operation(); await refreshPlatformTab(tab); }
-  catch (error) { q.error=error.message; if (state.tab === tab) renderDetailPanel(tab); }
+  catch (error) { q.error=error.message; if (state.tab === parentForLegacyTab(tab)) renderDetailPanel(parentForLegacyTab(tab)); }
   finally { q.loading=false; }
 }
