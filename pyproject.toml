@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prompt-playoff"
-version = "0.3.0"
+version = "0.4.0"
 description = "Prompt optimization and LLM evaluation for local LLMs: picks the prompting technique your task needs, compiles the prompt it implies, measures it on your model, and searches for a better one."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "Artem Kazakov Kozlov" }]
 keywords = [
   "prompt-engineering",
@@ -36,6 +37,7 @@ classifiers = [
 dependencies = [
   "httpx>=0.28,<1",
   "pydantic>=2.13,<3",
+  "python-dotenv>=1.1,<2",
   "pyyaml>=6.0,<7",
 ]
 

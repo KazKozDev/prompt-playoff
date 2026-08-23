@@ -18,7 +18,7 @@ start.bat
   <a href="start.command"><img src="assets/badges/linux.png" alt="Linux" height="36"></a>
 </p>
 
-<p align="center">Launchers after clone — double-click <code>.command</code> / <code>.bat</code>, or run <code>.sh</code>.</p>
+<p align="center">Launchers after clone — double-click <code>start.command</code> on macOS, run it from a Linux shell, or use <code>start.bat</code> on Windows.</p>
 
 <p align="center">
   <img src="assets/demo-cli.gif" alt="Prompt Playoff benchmarking a prompt technique against a local Ollama model" width="820">
@@ -62,19 +62,19 @@ Prompt Playoff ships with techniques from research papers, ready to use. Click a
 
 <table>
   <tr>
-    <td align="center"><a href="docs/techniques.md#chain-of-thought"><img src="assets/techniques/thumbs/chain-of-thought.png" alt="Chain of Thought" width="260"></a><br><code>reasoning.cot</code></td>
-    <td align="center"><a href="docs/techniques.md#self-consistency"><img src="assets/techniques/thumbs/self-consistency.png" alt="Self Consistency" width="260"></a><br><code>reasoning.self-consistency</code></td>
-    <td align="center"><a href="docs/techniques.md#react"><img src="assets/techniques/thumbs/react.png" alt="ReAct" width="260"></a><br><code>reasoning.react</code></td>
+    <td align="center"><a href="docs/techniques.md#zero-shot-chain-of-thought"><img src="assets/techniques/thumbs/chain-of-thought.svg" alt="Zero-shot Chain of Thought" width="260"></a><br><code>reasoning.zero-shot-cot</code></td>
+    <td align="center"><a href="docs/techniques.md#self-consistency-sampling"><img src="assets/techniques/thumbs/self-consistency.svg" alt="Self Consistency" width="260"></a><br><code>reasoning.self-consistency</code></td>
+    <td align="center"><a href="docs/techniques.md#react-tool-loop"><img src="assets/techniques/thumbs/react.svg" alt="ReAct" width="260"></a><br><code>agents.react</code></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/techniques.md#schema-first"><img src="assets/techniques/thumbs/schema-first.png" alt="Schema First" width="260"></a><br><code>structured.schema-first</code></td>
-    <td align="center"><a href="docs/techniques.md#direct"><img src="assets/techniques/thumbs/direct.png" alt="Direct" width="260"></a><br><code>direct.explicit-constraints</code></td>
-    <td align="center"><a href="docs/techniques.md#few-shot"><img src="assets/techniques/thumbs/few-shot.png" alt="Few Shot" width="260"></a><br><code>direct.few-shot</code></td>
+    <td align="center"><a href="docs/techniques.md#schema-first-output"><img src="assets/techniques/thumbs/schema-first.svg" alt="Schema First" width="260"></a><br><code>structured.schema-first</code></td>
+    <td align="center"><a href="docs/techniques.md#direct-prompting-with-explicit-constraints"><img src="assets/techniques/thumbs/direct.svg" alt="Direct" width="260"></a><br><code>direct.explicit-constraints</code></td>
+    <td align="center"><a href="docs/techniques.md#few-shot-schema-with-repair"><img src="assets/techniques/thumbs/few-shot.svg" alt="Few Shot" width="260"></a><br><code>structured.few-shot-repair</code></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/techniques.md#reflexion"><img src="assets/techniques/thumbs/reflexion.png" alt="Reflexion" width="260"></a><br><code>refinement.reflexion</code></td>
-    <td align="center"><a href="docs/techniques.md#maieutic"><img src="assets/techniques/thumbs/maieutic.png" alt="Maieutic" width="260"></a><br><code>reasoning.maieutic</code></td>
-    <td align="center"><a href="docs/techniques.md#graph-of-thought"><img src="assets/techniques/thumbs/graph-of-thought.png" alt="Graph of Thought" width="260"></a><br><code>reasoning.graph-of-thought</code></td>
+    <td align="center"><a href="docs/techniques.md#reflexion"><img src="assets/techniques/thumbs/reflexion.svg" alt="Reflexion" width="260"></a><br><code>verification.reflexion</code></td>
+    <td align="center"><a href="docs/techniques.md#maieutic-prompting"><img src="assets/techniques/thumbs/maieutic.svg" alt="Maieutic" width="260"></a><br><code>reasoning.maieutic</code></td>
+    <td align="center"><a href="docs/techniques.md#graph-of-thoughts"><img src="assets/techniques/thumbs/graph-of-thought.svg" alt="Graph of Thought" width="260"></a><br><code>reasoning.graph-of-thought</code></td>
   </tr>
 </table>
 
@@ -92,9 +92,15 @@ Review the dataset before starting the benchmark: check the input format, verify
 
 - `business-catalogue` tag marks all business datasets
 - Each dataset has input/expected/graders structure
-- Graders include exact_match, contains_all, field_f1, and LLM judges
+- Benchmark graders are deterministic and include exact_match, contains_all, field_f1, chrF, JSON validity, and task-specific metrics
 
-The benchmark belongs to this task and model pair. If you configure an external provider, **LLM grading** can evaluate open-ended outputs; Prompt Playoff reports scores without modifying your prompt.
+The benchmark belongs to this task and model pair. Model-assisted pairwise judging is a separate review workflow: its verdicts are recorded as review evidence and never presented as deterministic benchmark scores.
+
+Every company case links the official publication used to document it and carries an evidence status. `verified_official` still means a self-reported company/vendor statement, not an independent audit; qualified and unverified wording stays visible. See the [case evidence policy](docs/business-cases.md) and [third-party data notices](THIRD_PARTY_NOTICES.md).
+
+## Use the Python and HTTP interfaces
+
+The package exports `Registry`, `Selector`, `PromptCompiler`, and task/model domain types for Python integrations. The server exposes the same workflow through `/v1`; its generated Swagger UI is available at `/docs` while the server is running. See the [HTTP API guide](docs/api.md), [architecture](docs/architecture.md), and the runnable files in [`examples/`](examples/).
 
 ## Measure prompt quality side by side
 
@@ -131,7 +137,7 @@ Task → Technique selection → Prompt compilation → Benchmark → Human revi
 1. **Describe** — the parser reads your task description and extracts type, constraints, and capabilities. A structured extraction task gets different priors than a reasoning task.
 2. **Recommend** — the Selector scores all techniques against your task profile. Heuristics consider task type, model capabilities, and prior performance. The top 5 techniques are shown with reasons.
 3. **Compile** — the PromptCompiler renders the technique template with your task description. Each technique has stages (e.g., cot has reasoning → answer) that become numbered model calls.
-4. **Benchmark** — the dataset loader reads JSONL examples. The service runs each example through the compiled prompt. Graders score outputs: exact_match for classification, contains_all for extraction, chrF for summarization, LLM judges for open-ended tasks.
+4. **Benchmark** — the dataset loader reads JSONL examples. The service runs each example through the compiled prompt. Deterministic graders score outputs: exact_match for classification, contains_all or field_f1 for extraction, and chrF or token overlap for summarization.
 5. **Optimize** — optional DSPy backend (MIPROv2, GEPA) searches for better prompt variants. The optimizer modifies instructions and demonstrations while preserving the technique structure.
 
 ```text
@@ -151,7 +157,10 @@ SQLite + JSON export
 ### Storage and measurements
 
 - `prompt_playoff.db` stores optimizations, task profiles, technique rankings, and measurement results.
-- `measurements/` stores per-experiment JSONL with detailed scores.
+- `benchmark-results/measurements.json` stores reusable measurement evidence;
+  `benchmark-results/jobs.json`, `benchmark-results/experiments.json`, and
+  `benchmark-results/business-cases.json` store job history and the business-case → prompt version
+  → dataset → run lineage shown in Results.
 - Quality is the headline grader's mean score (e.g., exact_match accuracy).
 - Reliability measures variance across dataset subsets.
 - Grades break down performance by grader (e.g., terminology, fluency, completeness).
@@ -162,10 +171,10 @@ SQLite + JSON export
 - `src/prompt_playoff/service.py` — core optimization service, selection, compilation, benchmarking.
 - `src/prompt_playoff/selector.py` — technique ranking with heuristics and priors.
 - `src/prompt_playoff/optimizer.py` — prompt optimization with native and DSPy backends.
-- `src/prompt_playoff/graders.py` — exact_match, contains_all, field_f1, chrF, LLM judges.
+- `src/prompt_playoff/graders.py` — the deterministic grader registry, including exact_match, contains_all, field_f1 and chrF.
 - `src/prompt_playoff/business_catalog.py` — business dataset catalogue.
 - `src/prompt_playoff/technique_store.py` — technique registry from YAML files.
-- `src/prompt_playoff/data/techniques/` — 32 technique definitions.
+- `src/prompt_playoff/data/techniques/` — 61 technique definitions; see the [complete catalogue](docs/techniques.md).
 - `src/prompt_playoff/data/datasets/` — bundled JSONL datasets.
 - `src/prompt_playoff/data/static/` — web interface HTML/CSS/JS.
 - `tests/` — unit and integration tests.
@@ -182,10 +191,10 @@ SQLite + JSON export
 | Model profile | keyword parsing only | Model capabilities detected from name (e.g., `llama3.2:3b` → 3B params, instruct) |
 | Dataset directory | `src/prompt_playoff/data/datasets/` | JSONL datasets for benchmarking |
 | Techniques directory | `src/prompt_playoff/data/techniques/` | YAML technique definitions |
-| Measurements directory | `measurements/` | JSONL export of benchmark results |
+| Measurement store | `benchmark-results/measurements.json` | Reusable benchmark evidence; configurable with `PROMPT_PLAYOFF_MEASUREMENTS` |
 | Engine model | unset | Model that reads descriptions, authors prompts, and proposes rewrites |
 | Chunk size | dataset-defined | Examples per benchmark (typically 50-100) |
-| Grader | task-dependent | exact_match for classification, chrF for summarization, LLM for open-ended |
+| Grader | task-dependent | Deterministic metric declared by each dataset; model judging is a separate review workflow |
 
 </details>
 
@@ -214,7 +223,7 @@ The launchers use an existing Python 3.11+ installation when available. Otherwis
 - Benchmarking a technique on 100 examples can take minutes to hours depending on model speed and dataset complexity.
 - Technique rankings can still miss edge cases or favor techniques that match the grader rather than your actual use case. Review compiled prompts before deploying.
 - Large Ollama models need substantial memory and disk space; Prompt Playoff cannot make a model fit hardware that is too small.
-- Optional LLM grading sends examples to the selected API provider and may cost money.
+- Model-assisted authoring, optimization and pairwise review send the supplied content to the selected provider and may cost money.
 - DSPy optimization is optional, requires additional dependencies, and may take many model calls to converge.
 - Prompt Playoff does not currently provide an official Docker image.
 
@@ -244,7 +253,7 @@ To use optional integrations, copy `.env.example` to `.env` and add the provider
 
 ### Docker
 
-This repository does not currently include a Dockerfile or published image. Use the native launcher so Prompt Playoff can detect Ollama, installed models, and local hardware.
+The repository includes a non-root [Dockerfile](Dockerfile). Build and run it with the commands in [configuration](docs/configuration.md#docker). No prebuilt official container image is published yet; pass an accessible Ollama/provider URL explicitly when the container cannot reach the host service.
 
 ### Development setup
 
@@ -263,7 +272,7 @@ The test suite does not require Ollama, downloaded models, or network access.
 
 ## License
 
-Prompt Playoff is free and open-source software licensed under the [MIT License](LICENSE) (`MIT`).
+Prompt Playoff source code is free and open-source software licensed under the [MIT License](LICENSE). Bundled benchmark samples retain their upstream licenses and are not relicensed under MIT; see [third-party data notices](THIRD_PARTY_NOTICES.md). Dataset entries without redistribution permission remain visible as source-only and are not included in the package.
 
 <br><br>
 
@@ -280,5 +289,7 @@ Prompt Playoff is free and open-source software licensed under the [MIT License]
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/CONTRIBUTING.md">Contributing</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/LICENSE">LICENSE</a> ·
   <a href="https://github.com/KazKozDev/prompt-playoff/blob/main/docs/architecture.md">Architecture</a> ·
+  <a href="docs/api.md">API</a> ·
+  <a href="docs/releasing.md">Releasing</a> ·
   <a href="https://www.linkedin.com/in/kazkozdev/">LinkedIn</a>
 </p>

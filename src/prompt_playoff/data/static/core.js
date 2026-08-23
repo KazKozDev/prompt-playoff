@@ -46,6 +46,16 @@ const screenIcons = {
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+// A row's right answer is JSON as often as it is a string: an extraction set
+// holds an object, a classification set a bare label. `String(value)` renders
+// the first as "[object Object]", which is the one thing the reader cannot act
+// on — the whole point of showing the row is to see what was expected. Objects
+// and arrays are shown as the JSON they already are.
+const asText = value => (
+  value === null || value === undefined ? ''
+    : typeof value === 'object' ? JSON.stringify(value, null, 2)
+      : String(value)
+);
 const plural = (count, word) => `${count} ${word}${Number(count) === 1 ? '' : 's'}`;
 const chips = values => values.map(value => `<code>${esc(value)}</code>`).join('');
 const state = {
@@ -54,6 +64,10 @@ const state = {
   // {tab, value}, or null for the whole screen. It lives in the address bar as
   // `#screen/thing`, so the step can be walked back out of like any other.
   showing:null,
+  // The selector's whole answer, not just the ranking it put first: the Method
+  // panel draws the rejections and the warnings out of it as well, so this is
+  // what that panel is redrawn from when the page comes back from a reload.
+  ranking:null,
   comparison:null, optimization:null, inputSource:'task',
   techniqueCatalog:new Map(), catalogStatus:'loading', catalogError:'', copyPayloads:new Map(),
   datasetSizes:new Map(), datasetFacts:new Map(), hub:null,
@@ -76,7 +90,12 @@ const state = {
   // What a run is set up with. It used to live in the DOM, which meant the
   // controls had to exist on whatever screen you were on; held here, each
   // screen can render the ones it needs and none of the others.
-  run:{dataset:'', repeats:1, rounds:2, backend:''}, backendOptions:'',
+  // Three runs per example, not one. At one, the verdict the run produces goes
+  // on to say that nothing in it separates a real difference from the model
+  // answering differently on a second try — so the opening value was the one
+  // the scorecard itself refuses to stand behind. Pasting your own inputs
+  // already raised it to three; arriving at the screen now does the same.
+  run:{dataset:'', repeats:3, rounds:2, backend:''}, backendOptions:'',
   // What the last paste of your own inputs did, said on the screen after the
   // block that asked for them has stepped aside.
   ownRowsNote:'',
@@ -99,6 +118,12 @@ const state = {
   techniqueNote:'',
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
   openLogs:new Set(), selectedJobId:null, logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
+  // Saved cases organize prompt lineage without making assignment mandatory.
+  // Empty string is the deliberate Unassigned choice; the history uses its own
+  // sentinel because case ids themselves are opaque strings.
+  businessCases:[], businessCasesLoading:true, businessCasesError:'', businessCaseId:'',
+  historyCaseId:null, historyPromptId:null, historyDataset:null, historyTechnique:null,
+  historyCompareContext:null, historyError:'',
   quality:{projects:[], reviews:[], releases:[], gates:{}, results:{}, error:'', loading:false, loaded:new Set(),
     // The builder form lives here rather than in the DOM: the cost of the
     // settings is quoted before the button is pressed, so a keystroke has to
@@ -116,6 +141,63 @@ const state = {
   }
 };
 
+/* --------------------------------------------------------------------------
+ * The prompt outlives the tab.
+ *
+ * The compiled prompt was held in page memory and nowhere else. A reload — or a
+ * closed tab, or a crash — took the only copy with it: the screen that writes
+ * it came back saying "Nothing here yet", and no other screen could produce the
+ * text, because the run history stores a preview and a fingerprint and the
+ * release table stores a fingerprint. So the prompt was unopenable at every
+ * step of the workflow, including the one step that had just written it.
+ *
+ * Only what the screens redraw from is written down. The task profile is not:
+ * it carries the evaluation model, and that carries an API key, which has no
+ * business being on disk. It is re-derived from the description on the next run.
+ * -------------------------------------------------------------------------- */
+const DRAFT_KEY = 'pp-draft';
+const DRAFT_VERSION = 1;
+
+function rememberDraft() {
+  const description = $('description')?.value || '';
+  if (!state.program && !state.chosen && !description.trim()) return forgetDraft();
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      version:DRAFT_VERSION, description, inputSource:state.inputSource, chosen:state.chosen,
+      program:state.program, ranking:state.ranking, provenance:state.provenance,
+      businessCaseId:state.businessCaseId
+    }));
+  } catch { /* storage can be denied or full; the page still works */ }
+}
+
+function forgetDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* nothing to undo */ }
+}
+
+// Read back before the first render, so the screens draw the restored prompt
+// rather than drawing "nothing yet" and being corrected a frame later.
+function restoreDraft() {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); }
+  catch { draft = null; }
+  if (!draft || draft.version !== DRAFT_VERSION) return;
+  if ($('description')) $('description').value = draft.description || '';
+  state.inputSource = draft.inputSource === 'reusable' ? 'reusable' : 'task';
+  const mode = document.querySelector(`input[name="creation-mode"][value="${state.inputSource}"]`);
+  if (mode) mode.checked = true;
+  if ($('task-helper')) $('task-helper').innerHTML = CREATION_HELP[state.inputSource];
+  state.chosen = draft.chosen || null;
+  state.program = draft.program || null;
+  state.provenance = draft.provenance || null;
+  state.businessCaseId = draft.businessCaseId || '';
+  state.ranking = draft.ranking || null;
+  state.recs = state.ranking?.recommendations || [];
+  if (state.ranking) {
+    renderRecommendations(state.ranking);
+    if (state.chosen) markChosenTechnique(state.chosen);
+  }
+}
+
 // What this screen has been narrowed to, or null. Every screen that can be
 // narrowed asks this one question rather than reading the address bar itself.
 const showingOn = tab => (state.showing && state.showing.tab === tab ? state.showing.value : null);
@@ -128,6 +210,54 @@ function promptPartName(program, stageIndex, message) {
   const role = String(message.role || 'message');
   return program.stages.length > 1 ? `${stage.stage || `stage ${stageIndex + 1}`} · ${role}` : role;
 }
+
+/* A prompt read out as a flat list of messages, each under the name the rest of
+ * the app calls that part by. Two screens show a whole prompt — the one
+ * measuring it and the one holding the copy a release froze — and neither walks
+ * the stages itself, or the same prompt would be drawn two ways on two screens.
+ *
+ * The three shapes are the three the server's manifest reader knows, and for the
+ * same reason: a release freezes whatever payload registered it, and one frozen
+ * by an older client or by the API directly is still a prompt somebody has to be
+ * able to read. Anything else returns nothing, and the caller says so rather
+ * than dressing an unknown object up as a prompt. */
+function promptMessages(program) {
+  const stages = program?.stages;
+  if (Array.isArray(stages) && stages.length) {
+    const multi = stages.length > 1;
+    return stages.flatMap((stage, stageIndex) => (stage.messages || []).map(message => {
+      const role = String(message.role || 'message').toUpperCase();
+      return {
+        head: multi ? `${stage.stage || `stage ${stageIndex + 1}`} · ${role}` : role,
+        content: message.content || '',
+        demo: Boolean(message.demo)
+      };
+    }));
+  }
+  for (const key of ['text', 'prompt', 'content']) {
+    const value = program?.[key];
+    if (typeof value === 'string' && value.trim()) return [{head:'PROMPT', content:value, demo:false}];
+  }
+  const messages = program?.messages;
+  if (Array.isArray(messages)) {
+    return messages.filter(message => message && typeof message === 'object').map(message => ({
+      head: String(message.role || 'message').toUpperCase(),
+      content: message.content || '',
+      demo: Boolean(message.demo)
+    }));
+  }
+  return [];
+}
+
+// The same prompt as plain text, which is what a copy button hands over.
+const promptPlainText = program =>
+  promptMessages(program).map(part => `${part.head}\n${part.content}`).join('\n\n');
+
+// One message of it, drawn the same way wherever a whole prompt is shown.
+const promptPartBlock = part => `<div class="prompt-part">
+    <span class="prompt-role">${esc(part.head)}</span>${part.demo ? '<span class="demo-tag">worked example</span>' : ''}
+    <pre>${esc(part.content)}</pre>
+  </div>`;
 
 function modelProfile() {
   const setting = state.settings.evaluation;

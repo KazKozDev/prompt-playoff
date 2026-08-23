@@ -30,7 +30,40 @@
 # scripts/fetch_business_datasets.py downloads from. Change a column or a split
 # here, re-run the script, and the bundled rows follow.
 
-version: 1
+version: 2
+
+# Primary provenance for the deployment stories below. A source can support a
+# deployment without independently proving a vendor/customer outcome. Unknown
+# publication dates stay null instead of being guessed.
+case_sources:
+  - {id: google-real-world, title: Real-world generative AI use cases from industry leaders, publisher: Google Cloud, url: https://cloud.google.com/transform/101-real-world-generative-ai-use-cases-from-industry-leaders, source_type: vendor_case_index, published_at: null, accessed_at: 2026-08-23}
+  - {id: uber-genai-gateway, title: Building Uber's GenAI Gateway, publisher: Uber, url: https://www.uber.com/en-CO/blog/genai-gateway/, source_type: company_engineering_blog, published_at: null, accessed_at: 2026-08-23}
+  - {id: be-international, title: 'BE International: Modernizing direct selling globally with Cloud and AI', publisher: Google Cloud, url: https://cloud.google.com/customers/be-international, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: itom, title: Scaling support operations using generative AI on AWS with i-Tom Solutions, publisher: AWS, url: https://aws.amazon.com/solutions/case-studies/i-tom-solutions-case-study/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: satair, title: Satair customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/satair, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: contactpigeon, title: ContactPigeon customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/contactpigeon, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: cars24, title: How CARS24 uses GPT-4o to transform the car-buying experience, publisher: OpenAI, url: https://openai.com/nb-NO/index/cars24/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: podium, title: Meet the AI Employee, publisher: Podium, url: https://www.podium.com/product/ai-employee, source_type: company_product_page, published_at: null, accessed_at: 2026-08-23}
+  - {id: avatarin, title: avatarin customer story, publisher: OpenAI, url: https://openai.com/index/avatarin/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: complyadvantage, title: ComplyAdvantage customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/complyadvantage, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: starling, title: Annual Report 2025, publisher: Starling Bank, url: https://www.starlingbank.com/investors/2025/annual-report-2025/, source_type: company_annual_report, published_at: 2025-06-12, accessed_at: 2026-08-23}
+  - {id: mike-morse, title: Mike Morse Law Firm customer story, publisher: Salesforce, url: https://www.salesforce.com/customer-stories/mike-morse-law-firm/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: deutsche-telekom, title: Deutsche Telekom reimagines phone calls with AI embedded in the network, publisher: Deutsche Telekom, url: https://www.telekom.com/en/media/media-information/archive/deutsche-telekom-reimagines-phone-calls-with-ai-embedded-in-the-network-1102890, source_type: company_press_release, published_at: 2026-03-02, accessed_at: 2026-08-23}
+  - {id: staple-ai, title: Staple AI customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/staple-ai, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: rossum, title: Rossum case study, publisher: AWS, url: https://aws.amazon.com/solutions/case-studies/rossum-case-study/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: snowfox, title: Snowfox.AI customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/snowfox, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: affinda, title: Affinda case study, publisher: AWS, url: https://aws.amazon.com/solutions/case-studies/affinda-case-study/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: bny, title: 'AI in the next phase: Driving adoption', publisher: BNY, url: https://www.bny.com/content/dam/bnymellon/documents/pdf/insights/ai-in-the-next-phase-driving-adoption.pdf, source_type: company_report, published_at: null, accessed_at: 2026-08-23}
+  - {id: openai-contract-pack, title: ChatGPT Enterprise prompt pack for financial services, publisher: OpenAI, url: https://cdn.openai.com/pdf/b96a6047-53b2-43bd-85b9-44885cf4007a%20/chatgpt-enterprise-prompt-pack-for-financial-services.pdf, source_type: vendor_guidance, published_at: null, accessed_at: 2026-08-23}
+  - {id: hebbia-credit, title: How private credit teams use Hebbia, publisher: Hebbia, url: https://www.hebbia.com/blog/how-private-credit-teams-use-hebbia, source_type: vendor_use_case, published_at: 2025-09-22, accessed_at: 2026-08-23}
+  - {id: harvey-contracts, title: Contract Intelligence, publisher: Harvey, url: https://www.harvey.ai/blog/contract-intelligence, source_type: vendor_product_page, published_at: null, accessed_at: 2026-08-23}
+  - {id: cognizant-agents, title: The Agent Advantage, publisher: Cognizant, url: https://www.cognizant.com/en_us/about/documents/the-agent-advantage.pdf, source_type: company_report, published_at: null, accessed_at: 2026-08-23}
+  - {id: steuerrecht, title: Steuerrecht.com customer story, publisher: OpenAI, url: https://openai.com/index/steuerrecht/, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: hebbia-finance, title: AI agents in finance, publisher: Hebbia, url: https://www.hebbia.com/resources/ai-agents-in-finance, source_type: vendor_use_case, published_at: null, accessed_at: 2026-08-23}
+  - {id: somin, title: SOMIN.AI customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/somin-ai, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: huge, title: Huge customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/huge, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: viral-nation, title: Viral Nation customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/viralnation, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
+  - {id: kraft-heinz, title: Kraft Heinz customer story, publisher: Google Cloud, url: https://cloud.google.com/customers/kraftheinz, source_type: vendor_customer_story, published_at: null, accessed_at: 2026-08-23}
 
 # The packaged benchmarks outside the business shelf that a taxonomy task is
 # allowed to route to.  A task's `dataset` has to name either one of these or
@@ -170,6 +203,9 @@ groups:
         story: Gemini drafts customer-service email.
         claim: −30–35%
         claim_of: time spent writing them
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:email-reply]
       - number: 2
@@ -177,6 +213,9 @@ groups:
         company: Morgan Ranch
         source: Google Cloud
         story: Gemini in Gmail turns a long supplier letter into a few minutes' work.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:email-reply]
         references: [enron-emails]
@@ -185,6 +224,9 @@ groups:
         company: oogiebear
         source: Google Cloud
         story: Gemini in Gmail answers customers and vendors from the inbox itself.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:email-reply]
       - number: 4
@@ -192,6 +234,9 @@ groups:
         company: Understood.org
         source: Google Cloud
         story: Gemini drafts everyday work email and internal communication.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:email-reply]
         references: [enron-emails]
@@ -202,6 +247,9 @@ groups:
         story: Gmail's own AI features, across the staff.
         claim: 5 h / week
         claim_of: saved per employee
+        source_ref: google-real-world
+        evidence_status: unverified
+        evidence_note: 'The Google case index supports use of Gemini in Workspace, but the exact five-hours-per-week claim was not located.'
         match: partial
         sets: [business:email-reply, business:email-subject]
       - number: 6
@@ -209,6 +257,9 @@ groups:
         company: John Lewis & Partners
         source: Google Cloud
         story: Gemini summarizes long documents and the day's information.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:email-subject, business:email-reply]
       - number: 7
@@ -216,6 +267,9 @@ groups:
         company: Just Salad
         source: Google Cloud
         story: Gemini summarizes email and meetings without being asked each time.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:email-subject, business:meeting-summary]
   - id: support
@@ -230,6 +284,9 @@ groups:
         story: >-
           The agent opens the call already holding a summary of it and the
           context of every earlier interaction.
+        source_ref: uber-genai-gateway
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:support-reply]
         references: [dialogstudio]
@@ -237,6 +294,9 @@ groups:
         task: Answers customer questions around the clock
         company: BE International
         story: BE-GPT answers questions about the products and about the company.
+        source_ref: be-international
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:support-reply, business:support-intent]
       - number: 10
@@ -245,18 +305,27 @@ groups:
         story: A GenAI assistant standing at the front of the queue.
         claim: 600 / day
         claim_of: requests it meets first
+        source_ref: itom
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:support-intent]
       - number: 11
         task: Helps a support agent find the answer
         company: Satair
         story: An online assistant that looks the answer up for the support team.
+        source_ref: satair
+        evidence_status: qualified_official
+        evidence_note: 'The source describes quote-request automation and an online assistant; it does not establish the narrower support-agent wording.'
         match: partial
         sets: [business:support-reply, business:banking-intent]
       - number: 12
         task: Answers customer-service enquiries automatically
         company: ContactPigeon
         story: An AI chatbot answering customer-service enquiries.
+        source_ref: contactpigeon
+        evidence_status: qualified_official
+        evidence_note: 'The source describes the service chatbot as being developed, so this is planned rather than a completed deployment.'
         match: direct
         sets: [business:support-reply, business:retail-support]
       - number: 13
@@ -265,6 +334,9 @@ groups:
         story: AI agents hold the call themselves, and resolution rate is reported up.
         claim: 1M+ min / month
         claim_of: of conversation
+        source_ref: cars24
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:support-reply]
         references: [ami-meeting-corpus]
@@ -274,6 +346,9 @@ groups:
         story: Agents work back through the leads nobody returned to.
         claim: 12%
         claim_of: of lost leads recovered
+        source_ref: cars24
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 15
         task: Answers an incoming lead instantly
@@ -281,6 +356,9 @@ groups:
         story: AI agents capture the lead, answer it, and help close the order.
         claim: under a minute
         claim_of: to a first reply
+        source_ref: podium
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 16
         task: Advises shoppers by voice
@@ -288,6 +366,9 @@ groups:
         story: >-
           A Japanese retail agent speaks, and takes the shopper from choosing a
           product to deciding on it.
+        source_ref: avatarin
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:retail-support]
         references: [ami-meeting-corpus]
@@ -298,6 +379,9 @@ groups:
         story: Gemini Code Assist put on the support issue itself.
         claim: hours → minutes
         claim_of: to identify a root cause
+        source_ref: complyadvantage
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
   - id: meetings
     name: Meetings
@@ -310,6 +394,9 @@ groups:
         company: Ocado Retail
         source: Google Cloud
         story: Gemini takes the notes and the summary of a meeting.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:meeting-summary]
       - number: 19
@@ -317,6 +404,9 @@ groups:
         company: Momentum Climbing Gym
         source: Google Cloud
         story: Gemini in Meet recaps the conversations of a distributed team.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:meeting-summary]
       - number: 20
@@ -324,6 +414,9 @@ groups:
         company: Nuts.com
         source: Google Cloud
         story: Live translation while talking to international suppliers.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:meeting-translation]
       - number: 21
@@ -332,6 +425,9 @@ groups:
         story: Customer-call transcripts summarized automatically.
         claim: 8,000 h / month
         claim_of: of handling time saved
+        source_ref: starling
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:meeting-summary]
         references: [ami-meeting-corpus]
@@ -340,6 +436,9 @@ groups:
         company: Mike Morse Law
         source: Salesforce
         story: Einstein Conversation Insights writes the call summary and feeds coaching from it.
+        source_ref: mike-morse
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:meeting-summary]
         references: [ami-meeting-corpus]
@@ -347,6 +446,9 @@ groups:
         task: Live translation, in-call assistant, post-call summary
         company: Deutsche Telekom
         story: All three at once — translation during the call, an assistant on it, a summary after.
+        source_ref: deutsche-telekom
+        evidence_status: qualified_official
+        evidence_note: 'The source announces a phased 2026 rollout; availability can vary by service and market.'
         match: partial
         sets: [business:meeting-translation, business:meeting-summary]
         references: [ami-meeting-corpus]
@@ -360,12 +462,18 @@ groups:
         task: Reads ID cards and other documents
         company: Staple AI
         story: The same document processing pointed at ID cards and everything else.
+        source_ref: staple-ai
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         references: [rvl-cdip]
       - number: 25
         task: Automates the inbound flow of business documents
         company: Rossum
         story: GenAI runs the document-processing workflow that used to be a queue of people.
+        source_ref: rossum
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         references: [rvl-cdip]
   - id: invoices
@@ -378,12 +486,18 @@ groups:
         task: Reads an invoice and pulls out the fields
         company: Staple AI
         story: Invoices in, structured data out.
+        source_ref: staple-ai
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:invoice-fields]
       - number: 27
         task: Automates purchase invoices
         company: Snowfox.AI
         story: Purchase-invoice processing for large companies, done without hands.
+        source_ref: snowfox
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:invoice-fields]
       - number: 28
@@ -391,6 +505,9 @@ groups:
         company: Affinda
         source: AWS
         story: An LLM on Amazon Bedrock doing intelligent document processing and extraction.
+        source_ref: affinda
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:invoice-fields]
         references: [rvl-cdip, sroie, cord]
@@ -404,6 +521,9 @@ groups:
         task: Breaks a contract into its clauses
         company: Staple AI
         story: Contracts read whatever the language, the layout or the format.
+        source_ref: staple-ai
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:contract-clause, business:contract-risk]
       - number: 30
@@ -412,6 +532,9 @@ groups:
         story: A Contract Review Assistant across thousands of vendor agreements.
         claim: 4 h → 1 h
         claim_of: per review
+        source_ref: bny
+        evidence_status: qualified_official
+        evidence_note: 'BNY documents its Contract Review Assistant, but the exact four-hours-to-one-hour figure was not found in the primary report used here.'
         match: direct
         sets: [business:contract-clause, business:contract-risk, business:legal-reasoning]
       - number: 31
@@ -421,18 +544,27 @@ groups:
         story: >-
           An internal contract-data agent extracts the structured fields and
           flags the non-standard terms for Finance.
+        source_ref: openai-contract-pack
+        evidence_status: unverified
+        evidence_note: 'The OpenAI prompt pack supports contract-term extraction as a workflow, not this claimed internal deployment.'
         match: direct
         sets: [business:contract-clause]
       - number: 32
         task: Extracts loan terms and covenants
         company: Hebbia (private credit)
         story: Private-credit teams pull the terms out of a loan agreement.
+        source_ref: hebbia-credit
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:contract-clause, business:contract-risk]
       - number: 33
         task: Finds the differences across hundreds of contracts
         company: Harvey
         story: Material discrepancies found across a body of contracts too large to read.
+        source_ref: harvey-contracts
+        evidence_status: qualified_official
+        evidence_note: 'Harvey documents contract-comparison capability, but this wording is a product use case rather than a named customer result.'
         match: partial
         sets: [business:contract-clause, business:contract-risk]
       - number: 34
@@ -440,6 +572,9 @@ groups:
         company: Cognizant
         source: Google Cloud
         story: A legal agent built on Gemini writes the first draft.
+        source_ref: cognizant-agents
+        evidence_status: unverified
+        evidence_note: 'The available Cognizant source discusses agent development but does not substantiate this exact legal drafting deployment.'
         match: partial
         sets: [business:legal-reasoning]
       - number: 35
@@ -447,6 +582,9 @@ groups:
         company: Cognizant
         source: Google Cloud
         story: The same agent scores the contract's risk and says what to do about it.
+        source_ref: cognizant-agents
+        evidence_status: unverified
+        evidence_note: 'The available Cognizant source discusses risk-assessment agents but does not substantiate this exact contract-scoring deployment.'
         match: partial
         sets: [business:contract-risk, business:contract-clause]
       - number: 36
@@ -454,6 +592,9 @@ groups:
         company: Steuerrecht.com
         source: OpenAI
         story: ChatGPT Business researches tax law and prepares client-ready analysis.
+        source_ref: steuerrecht
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:legal-reasoning]
   - id: finance
@@ -466,6 +607,9 @@ groups:
         task: Runs due diligence
         company: Hebbia (private equity)
         story: Private-equity clients screen, diligence and run expert-network research.
+        source_ref: hebbia-finance
+        evidence_status: qualified_official
+        evidence_note: 'Hebbia documents the workflow and adoption by private-equity users in aggregate, not a named customer outcome.'
         match: partial
         sets: [business:legal-reasoning, business:financial-qa]
       - number: 38
@@ -475,12 +619,18 @@ groups:
         story: Gemini in Gmail compares vendor proposals arriving from the supplier network.
         claim: 600+
         claim_of: suppliers in that network
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 39
         task: Compares offers and does market research
         company: Grupo Dia
         source: Google Cloud
         story: Gemini compares complicated proposals and researches the market behind them.
+        source_ref: google-real-world
+        evidence_status: unverified
+        evidence_note: 'The Google source supports AI-assisted workflows at Grupo Dia, not the exact proposal-comparison and market-research wording.'
         match: none
   - id: privacy
     name: Privacy / Compliance
@@ -492,6 +642,9 @@ groups:
         task: Formats lab results and compliance documents
         company: Mark Cuban Cost Plus Drugs
         story: Pharmaceutical lab results auto-formatted, with the FDA compliance paperwork.
+        source_ref: google-real-world
+        evidence_status: unverified
+        evidence_note: 'No primary source was located for this exact lab-result and FDA-document formatting deployment.'
         match: none
       - number: 41
         task: Automates checks on a new customer
@@ -500,6 +653,9 @@ groups:
         story: Gemini vets the client before the work is taken on.
         claim: days → minutes
         claim_of: for new-business intake
+        source_ref: huge
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 42
         task: Checks influencer content for brand risk
@@ -508,6 +664,9 @@ groups:
         story: >-
           Gemini reads an archive of creator content nobody could watch through
           and writes the short summary a brand-safety check needs.
+        source_ref: viral-nation
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
   - id: hr
     name: HR / Recruiting
@@ -520,6 +679,9 @@ groups:
         company: Oxa
         source: Google Cloud
         story: And the job descriptions, on the same model.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:resume-fit]
   - id: market
@@ -533,18 +695,27 @@ groups:
         company: Own Your Brand
         source: Google Cloud
         story: Gemini writes personalized letters to prospective clients.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:marketing-email]
       - number: 45
         task: Writes product data sheets automatically
         company: Trace One
         story: Data pulled out of complicated documents and into a current product data sheet.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 46
         task: Creates a marketing brief
         company: SOMIN
         source: Google Cloud
         story: Gemini reads the market and audience data and writes the campaign brief from it.
+        source_ref: somin
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: partial
         sets: [business:marketing-email, business:review-signal]
       - number: 47
@@ -553,6 +724,9 @@ groups:
         story: Product descriptions written automatically instead of by hand.
         claim: 30–40 h → ~1 h
         claim_of: per month
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:product-description]
       - number: 48
@@ -560,11 +734,17 @@ groups:
         company: Oxa
         source: Google Cloud
         story: Gemini drafts the social posts.
+        source_ref: google-real-world
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: none
       - number: 49
         task: Generates personalized marketing messages
         company: ContactPigeon
         story: Retailers generate the campaign message per customer rather than per campaign.
+        source_ref: contactpigeon
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:marketing-email]
       - number: 50
@@ -574,6 +754,9 @@ groups:
         story: Gemini put inside the product-content workflow itself.
         claim: 8 weeks → 8 hours
         claim_of: cycle time
+        source_ref: kraft-heinz
+        evidence_status: verified_official
+        evidence_note: 'The cited official source directly supports the deployment described; outcomes remain self-reported.'
         match: direct
         sets: [business:product-description, business:marketing-email]
 
@@ -594,6 +777,11 @@ sets:
     source: snap-stanford/humanual-email
     url: https://huggingface.co/datasets/snap-stanford/humanual-email
     license: cc-by-nc-4.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/snap-stanford/humanual-email
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 895c918ef386229106ba8689e78910e71cb9548b
     config: default
     split: test
     fetch: chat_reply
@@ -606,7 +794,12 @@ sets:
     shape: The body of a work email; the subject line its author wrote.
     source: Yale-LILY/aeslc
     url: https://huggingface.co/datasets/Yale-LILY/aeslc
-    license: unspecified by the publisher
+    license: no-license-declared
+    license_status: unresolved
+    license_url: https://huggingface.co/datasets/Yale-LILY/aeslc
+    redistribution: source_only
+    bundled: false
+    source_revision: 2305f2e63b68056f9b9037a3805c8c196e0d5581
     config: default
     split: test
     fetch: column
@@ -621,6 +814,11 @@ sets:
     source: marketeam/Marketing-Emails
     url: https://huggingface.co/datasets/marketeam/Marketing-Emails
     license: mit
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/marketeam/Marketing-Emails
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 56377f4213c15921f724add23ab175b0a5a0eea1
     config: default
     split: train
     fetch: subject_body
@@ -633,6 +831,11 @@ sets:
     source: huuuyeah/meetingbank
     url: https://huggingface.co/datasets/huuuyeah/meetingbank
     license: cc-by-nc-sa-4.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/huuuyeah/meetingbank
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 5b4fb6f67f490be93e249d70b732780932d19fe3
     config: default
     split: test
     fetch: column
@@ -646,7 +849,12 @@ sets:
     shape: An utterance in English; the same line in German.
     source: Helsinki-NLP/opus-100
     url: https://huggingface.co/datasets/Helsinki-NLP/opus-100
-    license: unspecified by the publisher
+    license: varies-by-source-corpus
+    license_status: unresolved
+    license_url: https://opus.nlpl.eu/OPUS-100
+    redistribution: source_only
+    bundled: false
+    source_revision: 805090dc28bf78897da9641cdf08b61287580df9
     config: de-en
     split: test
     fetch: translation
@@ -661,6 +869,11 @@ sets:
     source: bitext/Bitext-customer-support-llm-chatbot-training-dataset
     url: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
     license: cdla-sharing-1.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
     config: default
     split: train
     fetch: column
@@ -675,6 +888,11 @@ sets:
     source: bitext/Bitext-customer-support-llm-chatbot-training-dataset
     url: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
     license: cdla-sharing-1.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
     config: default
     split: train
     fetch: column
@@ -689,6 +907,11 @@ sets:
     source: bitext/Bitext-retail-ecommerce-llm-chatbot-training-dataset
     url: https://huggingface.co/datasets/bitext/Bitext-retail-ecommerce-llm-chatbot-training-dataset
     license: cdla-sharing-1.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/bitext/Bitext-retail-ecommerce-llm-chatbot-training-dataset
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 12dd624ddcd3057382b2faad661bcda1fa869491
     config: default
     split: train
     fetch: column
@@ -703,6 +926,11 @@ sets:
     source: mteb/banking77
     url: https://huggingface.co/datasets/mteb/banking77
     license: mit
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/mteb/banking77
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 18072d2685ea682290f7b8924d94c62acc19c0b2
     config: default
     split: test
     fetch: column
@@ -716,7 +944,12 @@ sets:
     shape: The OCR words off an invoice or receipt; the fields as JSON.
     source: mychen76/invoices-and-receipts_ocr_v2
     url: https://huggingface.co/datasets/mychen76/invoices-and-receipts_ocr_v2
-    license: unspecified by the publisher
+    license: no-license-declared
+    license_status: unresolved
+    license_url: https://huggingface.co/datasets/mychen76/invoices-and-receipts_ocr_v2
+    redistribution: source_only
+    bundled: false
+    source_revision: e28d8f5c57e566cc87b3383e22f710e70c02aa70
     config: default
     split: test
     fetch: invoice_ocr
@@ -729,6 +962,11 @@ sets:
     source: dvgodoy/CUAD_v1_Contract_Understanding_clause_classification
     url: https://huggingface.co/datasets/dvgodoy/CUAD_v1_Contract_Understanding_clause_classification
     license: cc-by-4.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/dvgodoy/CUAD_v1_Contract_Understanding_clause_classification
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 2647c92f634569acbdfbd694ad5488293c55b3f7
     config: default
     split: train
     fetch: column
@@ -743,6 +981,11 @@ sets:
     source: kiddothe2b/contract-nli
     url: https://huggingface.co/datasets/kiddothe2b/contract-nli
     license: cc-by-nc-sa-4.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/kiddothe2b/contract-nli
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 059927b91122a6827e7dbb4f296f6da8f5dcee1c
     config: contractnli_a
     split: test
     fetch: nli
@@ -756,6 +999,11 @@ sets:
     source: nguha/legalbench
     url: https://huggingface.co/datasets/nguha/legalbench
     license: cc-by-4.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/nguha/legalbench
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: daec8237410aa23e3faf4bc41ad8b3a7e1696826
     config: abercrombie
     split: test
     fetch: column
@@ -769,7 +1017,12 @@ sets:
     shape: A passage and table from a filing, and a question about it; the figure.
     source: dreamerdeo/finqa
     url: https://huggingface.co/datasets/dreamerdeo/finqa
-    license: unspecified by the publisher
+    license: mit
+    license_status: verified_upstream
+    license_url: https://github.com/czyssrs/FinQA/blob/main/LICENSE
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: ebf0fda6e42b597b3b301baeba8da9f97e9aef03
     config: default
     split: test
     fetch: finqa
@@ -781,7 +1034,12 @@ sets:
     shape: A brand and a spec list; the product description written from them.
     source: Rahul5262/ecommerce-product-descriptions-v1
     url: https://huggingface.co/datasets/Rahul5262/ecommerce-product-descriptions-v1
-    license: unspecified by the publisher
+    license: no-license-declared
+    license_status: unresolved
+    license_url: https://huggingface.co/datasets/Rahul5262/ecommerce-product-descriptions-v1
+    redistribution: source_only
+    bundled: false
+    source_revision: 88ca6ed4e597614fcc19645c08e2fd158978e349
     config: default
     split: train
     fetch: instruction_input
@@ -793,7 +1051,12 @@ sets:
     shape: A product review in the customer's own words; the stars they gave.
     source: mteb/amazon_reviews_multi
     url: https://huggingface.co/datasets/mteb/amazon_reviews_multi
-    license: unspecified by the publisher
+    license: amazon-reviews-academic-only
+    license_status: verified_upstream
+    license_url: https://raw.githubusercontent.com/awslabs/open-data-docs/main/docs/amazon-reviews-ml/license.txt
+    redistribution: source_only
+    bundled: false
+    source_revision: c379a6705fec24a2493fa68e011692605f44e119
     config: en
     split: test
     fetch: column
@@ -808,6 +1071,11 @@ sets:
     source: 0xnbk/resume-ats-score-v1-en
     url: https://huggingface.co/datasets/0xnbk/resume-ats-score-v1-en
     license: apache-2.0
+    license_status: verified_upstream
+    license_url: https://huggingface.co/datasets/0xnbk/resume-ats-score-v1-en
+    redistribution: bundled_with_conditions
+    bundled: true
+    source_revision: 836a2db5ac95094bd423904c2b1a0d06f1b2a505
     config: default
     split: validation
     fetch: column

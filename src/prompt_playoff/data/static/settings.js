@@ -207,6 +207,9 @@ function updateSetting(event) {
     ++state.compileVersion;
     state.program = null;
     state.provenance = null;
+    // A prompt written by a model that is no longer set must not come back on
+    // the next reload either.
+    rememberDraft();
   }
   refreshSettingsIndicators(role);
   updateWorkspaceContext();

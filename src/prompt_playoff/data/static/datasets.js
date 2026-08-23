@@ -141,7 +141,8 @@ function renderDatasetUpload() {
            the server restarts. -->
       <label class="keep-rows"><input type="checkbox" id="upload-keep">
         <span><strong>Keep on this machine</strong><small>Writes the rows next to your measurements, so the set is
-          still here after a restart. Leave it off and they live in this server's memory only.</small></span></label>
+          still here after a restart. Leave it off and they live in this server's memory only — every run you
+          record against them stays in Results afterwards, naming a set this server no longer has.</small></span></label>
     </section>
     <aside class="screen-guide" data-testid="upload-guide">
       <h2>What the file has to be</h2>

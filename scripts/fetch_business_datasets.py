@@ -280,13 +280,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("match", nargs="*", help="only sets whose name contains one of these")
     parser.add_argument("--check", action="store_true", help="fetch and report, write nothing")
+    parser.add_argument(
+        "--allow-source-only",
+        action="store_true",
+        help="fetch sets that are not licensed for redistribution into your local checkout",
+    )
     args = parser.parse_args()
 
     catalogue = yaml.safe_load(CATALOGUE.read_text(encoding="utf-8"))
     specs = [
         spec
         for spec in catalogue["sets"]
-        if not args.match or any(term in spec["name"] for term in args.match)
+        if (spec.get("bundled") or args.allow_source_only)
+        and (not args.match or any(term in spec["name"] for term in args.match))
     ]
     if not specs:
         print("No set matched.", file=sys.stderr)

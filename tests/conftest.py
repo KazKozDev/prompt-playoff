@@ -119,6 +119,7 @@ def isolated_measurements(tmp_path, monkeypatch):
     monkeypatch.setenv("PROMPT_PLAYOFF_DATASETS", str(tmp_path / "datasets"))
     monkeypatch.setenv("PROMPT_PLAYOFF_PROFILES_PATH", str(tmp_path / "model-profiles.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_EXPERIMENTS_PATH", str(tmp_path / "experiments.json"))
+    monkeypatch.setenv("PROMPT_PLAYOFF_BUSINESS_CASES_PATH", str(tmp_path / "business-cases.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_QUALITY", str(tmp_path / "quality.json"))
     monkeypatch.setenv("PROMPT_PLAYOFF_TECHNIQUES", str(tmp_path / "techniques"))
     # The release gate reads the project's committed thresholds. Left at the

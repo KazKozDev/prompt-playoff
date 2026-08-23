@@ -829,3 +829,73 @@ def test_a_bar_cleared_on_rows_that_have_since_changed_is_not_cleared(client: Te
     assert "no longer exist" in gate["reason"]
     blocked = client.post(f"/v1/releases/{release['id']}/action", json={"action": "approve"})
     assert blocked.status_code == 409
+
+
+def test_judge_on_a_hundred_point_scale_is_read_not_refused(client: TestClient, monkeypatch):
+    """A judge that answers 0-100 got the verdict right and the units wrong.
+
+    The response schema asks for 0-10, and a model that ignored it used to take
+    the whole request down with a 502 — deterministically for the same pair, so
+    the retry that follows a 502 never helped. The verdict is the expensive
+    part; the scale is arithmetic.
+    """
+
+    class HundredPointJudge:
+        async def generate(self, prompt, model, timeout_seconds=120):
+            assert "from 0 to 10" in prompt.messages[0].content
+            return ModelResult(
+                content='{"winner":"first","scores":{"first":80,"second":20},"rationale":"Fuller"}'
+            )
+
+    monkeypatch.setattr(app.state.service, "provider", lambda *args, **kwargs: HundredPointJudge())
+    response = client.post(
+        "/v1/evaluate/pairwise",
+        json={
+            "input": "Reply to the customer",
+            "answer_a": "Steps",
+            "answer_b": "A question",
+            "rubric": ["Correctness"],
+            "judge_model": {"provider": "ollama", "model_id": "judge"},
+            "seed": 7,
+        },
+    )
+    assert response.status_code == 200
+    assert sorted(response.json()["scores"].values()) == [0.2, 0.8]
+
+
+def test_judge_scales_stay_distinguishable(client: TestClient, monkeypatch):
+    """0-1, 0-10 and 0-100 all land on 0-1 without colliding."""
+
+    def judge_returning(first, second):
+        class Judge:
+            async def generate(self, prompt, model, timeout_seconds=120):
+                return ModelResult(
+                    content=f'{{"winner":"first","scores":{{"first":{first},'
+                    f'"second":{second}}},"rationale":"r"}}'
+                )
+
+        return Judge()
+
+    for first, second, expected in (
+        (0.8, 0.2, [0.2, 0.8]),
+        (8, 2, [0.2, 0.8]),
+        (80, 20, [0.2, 0.8]),
+    ):
+        monkeypatch.setattr(
+            app.state.service,
+            "provider",
+            lambda *args, _f=first, _s=second, **kwargs: judge_returning(_f, _s),
+        )
+        response = client.post(
+            "/v1/evaluate/pairwise",
+            json={
+                "input": "in",
+                "answer_a": "a",
+                "answer_b": "b",
+                "rubric": ["Correctness"],
+                "judge_model": {"provider": "ollama", "model_id": "judge"},
+                "seed": 7,
+            },
+        )
+        assert response.status_code == 200, (first, second)
+        assert sorted(response.json()["scores"].values()) == expected, (first, second)

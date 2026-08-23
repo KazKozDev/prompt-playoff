@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from prompt_playoff import __version__
+from prompt_playoff.business_cases import BusinessCaseRecord
 from prompt_playoff.business_catalog import CatalogError, catalog
 from prompt_playoff.checks import ReleaseGate, release_gate
 from prompt_playoff.deployment import (
@@ -163,6 +164,18 @@ class BenchmarkRequest(BaseModel):
     #: it is the baseline the search has to beat, for the same reason: a gain
     #: over a compile nobody has seen is not a gain over the prompt you have.
     prompt: CompiledProgram | None = None
+    business_case_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class BusinessCaseCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=4000)
+
+
+class BusinessCaseUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=4000)
+    archived: bool | None = None
 
 
 class CompareRequest(BenchmarkRequest):
@@ -280,6 +293,9 @@ class PairwiseJudgeRequest(BaseModel):
 
 
 class PairwiseJudgeScores(BaseModel):
+    #: The scale the judge is *asked* for: this bound is what its response
+    #: schema advertises. Reading the reply back is deliberately more
+    #: forgiving — see `PairwiseJudgeReading`.
     first: float = Field(ge=0, le=10)
     second: float = Field(ge=0, le=10)
 
@@ -287,6 +303,29 @@ class PairwiseJudgeScores(BaseModel):
 class PairwiseJudgeOutput(BaseModel):
     winner: Literal["first", "second", "tie"]
     scores: PairwiseJudgeScores
+    rationale: str
+
+
+class PairwiseReadScores(BaseModel):
+    #: No upper bound, because the number that arrives is in units nobody has
+    #: established yet. `_judge_scale` establishes them.
+    first: float = Field(ge=0)
+    second: float = Field(ge=0)
+
+
+class PairwiseJudgeReading(BaseModel):
+    """A verdict as it arrived, before anyone knows which scale it is on.
+
+    The schema handed to the judge says 0-10 and most of them comply, but a
+    model that decided on 0-100 answered the question correctly and only
+    disagreed about units. Validating the reply against the asked-for bound
+    turned that into a 502 that spent a model call and returned nothing —
+    deterministically, for the same input, so retrying never helped either.
+    The reply is therefore read without an upper bound and normalised after.
+    """
+
+    winner: Literal["first", "second", "tie"]
+    scores: PairwiseReadScores
     rationale: str
 
 
@@ -1165,9 +1204,72 @@ async def run_prompt(payload: RunRequest, request: Request) -> ExecutionTrace:
 # --------------------------------------------------------------------------- #
 
 
+def _business_case_for(
+    service: PromptSelectorService, case_id: str | None
+) -> BusinessCaseRecord | None:
+    if case_id is None:
+        return None
+    record = service.business_cases.get(case_id)
+    if record is None:
+        raise HTTPException(status_code=422, detail="Unknown business case")
+    if record.archived:
+        raise HTTPException(status_code=422, detail="This business case is archived")
+    return record
+
+
+@app.get("/v1/business-cases", response_model=list[BusinessCaseRecord])
+def list_business_cases(
+    request: Request, include_archived: bool = False
+) -> list[BusinessCaseRecord]:
+    return _service(request).business_cases.list(include_archived=include_archived)
+
+
+@app.post(
+    "/v1/business-cases",
+    response_model=BusinessCaseRecord,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_business_case(
+    payload: BusinessCaseCreateRequest, request: Request
+) -> BusinessCaseRecord:
+    try:
+        return _service(request).business_cases.create(payload.name, payload.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.patch("/v1/business-cases/{case_id}", response_model=BusinessCaseRecord)
+def update_business_case(
+    case_id: str, payload: BusinessCaseUpdateRequest, request: Request
+) -> BusinessCaseRecord:
+    if payload.name is None and payload.description is None and payload.archived is None:
+        raise HTTPException(status_code=422, detail="Provide a field to update")
+    try:
+        return _service(request).business_cases.update(
+            case_id,
+            name=payload.name,
+            description=payload.description,
+            archived=payload.archived,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unknown business case") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/v1/business-cases/{case_id}", response_model=BusinessCaseRecord)
+def archive_business_case(case_id: str, request: Request) -> BusinessCaseRecord:
+    """Archive rather than erase: recorded experiment lineage must stay resolvable."""
+    try:
+        return _service(request).business_cases.update(case_id, archived=True)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unknown business case") from exc
+
+
 @app.post("/v1/benchmark", response_model=Job)
 async def start_benchmark(payload: BenchmarkRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
+    business_case = _business_case_for(service, payload.business_case_id)
     job = store.create("benchmark")
 
     async def work() -> dict[str, Any]:
@@ -1181,6 +1283,7 @@ async def start_benchmark(payload: BenchmarkRequest, request: Request) -> Job:
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
             prompt=payload.prompt,
+            business_case=business_case,
         )
         return report.model_dump(mode="json")
 
@@ -1190,6 +1293,7 @@ async def start_benchmark(payload: BenchmarkRequest, request: Request) -> Job:
 @app.post("/v1/compare", response_model=Job)
 async def start_compare(payload: CompareRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
+    business_case = _business_case_for(service, payload.business_case_id)
     if len(payload.technique_ids) < 2:
         raise HTTPException(status_code=422, detail="Provide at least two technique_ids")
     job = store.create("compare")
@@ -1205,6 +1309,7 @@ async def start_compare(payload: CompareRequest, request: Request) -> Job:
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
             prompt=payload.prompt,
+            business_case=business_case,
         )
         return {
             "comparison": comparison.model_dump(mode="json"),
@@ -1217,6 +1322,7 @@ async def start_compare(payload: CompareRequest, request: Request) -> Job:
 @app.post("/v1/optimize", response_model=Job)
 async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
+    business_case = _business_case_for(service, payload.business_case_id)
     if payload.backend not in BACKENDS:
         raise HTTPException(
             status_code=422, detail=f"Unknown backend. Known: {', '.join(BACKENDS)}"
@@ -1242,6 +1348,7 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
             prompt=payload.prompt,
+            business_case=business_case,
         )
         return result.model_dump(mode="json")
 
@@ -1304,6 +1411,18 @@ def _judge_leakage(payload: PairwiseJudgeRequest) -> str | None:
     )
 
 
+def _judge_scale(first: float, second: float) -> float:
+    """Which scale a judge answered on, named by the larger of its two scores.
+
+    The smaller score can legitimately be 0 on every scale, so it distinguishes
+    nothing; the larger one is what separates 0-1 from 0-10 from 0-100.
+    """
+    top = max(first, second)
+    if top > 10:
+        return 100.0
+    return 10.0 if top > 1 else 1.0
+
+
 @app.post("/v1/evaluate/pairwise")
 async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dict[str, Any]:
     """Blind pairwise judging with seeded order randomisation and human review."""
@@ -1320,7 +1439,8 @@ async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dic
                 role="system",
                 content=(
                     "You are an impartial evaluator. Apply only the rubric. Do not infer which "
-                    "answer is a baseline or candidate. Return the requested JSON."
+                    "answer is a baseline or candidate. Score each answer from 0 to 10, where "
+                    "10 fully satisfies the rubric. Return the requested JSON."
                 ),
             ),
             Message(
@@ -1345,7 +1465,7 @@ async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dic
             )
             .generate(prompt, payload.judge_model, payload.timeout_seconds)
         )
-        judged = PairwiseJudgeOutput.model_validate_json(result.content)
+        judged = PairwiseJudgeReading.model_validate_json(result.content)
     except (ProviderError, ValidationError, TypeError, KeyError) as exc:
         raise HTTPException(
             status_code=502, detail=f"Judge did not return valid JSON: {exc}"
@@ -1353,12 +1473,15 @@ async def pairwise_judge(payload: PairwiseJudgeRequest, request: Request) -> dic
     winner = judged.winner
     mapped = "tie" if winner == "tie" else order[0 if winner == "first" else 1]
     raw_scores = {"first": judged.scores.first, "second": judged.scores.second}
-    scale = 10 if max(raw_scores.values()) > 1 else 1
+    scale = _judge_scale(raw_scores["first"], raw_scores["second"])
+    # A score above the top of its own scale is not a reading anyone can use;
+    # it is capped rather than reported as more than whole.
+    on_unit = {key: min(value / scale, 1.0) for key, value in raw_scores.items()}
     response = {
         "winner": mapped,
         "scores": {
-            order[0]: round(raw_scores["first"] / scale, 4),
-            order[1]: round(raw_scores["second"] / scale, 4),
+            order[0]: round(on_unit["first"], 4),
+            order[1]: round(on_unit["second"], 4),
         },
         "rationale": judged.rationale,
         "blind_order": order,
@@ -1462,6 +1585,9 @@ async def rerun_regression(payload: RegressionActionRequest, request: Request) -
             detail="This older experiment lacks the reproducibility snapshot required to rerun it",
         )
     task = TaskProfile.model_validate(record.task)
+    business_case = (
+        service.business_cases.get(record.business_case_id) if record.business_case_id else None
+    )
     job = store.create("regression-rerun")
 
     async def work() -> dict[str, Any]:
@@ -1472,6 +1598,7 @@ async def rerun_regression(payload: RegressionActionRequest, request: Request) -
             repeats=1,
             record=True,
             progress=lambda event: store.note(job.id, event),
+            business_case=business_case,
         )
         return report.model_dump(mode="json")
 
@@ -1481,6 +1608,7 @@ async def rerun_regression(payload: RegressionActionRequest, request: Request) -
 @app.post("/v1/model-matrix", response_model=Job)
 async def start_model_matrix(payload: ModelMatrixRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
+    business_case = _business_case_for(service, payload.business_case_id)
     job = store.create("model-matrix")
 
     async def work() -> dict[str, Any]:
@@ -1499,6 +1627,7 @@ async def start_model_matrix(payload: ModelMatrixRequest, request: Request) -> J
                 progress=lambda event, current_model_id=model_id: store.note(
                     job.id, {**event, "model_id": current_model_id}
                 ),
+                business_case=business_case,
             )
             reports.append(report.model_dump(mode="json"))
         winner = max(reports, key=lambda item: item["scorecard"]["quality"])
@@ -1510,6 +1639,7 @@ async def start_model_matrix(payload: ModelMatrixRequest, request: Request) -> J
 @app.post("/v1/security-evaluate", response_model=Job)
 async def start_security_evaluation(payload: SecurityEvaluationRequest, request: Request) -> Job:
     service, store = _service(request), _jobs(request)
+    business_case = _business_case_for(service, payload.business_case_id)
     job = store.create("security-evaluation")
 
     async def work() -> dict[str, Any]:
@@ -1521,6 +1651,7 @@ async def start_security_evaluation(payload: SecurityEvaluationRequest, request:
             timeout_seconds=payload.timeout_seconds,
             record=payload.record,
             progress=lambda event: store.note(job.id, event),
+            business_case=business_case,
         )
         return report.model_dump(mode="json")
 
@@ -1708,11 +1839,34 @@ def read_release_manifest(release_id: str, request: Request) -> ReleaseManifest:
 
 
 def _release_prompt_text(prompt: dict[str, Any]) -> str:
-    """The frozen text, however the screen that registered it shaped the payload."""
+    """The frozen text, however the screen that registered it shaped the payload.
+
+    The workbench registers a compiled program — stages, each with its messages —
+    and that shape fell through every branch here to the JSON dump at the end. So
+    the manifest a repository committed as `prompt.text` was a serialized object
+    rather than the prompt, and the one file meant to carry the exact wording out
+    of this tool carried it in the least readable form the tool can produce.
+    """
     for key in ("text", "prompt", "content"):
         value = prompt.get(key)
         if isinstance(value, str) and value.strip():
             return value
+    stages = prompt.get("stages")
+    if isinstance(stages, list):
+        multi = len(stages) > 1
+        parts = []
+        for index, stage in enumerate(stages):
+            if not isinstance(stage, dict):
+                continue
+            name = stage.get("stage") or f"stage {index + 1}"
+            for message in stage.get("messages") or []:
+                if not isinstance(message, dict):
+                    continue
+                role = str(message.get("role", "user")).upper()
+                head = f"{name} · {role}" if multi else role
+                parts.append(f"{head}\n{message.get('content', '')}")
+        if parts:
+            return "\n\n".join(parts)
     messages = prompt.get("messages")
     if isinstance(messages, list):
         parts = [

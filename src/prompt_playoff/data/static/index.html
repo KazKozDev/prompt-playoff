@@ -162,7 +162,7 @@
       </div>
     </nav>
     <div class="sidebar-foot">
-      <div class="sidebar-system" aria-label="System tools">
+      <div class="sidebar-system" role="group" aria-label="System tools">
         <a href="#settings" data-global-tab="settings" data-screen="settings" data-testid="nav-settings">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9M19 7.5h1M4 16.5h3M13 16.5h7"/><circle cx="16" cy="7.5" r="2.4"/><circle cx="10" cy="16.5" r="2.4"/></svg>
           <span class="system-link-name">Models &amp; keys</span>
@@ -191,14 +191,15 @@
       <button class="menu-button" type="button" data-action="open-drawer" data-testid="drawer-toggle" aria-controls="app-sidebar" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="sr-only">Open navigation</span></button>
       <button class="back-button" type="button" id="back-button" data-testid="back-button" aria-label="Back" hidden></button>
       <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
-      <div class="context-artifacts" aria-label="Active artifacts">
+      <div class="context-artifacts" role="group" aria-label="Active artifacts">
         <!-- The three things every number on every screen is computed from. Each
              one is named here and leads to the one place it lives — the dataset
              to that set in the library, not to the library. -->
+        <a class="context-artifact context-case" href="#results/history" data-global-tab="results" data-screen="results" data-mode="history" data-testid="context-case-link"><b>Case</b> <code id="context-case">Unassigned</code></a>
         <a class="context-artifact" href="#prompt" data-global-tab="prompt" data-screen="prompt" data-testid="context-prompt-link"><b>Prompt</b> <code id="context-prompt">Draft</code></a>
         <a class="context-artifact" href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library" data-testid="context-dataset-link" id="context-dataset-link"><b>Dataset</b> <code id="context-dataset">Loading…</code></a>
         <div class="model-picker">
-          <button class="model-chip" type="button" id="model-chip" aria-expanded="false" aria-haspopup="true" aria-controls="model-pop" data-testid="model-chip"><b>Model</b> <code id="context-model">llama3.2:3b</code><span class="section-caret" aria-hidden="true"></span></button>
+          <button class="model-chip" type="button" id="model-chip" aria-expanded="false" aria-haspopup="menu" data-testid="model-chip"><b>Model</b> <code id="context-model">llama3.2:3b</code><span class="section-caret" aria-hidden="true"></span></button>
           <div class="model-pop" id="model-pop" role="menu" hidden></div>
         </div>
       </div>
@@ -214,8 +215,25 @@
       <section class="panel" id="composer-panel">
         <div class="gate" data-model-gate hidden>No model is set, so nothing here can run yet.<button type="button" class="ghost" data-action="open-model-settings">Models &amp; keys</button></div>
         <h2 class="task-title">What should the model do?</h2>
+        <div class="business-case-field">
+          <label for="business-case-select">Business case</label>
+          <select id="business-case-select" aria-describedby="business-case-help">
+            <option value="">Unassigned</option>
+          </select>
+          <div class="business-case-new" id="business-case-new" hidden>
+            <label for="business-case-name">New business case name</label>
+            <input id="business-case-name" type="text" maxlength="120" autocomplete="off" placeholder="Example: Support ticket triage">
+          </div>
+          <p class="task-helper" id="business-case-help">Keep this prompt and its future runs together in Results.</p>
+          <div class="task-error" id="business-case-error" role="alert" aria-live="assertive"></div>
+        </div>
         <label for="description">Enter the actual task, including the result, format, and important constraints</label>
-        <textarea id="description" placeholder="Example: Extract people and places from text as strict JSON. Never invent values.">Extract people and places from text as strict JSON. Never invent values.</textarea>
+        <!-- The example is the placeholder and nothing else. It used to be the
+             value as well, word for word, which taught exactly the same thing
+             and left a written task sitting in a field nobody had filled in —
+             so Smart run, pressed from a screen where this field is not shown,
+             went off and measured somebody else's sentence. -->
+        <textarea id="description" placeholder="Example: Extract people and places from text as strict JSON. Never invent values."></textarea>
         <fieldset class="creation-modes">
           <legend>Create</legend>
           <div class="mode-options">

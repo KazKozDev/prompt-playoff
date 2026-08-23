@@ -145,7 +145,6 @@
     .tile-top .i { width:17px; height:17px; color:var(--accent-ink); }
     /* A home tile is read at rest, not scanned past, so it is the one place a
        section is named with its drawing rather than with its name alone. */
-    .tile-top .section-art { flex:0 0 34px; width:34px; height:34px; border-radius:var(--r-sm); object-fit:cover; box-shadow:inset 0 0 0 1px var(--border); }
     .tile-top strong { font-size:var(--fs-lead); font-weight:600; letter-spacing:-.01em; }
     .tile-lead { color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
     .tile-foot { margin-top:auto; padding-top:4px; }
@@ -179,67 +178,13 @@
       background:var(--panel); box-shadow:var(--shadow);
     }
     .panel.unplated .section-showcase { margin-top:18px; }
-    /* Three parts, and they drop out of the row in the order you can most
-       afford to lose them: the map goes under the other two before the list of
-       screens ever gives up its width, and only a narrow screen stacks all
-       three. Nothing is hidden — a section screen with a part missing would be
-       three different screens depending on the window. */
+    /* Two parts — the list of screens under this section, and the map of what
+       the section is holding — and the map goes under the list before the list
+       gives up its width. Nothing is hidden: a section screen with a part
+       missing would be two different screens depending on the window. */
     .section-showcase { display:grid; grid-template-columns:1fr; gap:24px; align-items:start; margin-top:6px; }
     @media (min-width:1100px) {
-      .section-showcase { grid-template-columns:minmax(340px, 430px) minmax(0, 1fr); }
-      .section-map { grid-column:1 / -1; }
-    }
-    @media (min-width:1480px) {
-      .section-showcase { grid-template-columns:minmax(300px, 360px) minmax(0, 1fr) minmax(300px, 340px); }
-      .section-map { grid-column:auto; }
-    }
-
-    /* The drawing sits in a well of its own rather than on the screen's own
-       surface: it shares an edge with the list of screens beside it, and two
-       panels of the same colour touching read as one wide panel. */
-    .section-spotlight {
-      display:flex; flex-direction:column; align-items:center; justify-content:space-between;
-      padding:32px 26px 24px; border:1px solid var(--border-strong); border-radius:var(--r-lg);
-      box-shadow:var(--shadow); position:relative; overflow:hidden;
-      background:radial-gradient(circle at 50% 34%, var(--accent-soft), var(--sunken) 74%);
-    }
-    .spotlight-aura {
-      position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
-      width:100%; padding:10px 0 18px;
-    }
-    .spotlight-ring {
-      position:relative; width:274px; height:274px; max-width:100%; aspect-ratio:1; border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      border:2.5px solid rgba(224,167,38,.45);
-      box-shadow:0 0 44px rgba(224,167,38,.24), inset 0 0 32px rgba(224,167,38,.16);
-      background:radial-gradient(circle, rgba(224,167,38,.14) 0%, rgba(224,167,38,.03) 65%, transparent 100%);
-      transition:transform .3s ease, box-shadow .3s ease;
-    }
-    .section-spotlight:hover .spotlight-ring {
-      transform:scale(1.02);
-      box-shadow:0 0 48px rgba(224,167,38,.34), inset 0 0 32px rgba(224,167,38,.22);
-    }
-    /* The drawing takes the ring's own shape rather than sitting in it as a
-       second, squarer object: the art is drawn with margin on all four sides,
-       so a round crop takes nothing off it. */
-    .spotlight-ring .section-art { width:218px; height:218px; max-width:78%; display:block; border-radius:50%; object-fit:cover; box-shadow:0 8px 22px rgba(0,0,0,.26); }
-    .spotlight-tag {
-      margin-top:14px; font-size:var(--fs-sm); font-weight:600; color:var(--text-2);
-      letter-spacing:.02em; text-align:center;
-    }
-    .spotlight-footer {
-      width:100%; text-align:left; padding-top:16px; border-top:1px solid var(--border);
-    }
-    .spotlight-status-title {
-      font-size:var(--fs-base); font-weight:600; margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; gap:8px;
-    }
-    .spotlight-status-title .state { font-size:var(--fs-micro); }
-    .spotlight-status-title .info-dot {
-      display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px;
-      border-radius:50%; background:var(--wash-2); color:var(--muted); font-size:11px; font-weight:600;
-    }
-    .spotlight-desc {
-      font-size:var(--fs-sm); color:var(--muted); line-height:1.55; margin:0;
+      .section-showcase { grid-template-columns:minmax(0, 1fr) minmax(300px, 340px); }
     }
 
     /* The screens under a section are one list, so they share one surface and
@@ -544,6 +489,20 @@
       -webkit-mask-image:linear-gradient(180deg, #000 66%, transparent 100%);
       mask-image:linear-gradient(180deg, #000 66%, transparent 100%);
     }
+    /* And the rest of it, opened where the claim about it is made. The fade
+       above says "this continues"; this is where it continues to, so the
+       screen that says "this exact text is what runs" can be checked without
+       leaving it. */
+    .subject-full { margin:11px 0 0; }
+    .subject-full > summary { cursor:pointer; list-style:none; color:var(--accent-ink); font-size:var(--fs-sm); }
+    .subject-full > summary::-webkit-details-marker { display:none; }
+    .subject-full > summary:hover { text-decoration:underline; }
+    .subject-full-body { margin-top:11px; }
+    .subject-full-actions { margin-top:11px; }
+    /* One message of a prompt, wherever a whole prompt is read: the column
+       beside a measurement, and the frozen copy under a release's hash. */
+    .prompt-part + .prompt-part { margin-top:11px; }
+    .prompt-part pre { margin:4px 0 0; background:var(--panel2); }
     .subject-note { margin:11px 0 0; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
     .subject-empty { color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
     .subject-empty a { color:var(--accent-ink); }
@@ -594,7 +553,7 @@
     .run-setup .estimate { margin-top:14px; }
     .run-setup .form-actions { margin-bottom:0; }
     .app-main { min-width:0; }
-    .context-bar { position:sticky; top:0; display:flex; align-items:center; gap:14px; min-height:56px; padding:12px 26px; border-bottom:1px solid transparent; background:color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter:blur(8px); transition:border-color .2s ease; z-index:20; }
+    .context-bar { position:sticky; top:0; display:flex; flex-wrap:wrap; row-gap:6px; align-items:center; gap:14px; min-height:56px; padding:12px 26px; border-bottom:1px solid transparent; background:color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter:blur(8px); transition:border-color .2s ease; z-index:20; }
     .context-bar.stuck { border-bottom-color:var(--border); }
     .context-artifacts { margin-left:auto; }
     .context-title { min-width:0; }
@@ -924,6 +883,66 @@
     .copy-status.success { color:var(--good); }
     .copy-status.error-text { color:var(--bad); }
     .method pre { margin-bottom:0; background:var(--sunken); }
+
+    /* ---- business-case portfolio -----------------------------------------
+       Cases, prompts and datasets form one nested ledger. Borders are rails,
+       not cards: each level narrows the next one without turning the history
+       into a dashboard of interchangeable boxes. */
+    .business-case-field { margin:0 0 16px; padding:0 0 16px; border-bottom:1px solid var(--border); }
+    .business-case-field > label, .business-case-new label { margin-bottom:5px; }
+    .business-case-field select { width:100%; }
+    .business-case-new { margin-top:9px; padding-left:12px; border-left:2px solid var(--accent-line); }
+    .business-case-new input { width:100%; }
+    .business-case-field .task-helper { margin:7px 0 0; }
+    .business-case-field .task-error:not(:empty) { margin-top:7px; }
+    .portfolio-status { margin:0 0 14px; }
+    .portfolio-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:0 0 18px; border-block:1px solid var(--border); }
+    .portfolio-summary > div { min-width:0; padding:11px 14px; }
+    .portfolio-summary > div + div { border-left:1px solid var(--border); }
+    .portfolio-summary dt { color:var(--muted); font:600 var(--fs-micro)/1.4 var(--mono); text-transform:uppercase; letter-spacing:.07em; }
+    .portfolio-summary dd { margin:3px 0 0; color:var(--text); font:600 21px/1.2 var(--mono); font-variant-numeric:tabular-nums; }
+    .portfolio-workspace { display:grid; grid-template-columns:220px minmax(0,1fr); min-width:0; border:1px solid var(--border); background:var(--panel2); }
+    .portfolio-cases { min-width:0; max-height:calc(100vh - 220px); overflow-y:auto; overscroll-behavior:contain; border-right:1px solid var(--border); background:var(--sunken); scrollbar-width:thin; }
+    .portfolio-rail-label { padding:10px 12px 7px; color:var(--muted); font:600 var(--fs-micro)/1.4 var(--mono); text-transform:uppercase; letter-spacing:.08em; }
+    button.portfolio-case-row, button.portfolio-prompt-row, button.portfolio-dataset-row { width:100%; margin:0; border:0; border-radius:0; background:transparent; color:var(--text-2); text-align:left; }
+    button.portfolio-case-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; padding:10px 12px; border-top:1px solid var(--border); }
+    button.portfolio-case-row:hover, button.portfolio-prompt-row:hover, button.portfolio-dataset-row:hover { background:var(--wash); color:var(--text); }
+    button.portfolio-case-row[aria-current="true"], button.portfolio-prompt-row[aria-current="true"], button.portfolio-dataset-row[aria-current="true"] { background:var(--accent-soft); color:var(--text); box-shadow:inset 2px 0 var(--accent); }
+    .portfolio-case-row > span:first-child { min-width:0; }
+    .portfolio-case-row strong, .portfolio-case-row small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .portfolio-case-row strong { font-size:var(--fs-sm); }
+    .portfolio-case-row small { margin-top:2px; color:var(--muted); font:var(--fs-micro)/1.4 var(--mono); }
+    .portfolio-case-row.unassigned { color:var(--muted); }
+    .case-health { text-align:right; font-variant-numeric:tabular-nums; }
+    .case-health b { display:block; font:600 var(--fs-sm)/1.3 var(--mono); }
+    .portfolio-case-detail { min-width:0; background:var(--panel); }
+    .portfolio-case-head { padding:16px 18px 14px; border-bottom:1px solid var(--border); }
+    .portfolio-case-head h2 { margin:3px 0 0; font-size:var(--fs-lead); }
+    .portfolio-case-head p { margin:5px 0 0; color:var(--muted); font-size:var(--fs-sm); }
+    .portfolio-prompt-layout { display:grid; grid-template-columns:185px minmax(0,1fr); min-width:0; }
+    .portfolio-prompt-list { min-width:0; max-height:calc(100vh - 280px); overflow-y:auto; overscroll-behavior:contain; border-right:1px solid var(--border); scrollbar-width:thin; }
+    button.portfolio-prompt-row { padding:10px 12px; border-top:1px solid var(--border); }
+    .portfolio-prompt-row strong, .portfolio-prompt-row small { display:block; overflow-wrap:anywhere; }
+    .portfolio-prompt-row strong { font-size:var(--fs-sm); }
+    .portfolio-prompt-row small { margin-top:3px; color:var(--muted); font:var(--fs-micro)/1.4 var(--mono); }
+    .portfolio-prompt-detail { min-width:0; }
+    .portfolio-lineage { display:flex; align-items:center; gap:7px; min-width:0; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--sunken); color:var(--text-2); font:var(--fs-micro)/1.5 var(--mono); overflow-x:auto; white-space:nowrap; scrollbar-width:thin; }
+    .portfolio-lineage b { color:var(--accent-ink); font-weight:600; }
+    .portfolio-lineage em { color:var(--accent-ink); font-style:normal; }
+    .portfolio-depth { display:grid; grid-template-columns:155px minmax(0,1fr); min-width:0; }
+    .portfolio-dataset-list { min-width:0; max-height:calc(100vh - 330px); overflow-y:auto; overscroll-behavior:contain; border-right:1px solid var(--border); scrollbar-width:thin; }
+    button.portfolio-dataset-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 11px; border-top:1px solid var(--border); font:var(--fs-sm)/1.35 var(--mono); }
+    .portfolio-dataset-row span { min-width:0; overflow-wrap:anywhere; }
+    .portfolio-dataset-row small { color:var(--muted); }
+    .portfolio-runs { min-width:0; padding:16px; }
+    .portfolio-section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .portfolio-section-head h3 { margin:3px 0 0; font-size:var(--fs-base); font-family:var(--mono); overflow-wrap:anywhere; }
+    .portfolio-runs .history-chart { margin:0 0 14px; }
+    .quality-form.portfolio-compare { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:end; gap:9px; margin:0 0 14px; }
+    .portfolio-compare button { margin:0; white-space:nowrap; }
+    .portfolio-compare-note { margin:0 0 14px; }
+    .portfolio-runs .stage-title { margin-top:16px; }
+    .pointed-run { background:var(--accent-soft); }
     .instruction-list { margin-top:6px; }
     .block-index { display:grid; gap:6px; margin-top:12px; }
     .block-index-item { display:grid; grid-template-columns:minmax(90px,.7fr) minmax(110px,1fr) auto; gap:8px; align-items:start; padding:8px 0; border-top:1px solid var(--border); font-size:var(--fs-sm); }
@@ -1003,6 +1022,17 @@
     .prompt-msg.demo { border-left:2px solid var(--border-strong); background:var(--wash); }
     .prompt-msg.demo pre { color:var(--muted); }
     .demo-tag { margin-left:8px; color:var(--muted); font-size:var(--fs-micro); text-transform:uppercase; letter-spacing:.06em; }
+    /* A fingerprint that opens the prompt it stands for. It is drawn as the code
+       it replaced rather than as a button, because the column is still the hash
+       column — the click is the only thing that is new. */
+    .link-hash { padding:0; border:0; background:none; color:inherit; cursor:pointer; font:inherit; }
+    .link-hash code { border-bottom:1px dashed var(--border-strong); }
+    .link-hash:hover code, .link-hash[aria-expanded="true"] code { color:var(--accent-ink); border-bottom-color:var(--accent); }
+    .release-text > td { text-align:left; background:var(--sunken); }
+    /* The table is wide enough to scroll sideways; the prompt under a row is
+       reading rather than a row, so it is held to a measure and stays where the
+       eye already is instead of running out under the action column. */
+    .release-text-body { padding:4px 0 8px; max-width:72ch; }
     .prompt-notes { margin-top:16px; }
     .prompt-notes h3 { margin:0; }
     .prompt-notes ul { margin:6px 0 0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
@@ -1503,6 +1533,15 @@
     .case-claim b { color:var(--accent-ink); font-size:var(--fs-h2); font-weight:600; letter-spacing:-.02em; line-height:1.15; }
     .case-claim span { color:var(--text-2); font-size:var(--fs-sm); line-height:1.4; }
     .case-story { margin:0; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .case-origin {
+      display:inline-flex; align-items:center; align-self:flex-start; gap:5px;
+      color:var(--text-2); font-size:var(--fs-micro); line-height:1.45;
+      text-decoration:none; border-bottom:1px dotted var(--border-strong);
+    }
+    .case-origin::before { content:'●'; color:var(--good); font-size:.7em; }
+    .case-origin[data-evidence="qualified"]::before { color:var(--warn); }
+    .case-origin[data-evidence="unverified"]::before { color:var(--bad); }
+    .case-origin:hover { color:var(--accent-ink); border-color:var(--accent); }
     .case-evidence { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; padding-top:8px; border-top:1px solid var(--border); }
     /* The foot of the card is where it stops being a story and becomes
        something you can run: one click to the rows the claim would be tested on. */
@@ -1531,6 +1570,10 @@
      * the app that says so in colour, and it only exists after the first click. */
     .dataset-list th:last-child, .dataset-list td.row-actions { text-align:right; white-space:nowrap; }
     .dataset-list td.row-actions button { width:auto; margin:0; padding:4px 10px; font-size:var(--fs-sm); }
+    /* Two actions on one row — choose this set, or delete it — and `margin:0`
+       above left them sharing an edge, which read as one wide split control. */
+    .dataset-list td.row-actions button + button { margin-left:6px; }
+    .dataset-list td.row-actions button[aria-current="true"] { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-ink); }
     .delete-confirm { display:inline-flex; gap:6px; }
     button.danger { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
     button.danger:hover:not(:disabled) { border-color:var(--bad); background:var(--bad); color:var(--panel); }
@@ -1555,7 +1598,16 @@
       body.drawer-open .drawer-backdrop { opacity:1; pointer-events:auto; }
       .context-bar { grid-template-columns:38px minmax(0,1fr) auto; gap:12px; min-height:62px; padding:8px 16px; }
       .menu-button { display:grid; }
-      .context-artifacts { display:none; }
+      /* The case, the prompt, the set and the model are what every number on
+         every screen is computed from, and this used to be where they were
+         hidden. On the narrow window they are needed more, not less: the
+         composer is a drawer away, and "Dataset: Not selected" is the one line
+         that explains why a run button will not start. They take a row of
+         their own under the path instead of leaving the bar. No sideways
+         scroll — the model menu opens out of this row, and a row that scrolls
+         would clip it. */
+      .context-artifacts { order:1; flex:1 0 100%; flex-wrap:wrap; gap:6px; margin-left:0; }
+      .context-artifacts code { max-width:92px; }
       .workspace-main { padding:18px 16px 88px; }
       .layout { grid-template-columns:minmax(0,1fr); }
       .layout > * { min-width:0; }
@@ -1747,17 +1799,14 @@
     }
     .tile + .tile { border-left:1px solid var(--border); }
     .tile:hover { transform:none; background:var(--sunken); }
-    .tile-top .section-art { display:none; }
     .tile-top strong { font-size:15px; }
     .tile.wide { border-top:1px solid var(--border); background:var(--panel); }
     .tile.wide:hover { background:var(--sunken); }
     .state, .grader-role, .log-status, .check-chip, .case-source { border-radius:3px; }
 
     .section-showcase { gap:12px; }
-    .section-spotlight { display:none; }
     @media (min-width:1100px) {
       .section-showcase { grid-template-columns:minmax(0,1fr) minmax(280px,340px); }
-      .section-map { grid-column:auto; }
     }
     @media (min-width:1480px) {
       .section-showcase { grid-template-columns:minmax(0,1fr) minmax(300px,360px); }
@@ -1824,7 +1873,7 @@
     .cat-tile { gap:6px; padding:12px 14px; transform:none; }
     .cat-tile:hover { transform:none; background:var(--sunken); }
     .cat-tile.open { box-shadow:inset 3px 0 0 var(--accent); }
-    .cat-art, .cat-visual, .cat-tile .section-art { display:none; }
+    .cat-art, .cat-visual { display:none; }
     .cat-headline { min-height:0; margin-top:-2px; font-size:15px; }
     .cat-summary { -webkit-line-clamp:2; }
     .cat-foot { padding-top:8px; }
@@ -1917,6 +1966,12 @@
 
     @media (max-width:1120px) {
       .catalog-groups { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .portfolio-prompt-layout { grid-template-columns:155px minmax(0,1fr); }
+      .portfolio-depth { grid-template-columns:minmax(0,1fr); }
+      .portfolio-dataset-list { display:flex; align-items:stretch; max-height:none; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--border); scrollbar-width:thin; }
+      .portfolio-dataset-list .portfolio-rail-label { flex:0 0 auto; align-self:center; }
+      button.portfolio-dataset-row { flex:0 0 150px; border-top:0; border-left:1px solid var(--border); }
+      button.portfolio-dataset-row[aria-current="true"] { box-shadow:inset 0 -2px var(--accent); }
     }
     @media (max-width:700px) {
       .catalog-controls { grid-template-columns:1fr; gap:6px; }
@@ -1954,22 +2009,41 @@
     @media (max-width:900px) {
       .sidebar { width:min(82vw,280px); padding:12px 10px; }
       .context-bar { min-height:52px; padding:7px 14px; }
-      .workspace-main { padding:14px 14px 78px; }
+      html { scroll-padding-bottom:112px; }
+      .workspace-main { padding:14px 14px calc(118px + env(safe-area-inset-bottom)); }
       .bottom-nav { background:var(--panel); }
       .panel { padding:15px; }
       .mode-rail { grid-template-columns:minmax(0,1fr); gap:8px; }
       .mode-rail-switch { width:100%; overflow-x:auto; scrollbar-width:thin; }
       button.mode-rail-option { flex:1 0 auto; }
+      .portfolio-workspace { grid-template-columns:minmax(0,1fr); }
+      .portfolio-cases { display:flex; max-height:120px; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--border); scrollbar-width:thin; }
+      .portfolio-cases .portfolio-rail-label { flex:0 0 auto; align-self:center; }
+      button.portfolio-case-row { flex:0 0 190px; border-top:0; border-left:1px solid var(--border); }
+      button.portfolio-case-row[aria-current="true"] { box-shadow:inset 0 -2px var(--accent); }
+      .portfolio-prompt-layout { grid-template-columns:minmax(0,1fr); }
+      .portfolio-prompt-list { display:flex; max-width:100%; max-height:120px; overflow-x:auto; overflow-y:hidden; overscroll-behavior-inline:contain; border-right:0; border-bottom:1px solid var(--border); scrollbar-width:thin; }
+      .portfolio-prompt-list .portfolio-rail-label { flex:0 0 auto; align-self:center; }
+      button.portfolio-prompt-row { flex:0 0 clamp(190px,32vw,260px); min-width:0; border-top:0; border-left:1px solid var(--border); }
+      button.portfolio-prompt-row[aria-current="true"] { box-shadow:inset 0 -2px var(--accent); }
+      .portfolio-prompt-row strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .portfolio-runs :is(button,select) { scroll-margin-bottom:112px; }
     }
     @media (max-width:640px) {
       .tile + .tile { border-left:0; border-top:1px solid var(--border); }
       .tile.wide { flex-direction:column; align-items:flex-start; }
       button.smart-start { width:100%; margin:4px 0 0; }
       .section-showcase { grid-template-columns:minmax(0,1fr); }
+      .portfolio-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .portfolio-summary > div:nth-child(3) { border-left:0; border-top:1px solid var(--border); }
+      .portfolio-summary > div:nth-child(4) { border-top:1px solid var(--border); }
+      .portfolio-lineage { flex-wrap:wrap; overflow:visible; white-space:normal; }
+      .quality-form.portfolio-compare { grid-template-columns:minmax(0,1fr); }
+      .quality-form.portfolio-compare button { width:100%; }
     }
     @media (max-width:480px) {
       .context-bar { padding-inline:10px; }
-      .workspace-main { padding:12px 10px 76px; }
+      .workspace-main { padding:12px 10px calc(118px + env(safe-area-inset-bottom)); }
       .panel { padding:13px; }
       .screen-head { min-width:0; }
       h1, h2 { overflow-wrap:anywhere; }

@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from prompt_playoff.business_cases import BusinessCaseRecord, BusinessCaseStore
 from prompt_playoff.compiler import PromptCompiler
 from prompt_playoff.dataset_store import DatasetStore
 from prompt_playoff.domain import (
@@ -62,6 +63,7 @@ class PromptSelectorService:
         experiments: ExperimentStore | None = None,
         profiles: ModelProfileStore | None = None,
         techniques: TechniqueStore | None = None,
+        business_cases: BusinessCaseStore | None = None,
     ) -> None:
         self.registry = registry
         self.measurements = measurements if measurements is not None else MeasurementStore()
@@ -71,6 +73,7 @@ class PromptSelectorService:
         self.dataset_store = datasets if datasets is not None else DatasetStore()
         self.experiments = experiments if experiments is not None else ExperimentStore()
         self.profiles = profiles if profiles is not None else ModelProfileStore()
+        self.business_cases = business_cases if business_cases is not None else BusinessCaseStore()
         #: Datasets the user brought in, whether saved to disk on a previous run
         #: or added during this one. Shadow the packaged datasets by name.
         self.user_datasets: dict[str, list[BenchmarkExample]] = self.dataset_store.load()
@@ -345,6 +348,7 @@ class PromptSelectorService:
         record: bool = True,
         progress: ProgressCallback | None = None,
         prompt: CompiledProgram | None = None,
+        business_case: BusinessCaseRecord | None = None,
     ) -> BenchmarkReport:
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
@@ -367,7 +371,9 @@ class PromptSelectorService:
             self.measurements.record(report.to_evidence())
             # The report carries its own record id: a release registered from
             # this prompt has to be able to name the run that justified it.
-            report.experiment_id = self.experiments.add_benchmark(report, task).id
+            report.experiment_id = self.experiments.add_benchmark(
+                report, task, business_case=business_case
+            ).id
         return report
 
     @staticmethod
@@ -402,6 +408,7 @@ class PromptSelectorService:
         record: bool = True,
         progress: ProgressCallback | None = None,
         prompt: CompiledProgram | None = None,
+        business_case: BusinessCaseRecord | None = None,
     ) -> tuple[ComparisonReport, list[BenchmarkReport]]:
         techniques = [self.resolve_technique(task, item) for item in technique_ids]
         examples, name = self.resolve_dataset(dataset_name, inline)
@@ -419,7 +426,7 @@ class PromptSelectorService:
         if record:
             for report in reports:
                 self.measurements.record(report.to_evidence())
-            self.experiments.add_comparison(comparison, reports, task)
+            self.experiments.add_comparison(comparison, reports, task, business_case=business_case)
         return comparison, reports
 
     async def optimize(
@@ -441,6 +448,7 @@ class PromptSelectorService:
         record: bool = True,
         progress: ProgressCallback | None = None,
         prompt: CompiledProgram | None = None,
+        business_case: BusinessCaseRecord | None = None,
     ) -> OptimizationResult:
         """Search for a better prompt. `backend` picks the search algorithm only —
         compilation, execution and grading are the same either way.
@@ -488,7 +496,9 @@ class PromptSelectorService:
                 authored=prompt,
             )
             if record:
-                result.experiment_id = self.experiments.add_optimization(result, task).id
+                result.experiment_id = self.experiments.add_optimization(
+                    result, task, business_case=business_case
+                ).id
             return result
 
         if not backend.startswith("dspy:"):
@@ -514,7 +524,9 @@ class PromptSelectorService:
             authored=prompt,
         )
         if record:
-            result.experiment_id = self.experiments.add_optimization(result, task).id
+            result.experiment_id = self.experiments.add_optimization(
+                result, task, business_case=business_case
+            ).id
         return result
 
     def export_promptfoo(

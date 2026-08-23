@@ -165,6 +165,28 @@ function promptOpening() {
   return (spoken?.content || '').trim();
 }
 
+/* The whole text, not the first 260 characters of it.
+ *
+ * The column showed an opening that stopped mid-sentence and a link away to the
+ * screen that holds the rest. On a screen whose entire subject is this text —
+ * "this exact text is what runs" — the text has to be readable where that claim
+ * is made, or the claim is about something the reader cannot see. The opening
+ * stays as the glance; the disclosure under it is the prompt. */
+function subjectFullText() {
+  const parts = promptMessages(state.program);
+  if (!parts.length) return '';
+  const multi = (state.program?.stages || []).length > 1;
+  const key = registerCopy('subject:full', promptPlainText(state.program));
+  return `<details class="subject-full" data-testid="subject-full">
+      <summary>Read the whole prompt (${plural(parts.length, 'message')})</summary>
+      <div class="subject-full-body">
+        ${parts.map(promptPartBlock).join('')}
+        <div class="subject-full-actions">${copyButton(key, multi ? 'Copy all calls' : 'Copy prompt', 'Copy the full text of the prompt this screen is working on')}</div>
+        <div class="copy-status" data-copy-status="subject:full" role="status" aria-live="polite"></div>
+      </div>
+    </details>`;
+}
+
 // The third zone of the workspace: the rail, the screen, and — on every screen
 // of the Prompt section — the prompt itself, in the left column where the
 // composer that wrote it stands. Under it, on the screen that measures, how
@@ -203,6 +225,7 @@ function runSubject(tab) {
     <p class="subject-name"><strong>${esc(techniqueTitle(state.chosen))}</strong>${alternatives}</p>
     ${task ? `<p class="subject-task">Your task: ${esc(task.slice(0, 220))}${task.length > 220 ? '…' : ''}</p>` : ''}
     ${opening ? `<pre class="subject-opening">${esc(opening.slice(0, 260))}${opening.length > 260 ? '…' : ''}</pre>` : ''}
+    ${subjectFullText()}
     <p class="subject-note">${esc(typeof note === 'function' ? note() : note)}</p>`;
 }
 
@@ -365,9 +388,37 @@ function measurementNote(tab) {
   </section>`;
 }
 
+/* The field that decides what every number on the screen is about, grouped the
+ * way the library groups the same sets and ordered the way they are worth
+ * measuring on. A flat alphabetical list put `agents` at the top — one of the
+ * benchmarks this tool tests itself with, and the one class the screen below
+ * warns describes the tool rather than your task — above the rows the reader
+ * brought themselves. The prefixes are what the grouping already knows, so they
+ * are dropped from the labels: the group says what `hf:` was saying. */
+const DATASET_GROUPS = [
+  ['Your sets', name => typeof datasetIsMine === 'function' && datasetIsMine(name)],
+  ['Ready-made datasets by business task', name => name.startsWith('business:')],
+  ['Shipped with the tool', () => true]
+];
+
+function datasetOptions() {
+  const sets = [...state.datasetSizes.entries()];
+  return DATASET_GROUPS.map(([label, belongs], index) => {
+    const mine = sets.filter(([name]) =>
+      belongs(name) && !DATASET_GROUPS.slice(0, index).some(([, earlier]) => earlier(name)));
+    if (!mine.length) return '';
+    const options = mine.map(([name, size]) => {
+      // The whole name stays the value — it is what the server is asked for —
+      // while the label drops the prefix the group above it already carries.
+      const shown = name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
+      return `<option value="${esc(name)}"${name === state.run.dataset ? ' selected' : ''}>${esc(shown)} — ${size} examples</option>`;
+    }).join('');
+    return `<optgroup label="${esc(label)}">${options}</optgroup>`;
+  }).join('');
+}
+
 function runField(name) {
-  const options = [...state.datasetSizes.entries()]
-    .map(([label, size]) => `<option value="${esc(label)}"${label === state.run.dataset ? ' selected' : ''}>${esc(label)} — ${size} examples</option>`).join('');
+  const options = datasetOptions();
   // The empty row is the opening state and stays in the list afterwards: a set
   // can be un-chosen the same way it was chosen, and nothing runs until one is.
   const placeholder = `<option value=""${state.run.dataset ? '' : ' selected'}>Choose a set of examples…</option>`;
@@ -580,7 +631,7 @@ async function runBenchmark() {
     // screen, including whatever the engine wrote into it.
     const job = await api('/v1/benchmark', {
       task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
-      dataset: state.run.dataset, repeats: Number(state.run.repeats)
+      dataset: state.run.dataset, repeats: Number(state.run.repeats), ...businessCaseRequestFields()
     });
     state.report = await pollJob(job.id, showProgress);
     // This run was of the prompt currently held, so it is the number a release
@@ -602,7 +653,8 @@ async function runComparison() {
     // their own, so they are compiled — which is the question being asked.
     const job = await api('/v1/compare', {
       task: await taskProfile(), technique_ids: state.recs.map(r => r.technique_id),
-      prompt: state.program, dataset: state.run.dataset, repeats: Number(state.run.repeats)
+      prompt: state.program, dataset: state.run.dataset, repeats: Number(state.run.repeats),
+      ...businessCaseRequestFields()
     });
     const result = await pollJob(job.id, showProgress);
     state.comparison = result.comparison;
@@ -621,7 +673,7 @@ async function runOptimization() {
       task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
       dataset: state.run.dataset, repeats: Number(state.run.repeats),
       rounds: Number(state.run.rounds), backend: state.run.backend,
-      engine_model: engineProfile()
+      engine_model: engineProfile(), ...businessCaseRequestFields()
     });
     state.optimization = await pollJob(job.id, showProgress);
     state.tab = 'optimization'; renderDetail();
@@ -733,13 +785,17 @@ async function smartRun(report) {
   if (!state.chosen) throw new Error('No method fit this task, so there is nothing to measure.');
 
   report('step', `Measuring ${techniqueTitle(state.chosen)} on ${plural(state.datasetSizes.get(dataset) || 0, 'example')}…`);
-  const benchmark = await api('/v1/benchmark', {task: await taskProfile(), technique_id: state.chosen, dataset, repeats});
+  const benchmark = await api('/v1/benchmark', {
+    task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
+    dataset, repeats, ...businessCaseRequestFields()
+  });
   state.report = await pollJob(benchmark.id, showProgress);
 
   report('step', `Improving it over ${plural(Number(state.run.rounds), 'round')}…`);
   const optimize = await api('/v1/optimize', {
     task: await taskProfile(), technique_id: state.chosen, prompt: state.program, dataset, repeats,
-    rounds: Number(state.run.rounds), backend: state.run.backend, engine_model: engineProfile()
+    rounds: Number(state.run.rounds), backend: state.run.backend, engine_model: engineProfile(),
+    ...businessCaseRequestFields()
   });
   state.optimization = await pollJob(optimize.id, showProgress);
   return state.optimization;
@@ -927,7 +983,7 @@ function renderExampleCard(report, entry, full, unscored = false) {
   // Nothing graded this run, so a red card would be a verdict nobody reached.
   const tone = unscored ? 'plain' : scoreTone(entry.score);
   const grader = report.scorecard.quality_grader;
-  const cut = (value, limit) => esc(String(value ?? '').slice(0, limit));
+  const cut = (value, limit) => esc(asText(value).slice(0, limit));
   const answers = (full ? entry.runs : entry.runs.slice(0, 1)).map(run => {
     const grades = Object.entries(run.grades)
       .map(([name, value]) => `<span class="grade ${value >= 0.999 ? 'good' : value > 0 ? 'part' : 'bad'}"><b>${esc(name)}</b> ${value.toFixed(2)}</span>`).join('');

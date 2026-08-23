@@ -169,6 +169,39 @@ def test_every_case_carries_the_story_the_card_is_built_from(cases):
         assert bool(case.get("claim")) == bool(case.get("claim_of")), case["number"]
 
 
+def test_every_case_has_a_resolvable_audited_source(raw, cases):
+    sources = {source["id"]: source for source in raw["case_sources"]}
+    assert sources
+    for source in sources.values():
+        assert source["url"].startswith("https://")
+        for field in ("title", "publisher", "source_type", "accessed_at"):
+            assert source.get(field), f"source {source['id']} has no {field}"
+        assert "published_at" in source, f"source {source['id']} guesses by omission"
+    for case in cases:
+        assert case["source_ref"] in sources, case["number"]
+        assert case["evidence_status"] in {
+            "verified_official",
+            "qualified_official",
+            "unverified",
+        }
+        assert case["evidence_note"].strip(), case["number"]
+
+
+def test_case_source_and_evidence_status_reach_the_api_and_ui():
+    result = catalog({})
+    cases = [case for group in result["groups"] for case in group["cases"]]
+    assert all(case["source_record"]["url"].startswith("https://") for case in cases)
+    assert {case["evidence_status"] for case in cases} == {
+        "verified_official",
+        "qualified_official",
+        "unverified",
+    }
+    javascript = (STATIC / "platform.js").read_text(encoding="utf-8")
+    assert 'class="case-origin"' in javascript
+    assert "Exact claim unverified" in javascript
+    assert "Official source means" in javascript
+
+
 def test_a_case_with_half_a_claim_is_refused(tmp_path, raw):
     broken = {
         **raw,
@@ -213,20 +246,36 @@ def test_every_category_carries_what_its_tile_is_built_from(raw):
         assert art.exists(), f"group {group['id']} names tile art that is not packaged: {art}"
 
 
-def test_every_named_set_is_bundled_and_carries_its_reference(raw):
+def test_every_named_set_has_license_provenance_and_only_cleared_sets_are_bundled(raw):
     for spec in raw["sets"]:
         assert spec["name"].startswith("business:"), spec["name"]
-        for field in ("title", "shape", "source", "url", "license"):
+        for field in (
+            "title",
+            "shape",
+            "source",
+            "url",
+            "license",
+            "license_status",
+            "license_url",
+            "redistribution",
+            "source_revision",
+        ):
             assert spec.get(field), f"{spec['name']} has no {field}"
         assert spec["url"].startswith("https://huggingface.co/datasets/")
         assert spec["source"] in spec["url"]
         path = BUSINESS / f"{spec['name'].split(':', 1)[1]}.jsonl"
-        assert path.exists(), f"{spec['name']} is in the catalogue with no rows at {path}"
+        assert path.exists() is spec["bundled"], spec["name"]
+        if spec["bundled"]:
+            assert spec["license_status"] == "verified_upstream"
+        else:
+            assert spec["redistribution"] == "source_only"
 
 
 def test_bundled_rows_match_what_the_catalogue_promises(raw):
     """Rows are a sample, so the count is a floor — but the shape is not negotiable."""
     for spec in raw["sets"]:
+        if not spec["bundled"]:
+            continue
         rows = load_jsonl(BUSINESS / f"{spec['name'].split(':', 1)[1]}.jsonl")
         assert len(rows) >= min(spec["rows"], 40), f"{spec['name']} has {len(rows)} rows"
         assert len({row.id for row in rows}) == len(rows)
@@ -248,6 +297,8 @@ def test_each_set_is_graded_by_something_that_can_tell_right_from_wrong(raw):
     against nonsense, which has to come out nothing.
     """
     for spec in raw["sets"]:
+        if not spec["bundled"]:
+            continue
         rows = load_jsonl(BUSINESS / f"{spec['name'].split(':', 1)[1]}.jsonl")[:12]
         gold, junk = [], []
         for row in rows:
@@ -265,7 +316,7 @@ def test_each_set_is_graded_by_something_that_can_tell_right_from_wrong(raw):
 
 def test_every_bundled_set_is_registered_under_its_catalogue_name(raw):
     registered = Registry.load().datasets
-    named = {spec["name"] for spec in raw["sets"]}
+    named = {spec["name"] for spec in raw["sets"] if spec["bundled"]}
     assert named <= set(registered)
     # And nothing extra: a file dropped into the directory without a catalogue
     # entry would be measurable with no source, licence or business case on it.
@@ -285,13 +336,14 @@ def test_business_taxonomy_has_every_reference_category_and_task_in_order():
 
 def test_taxonomy_mappings_only_name_registered_packaged_datasets(raw):
     registered = set(Registry.load().datasets)
+    catalogued = {spec["name"] for spec in raw["sets"]}
     mapped = {
         task["dataset"]
         for category in raw["taxonomy"]
         for task in category["tasks"]
         if task.get("dataset")
     }
-    assert mapped <= registered
+    assert mapped <= registered | catalogued
 
 
 def test_taxonomy_availability_and_routes_follow_a_partial_server_catalogue():
@@ -487,9 +539,10 @@ def test_api_serves_the_catalogue_joined_to_the_bundled_rows():
     with TestClient(app) as client:
         payload = client.get("/v1/datasets/catalog").json()
     assert payload["counts"]["cases"] == 50
-    assert payload["counts"]["available"] == payload["counts"]["sets"]
+    assert payload["counts"]["available"] == sum(spec["bundled"] for spec in payload["sets"])
     for spec in payload["sets"]:
-        assert spec["available"] and spec["examples"] > 0
+        assert spec["available"] is spec["bundled"]
+        assert (spec["examples"] or 0) > 0 if spec["bundled"] else spec["examples"] is None
     # The route is declared ahead of /v1/datasets/{name}, which would otherwise
     # answer 404 for a set called "catalog".
     assert "groups" in payload

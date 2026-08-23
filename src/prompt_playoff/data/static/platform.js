@@ -948,12 +948,45 @@ function releaseGateControl(release) {
     <button data-release-action="approve"${blocked ? ' disabled title="' + esc(gate.reason || '') + '"' : ''}>Approve</button>`;
 }
 
+/* The frozen text itself, under the fingerprint that stands for it.
+ *
+ * The row said `a41f0c9e2b` and nothing else. The whole point of a release is
+ * that it is the exact wording somebody shipped, and the exact wording was the
+ * one thing the register could not show: it was on this server the whole time,
+ * reachable only by downloading the manifest and opening it in another program.
+ * A fingerprint you cannot resolve to a prompt is a receipt for a lost parcel. */
+function releasePromptRow(release) {
+  const parts = promptMessages(release.prompt);
+  const key = registerCopy(`release:${release.id}`,
+    parts.length ? promptPlainText(release.prompt) : JSON.stringify(release.prompt, null, 2));
+  const body = parts.length
+    ? parts.map(promptPartBlock).join('')
+    : `<div class="prompt-part"><span class="prompt-role">FROZEN PAYLOAD</span>
+        <pre>${esc(JSON.stringify(release.prompt, null, 2))}</pre></div>`;
+  return `<tr class="release-text" data-release-text-for="${esc(release.id)}" hidden>
+      <td colspan="6">
+        <div class="release-text-body">
+          ${parts.length ? '' : '<p class="field-hint">This release was registered with a payload that is not a compiled prompt, so it is shown as it was frozen.</p>'}
+          ${body}
+          <div class="subject-full-actions">${copyButton(key, 'Copy frozen text', `Copy the exact text release ${release.name} v${release.version} froze`)}</div>
+          <div class="copy-status" data-copy-status="release:${esc(release.id)}" role="status" aria-live="polite"></div>
+        </div>
+      </td>
+    </tr>`;
+}
+
 function renderReleases() {
   // Arrived on one stage of the funnel: the table keeps its columns and its
   // buttons, and holds only the releases sitting in that stage.
   const only = showingOn('ship');
   const releases = only ? q.releases.filter(item => item.status === only) : q.releases;
-  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><code>${esc(item.prompt_hash.slice(0, 10))}</code></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}<button class="ghost" data-release-action="export" title="Download the manifest and the checks block">Export</button></div></td></tr>`).join('');
+  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><button type="button" class="link-hash" data-release-text="${esc(item.id)}" aria-expanded="false" title="Read the text this fingerprint stands for"><code>${esc(item.prompt_hash.slice(0, 10))}</code></button></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}<button class="ghost" data-release-action="export" title="Download the manifest and the checks block">Export</button></div></td></tr>${releasePromptRow(item)}`).join('');
+  // With no prompt to register, the band below is the whole of what this half
+  // of the screen can say. The form used to stand under it anyway — a heading
+  // claiming to register "the prompt you are holding" when nothing was being
+  // held, a name already filled in, and a dead button — so the screen asked and
+  // refused in the same breath. Reading the register needs no prompt, so that
+  // half stays.
   const gate = state.program ? '' : prerequisite('Author a prompt before registering a release.', 'prompt', 'Author a prompt');
   // A table of headings over nothing is a table that lost its rows. Say which
   // of the two it is.
@@ -967,7 +1000,7 @@ function renderReleases() {
   return `<div class="screen-split work-wide">
     <div class="build-work">
       ${qualityError()}${gate}
-      <section class="screen-body">
+      ${state.program ? `<section class="screen-body">
         <h2>Register the prompt you are holding</h2>
         <div class="quality-form">
           <label>Release name<input id="release-name" value="production-prompt"></label>
@@ -976,12 +1009,13 @@ function renderReleases() {
         <p class="field-hint">${state.provenance
           ? `This prompt carries the ${esc(state.provenance.kind)} on <code>${esc(state.provenance.dataset)}</code> — quality ${state.provenance.quality.toFixed(3)}. That run is recorded against the release, and the server checks it measured this exact text${state.provenance.kind === 'optimization' ? ' — an optimization did not, so this would register as evidence about the search rather than about the prompt' : ''}.`
           : 'Nothing has been measured on this prompt as it stands, so the release would be registered unmeasured. Run it on <a href="#report" data-global-tab="report" data-screen="report">Measurement</a> first.'}</p>
-        <div class="form-actions"><button class="release-create" data-action="create-release" ${state.program ? '' : 'disabled'}>Register current prompt</button></div>
-      </section>
+        <div class="form-actions"><button class="release-create" data-action="create-release">Register current prompt</button></div>
+      </section>` : ''}
       <section class="screen-body">
         <h2>The register</h2>
         ${table}
-        <p class="field-hint">A register kept in here is not a system of record: no colleague, no CI job and no
+        <p class="field-hint">A fingerprint in the <b>Hash</b> column opens the exact text that release froze.
+          Beyond that, a register kept in here is not a system of record: no colleague, no CI job and no
           future checkout can read it. <b>Export</b> writes two files to commit — the manifest, which carries the
           exact text, its fingerprint, the run behind it and the verdict of the bar; and a <code>checks:</code>
           block for <code>prompt-playoff.yaml</code>, which is what
@@ -1326,10 +1360,15 @@ function visibleOwnSets(entries) {
 // route to it.
 function visibleBusinessSet(name) {
   const browse = catalogBrowse();
+  const spec = catalogSets().get(name);
+  if (browse.availability === 'available' && !spec?.available) return false;
   const needle = browseNeedle(browse.query);
   if (!needle) return true;
-  const spec = catalogSets().get(name);
-  return browseNeedle([name, spec?.title, spec?.shape, spec?.source, spec?.group].join(' ')).includes(needle);
+  const haystack = browseNeedle([name, spec?.title, spec?.shape, spec?.source, spec?.group].join(' '));
+  // Treat search words independently so punctuation and natural title wording
+  // do not make `email subject` miss `business:email-subject` or
+  // `Email to subject line`.
+  return needle.split(/\s+/).every(word => haystack.includes(word));
 }
 
 function renderCatalogBrowseControls() {
@@ -1489,6 +1528,7 @@ function renderCatalogCases(cases) {
   const rank = {direct:0, partial:1, none:2};
   const ordered = [...cases].sort((a, b) => (rank[a.match] - rank[b.match]) || (a.number - b.number));
   const cards = ordered.map(item => {
+    const source = item.source_record || {};
     const measured = item.sets.map(name => {
       const spec = known.get(name);
       return spec?.available
@@ -1509,6 +1549,16 @@ function renderCatalogCases(cases) {
     const claim = item.claim
       ? `<div class="case-claim"><b>${esc(item.claim)}</b><span>${esc(item.claim_of)}</span></div>`
       : '';
+    const evidenceWords = {
+      verified_official: ['verified', 'Official source'],
+      qualified_official: ['qualified', 'Qualified source'],
+      unverified: ['unverified', 'Exact claim unverified'],
+    }[item.evidence_status] || ['unverified', 'Source status unknown'];
+    const sourceLink = source.url
+      ? `<a class="case-origin" data-evidence="${esc(evidenceWords[0])}" href="${esc(source.url)}"
+          target="_blank" rel="noreferrer noopener" title="${esc(item.evidence_note)}">
+          ${esc(evidenceWords[1])}: ${esc(source.publisher || source.title)} ↗</a>`
+      : '';
     return `<article class="case-card" data-match="${esc(item.match)}">
       <div class="case-top">
         <span class="case-no">${String(item.number).padStart(2, '0')}</span>
@@ -1518,15 +1568,16 @@ function renderCatalogCases(cases) {
       <div class="case-who">${esc(item.company)}${item.source ? `<span class="case-source">${esc(item.source)}</span>` : ''}</div>
       ${claim}
       <p class="case-story">${esc(item.story)}</p>
+      ${sourceLink}
       <div class="case-evidence">${evidence}</div>
     </article>`;
   }).join('');
   return `<div class="catalog-cases">
     <div class="cat-panel-label">Who does this work with a model<span class="cat-panel-note">and what they say it did for them</span></div>
     <div class="case-grid">${cards}</div>
-    <p class="field-hint">Every figure here was published by the company or its vendor and checked by nobody on this
-      side — the numbers this tool stands behind are the ones on Measurement. The company is a reported user of a
-      model for that work, not the source of the data: every set here is public.</p>
+    <p class="field-hint">Official source means the company or its vendor published the deployment; it is not an
+      independent audit. Qualified and unverified cards say exactly what the source does not establish. The numbers
+      this tool stands behind are the ones on Measurement. Case sources and benchmark datasets are separate.</p>
   </div>`;
 }
 
@@ -1539,12 +1590,17 @@ function renderBusinessZone(names, {collapsed = false, open = false} = {}) {
   if (!listed.length) return '';
   const rows = listed.map(name => {
     const spec = known.get(name);
+    const title = spec.available
+      ? `<a href="#dataset-library/${encodeURIComponent(name)}">${esc(spec.title)}</a>`
+      : `<span>${esc(spec.title)}</span><br><span class="pill warn">source only</span>`;
     return `<tr>
-      <td><a href="#dataset-library/${encodeURIComponent(name)}">${esc(spec.title)}</a><br><code class="meta">${esc(name)}</code></td>
+      <td>${title}<br><code class="meta">${esc(name)}</code></td>
       <td>${esc(spec.group || '—')}</td>
       <td>${state.datasetSizes.get(name) ?? '—'}</td>
       <td>${esc(spec.shape)}</td>
-      <td><a href="${esc(spec.url)}" target="_blank" rel="noreferrer noopener">${esc(spec.source)} ↗</a><br><span class="meta">${esc(spec.license)}</span></td>
+      <td><a href="${esc(spec.url)}" target="_blank" rel="noreferrer noopener">${esc(spec.source)} ↗</a><br>
+        <a class="meta" href="${esc(spec.license_url)}" target="_blank" rel="noreferrer noopener">${esc(spec.license)} ↗</a><br>
+        <span class="meta">revision ${esc(spec.source_revision.slice(0, 12))}</span></td>
     </tr>`;
   }).join('');
   const table = `<div class="table-scroll"><table class="business-list">
@@ -1566,7 +1622,7 @@ function renderBusinessZone(names, {collapsed = false, open = false} = {}) {
   // browse path stays unobstructed — except when it is the only thing that
   // answered the search, and a fold over the answer reads as no answer.
   return `<section class="library-zone"><details class="advanced-disclosure"${open ? ' open' : ''}>
-      <summary>Sources and licences<small class="meta"> — ${plural(listed.length, 'repository').replace('repositorys', 'repositories')} these rows were sampled from</small></summary>
+      <summary>Sources and licences<small class="meta"> — ${plural(listed.length, 'repository').replace('repositorys', 'repositories')} audited; source-only rows are not redistributed</small></summary>
       <div class="advanced-content">${table}</div>
     </details></section>`;
 }
@@ -1582,7 +1638,7 @@ function datasetPreview(name, total) {
   if (held.status === 'error') return `<div class="stage-title">What is inside</div><div class="error">Could not read ${esc(name)}: ${esc(held.error)}</div>`;
   if (!held.rows.length) return `<div class="stage-title">What is inside</div><div class="empty">${esc(name)} has no rows, so nothing can be scored against it.</div>`;
   const shown = held.rows.slice(0, PREVIEW_ROWS);
-  const cell = value => esc(String(value ?? '').slice(0, 240));
+  const cell = value => esc(asText(value).slice(0, 240));
   const rows = shown.map(row => `<tr>
       <td><code>${esc(row.id)}</code></td>
       <td>${cell(row.input)}</td>
@@ -1595,6 +1651,53 @@ function datasetPreview(name, total) {
     <div class="table-scroll dataset-preview" role="region" aria-label="${esc(`First rows of ${name}`)}" tabindex="0">
       <table><thead><tr><th>Row</th><th>Input</th><th>Right answer</th><th>Scored by</th></tr></thead><tbody>${rows}</tbody></table>
     </div>`;
+}
+
+/* --------------------------------------------------------------------------
+ * Picking the set, on the screen that says it is where you pick.
+ *
+ * The library's own lead has always read "this is where you pick what a score
+ * will be computed against", and until now nothing here could: the choice lived
+ * only in the `Measure against` field on the three screens that run something,
+ * and in the automatic selection an upload makes. So the second step of the
+ * lifecycle could not finish the step it is named after, the Dataset chip in
+ * the bar led to a screen that could not change what the chip said, and a
+ * reader who came here through the shelf of business tasks had to carry a name
+ * in their head to a different screen.
+ *
+ * The band states what is being measured against before it offers to change it,
+ * because "which set is it now" is the question that makes the button
+ * meaningful — and once the answer is this set, the band stops offering the
+ * click and offers the way on instead.
+ * -------------------------------------------------------------------------- */
+function measureAgainstBand(name) {
+  if (state.run.dataset === name) {
+    return `<div class="prerequisite" role="note" data-testid="measure-against">
+      <p>Every score you take next is computed against <strong>${esc(name)}</strong>.</p>
+      <button type="button" class="ghost" data-prereq-target="report" data-action="resolve-prerequisite">Go and measure</button>
+    </div>`;
+  }
+  const now = state.run.dataset
+    ? `Your runs currently measure against ${state.run.dataset}.`
+    : 'No set is chosen yet, so none of the three run buttons can start.';
+  return `<div class="prerequisite" role="note" data-testid="measure-against">
+    <p>${esc(now)}</p>
+    <button type="button" class="primary" data-measure-against="${esc(name)}">Measure against this set</button>
+  </div>`;
+}
+
+// The same choice from the list, for the rows the tool most wants measured: a
+// set of your own is the only kind a score speaks about directly, so it is the
+// one kind whose row carries the button rather than making you open it first.
+//
+// Chosen, the button stays where it was and goes quiet, the way the method card
+// says "In use" in the same place it offers the swap. A word of prose there
+// instead would be `.meta`, which is a block, and a block beside a button in a
+// cell one line tall puts the two on top of each other.
+function measureCell(name) {
+  const current = state.run.dataset === name;
+  return `<button type="button" class="ghost" data-measure-against="${esc(name)}"
+    aria-current="${current}"${current ? ' disabled' : ''}>${current ? 'Measuring' : 'Measure'}</button>`;
 }
 
 /* A bundled set lives inside the installed package: it is the same on every
@@ -1647,7 +1750,7 @@ function renderYoursZone(entries) {
       <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build one from your task</a>.</p></section>`;
   const rows = mine.map(([name, count]) => `<tr>
     <td>${esc(name)}</td><td>${count}</td><td>${esc(datasetSource(name))}</td>
-    <td class="row-actions">${deleteCell(name)}</td>
+    <td class="row-actions">${measureCell(name)}${deleteCell(name)}</td>
   </tr>`).join('');
   return `<section class="library-zone"><h3 class="zone-title">Your sets</h3>
     <p class="meta">Uploaded, imported or built here. These are the only ones this screen can delete.</p>
@@ -1835,13 +1938,19 @@ function renderDatasetLibrary() {
     : '';
 
   const names = sets.map(([name]) => name);
-  const business = names.filter(name => name.startsWith('business:'));
+  // The catalogue is larger than the wheel: source-only entries have audited
+  // provenance but may not be redistributed. Keep those entries discoverable
+  // in the Sources and licences table instead of deriving the table solely
+  // from files installed on this server.
+  const business = only
+    ? names.filter(name => name.startsWith('business:'))
+    : [...catalogSets().keys()];
   const own = sets.filter(([name]) => !name.startsWith('business:'));
   // Narrowed to one set, the zones it does not live in would be six group
   // buttons and an empty table above the rows you came to read.
   if (only) {
     const zones = renderBusinessZone(business) + renderYoursZone(own) + renderBundledZone(own) + renderCitations(only);
-    return `${qualityError()}${note}${warning}${zones}${datasetPreview(only, sets[0][1])}`;
+    return `${qualityError()}${note}${warning}${measureAgainstBand(only)}${zones}${datasetPreview(only, sets[0][1])}`;
   }
 
   const browse = catalogBrowse();
@@ -1862,7 +1971,10 @@ function renderDatasetLibrary() {
     </div>`;
 
   const catalogueZones = hasCatalogue
-    ? (groups.length ? renderCatalogZone() : '') + renderBusinessZone(visibleBusiness, {collapsed: true, open: !groups.length})
+    ? (groups.length ? renderCatalogZone() : '') + renderBusinessZone(visibleBusiness, {
+        collapsed: true,
+        open: Boolean(browseNeedle(browse.query)) || !groups.length,
+      })
     : '';
   const yourZone = browse.scope !== 'catalogue' && (visibleOwn.length || !browseNeedle(browse.query))
     ? renderYoursZone(visibleOwn)
@@ -1934,6 +2046,22 @@ function wireDatasetLibrary(tab, panel) {
     // that was, so the tile it belonged to takes the focus back.
     panel.querySelector(`[data-catalog-group="${CSS.escape(id || '')}"]`)?.focus();
   });
+  // Choosing what a score is computed against, from the screen that holds the
+  // sets. It writes the same field the `Measure against` control on the run
+  // screens writes, so the two can never disagree, and the note it leaves says
+  // what changed — the band it was clicked in has by then become a different
+  // sentence, and a control that rewrites itself has to say why.
+  panel.querySelectorAll('[data-measure-against]').forEach(button => button.addEventListener('click', () => {
+    const name = button.dataset.measureAgainst;
+    state.run.dataset = name;
+    // The invitation to paste your own inputs belongs to the set it was shown
+    // over, and a different set is now the one being measured.
+    state.ownRowsNote = '';
+    state.datasetNote = `${name} is now what your runs measure against.`;
+    if (typeof updateWorkspaceContext === 'function') updateWorkspaceContext();
+    if (typeof refreshActions === 'function') refreshActions();
+    renderDetailPanel(tab);
+  }));
   panel.querySelectorAll('[data-delete-arm]').forEach(button => button.addEventListener('click', () => {
     state.pendingDelete = button.dataset.deleteArm;
     state.datasetNote = '';
@@ -2087,6 +2215,14 @@ function wirePlatformTab(tab, panel) {
   panel.querySelector('.release-create')?.addEventListener('click', () => qualityAction(tab, async () => api('/v1/releases', {name:panel.querySelector('#release-name').value, technique_id:state.program.technique_id, prompt:state.program, experiment_id:state.provenance?.experiment_id || null})));
 
   panel.querySelectorAll('[data-cite-release]').forEach(button => button.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/releases/${button.closest('tr').dataset.releaseId}/cite`, {experiment_id:button.dataset.citeRelease}))));
+  // Opening the text is not a lifecycle move either: the row unfolds in place
+  // and nothing about the release changes.
+  panel.querySelectorAll('[data-release-text]').forEach(button => button.addEventListener('click', () => {
+    const row = panel.querySelector(`[data-release-text-for="${button.dataset.releaseText}"]`);
+    if (!row) return;
+    row.hidden = !row.hidden;
+    button.setAttribute('aria-expanded', String(!row.hidden));
+  }));
   panel.querySelectorAll('[data-release-action]').forEach(button => button.addEventListener('click', () => {
     const id = button.closest('tr').dataset.releaseId;
     // Export is not a lifecycle move: it takes the release out of here rather

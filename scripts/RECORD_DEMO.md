@@ -91,7 +91,7 @@ Edit `README.md` and update the demo section:
 
 ```markdown
 <p align="center">
-  <img src="assets/demo-cli.gif" alt="Prompt Playoff demo showing task description, technique ranking, prompt compilation, and benchmark results" width="820">
+  <img src="../assets/demo-cli.gif" alt="Prompt Playoff demo showing task description, technique ranking, prompt compilation, and benchmark results" width="820">
 </p>
 ```
 

@@ -1,4 +1,4 @@
-.PHONY: install install-all test lint format validate serve demo benchmark optimize promptfoo papers
+.PHONY: install install-all test lint format validate audit audit-links build-release serve demo benchmark optimize promptfoo papers
 
 install:
 	python3 -m pip install -e '.[dev]'
@@ -17,6 +17,16 @@ format:
 
 validate:
 	prompt-playoff validate-registry --strict
+
+audit:
+	python3 scripts/audit_publication.py
+
+audit-links:
+	python3 scripts/audit_publication.py --check-links
+
+build-release:
+	python3 -m build
+	python3 scripts/audit_publication.py --artifact "$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
 
 serve:
 	prompt-playoff serve

@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from prompt_playoff.business_cases import BusinessCaseRecord
 from prompt_playoff.domain import TaskProfile
 from prompt_playoff.evals import BenchmarkReport, ComparisonReport, Scorecard
 from prompt_playoff.optimizer import OptimizationResult
@@ -47,6 +48,10 @@ class ExperimentRecord(BaseModel):
     provider: str
     model_id: str
     dataset: str
+    business_case_id: str | None = None
+    business_case_name: str | None = None
+    prompt_id: str | None = None
+    prompt_version: int | None = Field(default=None, ge=1)
     technique_ids: list[str]
     winner: str | None = None
     metrics: dict[str, MetricSnapshot]
@@ -91,6 +96,10 @@ CSV_COLUMNS = (
     "provider",
     "model_id",
     "dataset",
+    "business_case_id",
+    "business_case_name",
+    "prompt_id",
+    "prompt_version",
     "variant",
     "is_winner",
     "quality",
@@ -153,6 +162,10 @@ def experiments_csv(records: Iterable[ExperimentRecord]) -> str:
                         record.provider,
                         record.model_id,
                         record.dataset,
+                        record.business_case_id,
+                        record.business_case_name,
+                        record.prompt_id,
+                        record.prompt_version,
                         variant,
                         variant == winner,
                         snapshot.quality,
@@ -189,7 +202,13 @@ class ExperimentStore:
     def get(self, record_id: str) -> ExperimentRecord | None:
         return next((item for item in self.list() if item.id == record_id), None)
 
-    def add_benchmark(self, report: BenchmarkReport, task: TaskProfile) -> ExperimentRecord:
+    def add_benchmark(
+        self,
+        report: BenchmarkReport,
+        task: TaskProfile,
+        *,
+        business_case: BusinessCaseRecord | None = None,
+    ) -> ExperimentRecord:
         return self._add(
             kind="benchmark",
             task=task,
@@ -204,10 +223,16 @@ class ExperimentStore:
                 "seed_policy": report.seed_policy,
             },
             authored_hash=report.authored_hash,
+            business_case=business_case,
         )
 
     def add_comparison(
-        self, comparison: ComparisonReport, reports: list[BenchmarkReport], task: TaskProfile
+        self,
+        comparison: ComparisonReport,
+        reports: list[BenchmarkReport],
+        task: TaskProfile,
+        *,
+        business_case: BusinessCaseRecord | None = None,
     ) -> ExperimentRecord:
         return self._add(
             kind="comparison",
@@ -231,9 +256,16 @@ class ExperimentStore:
                 "grader_version": reports[0].grader_version if reports else None,
                 "seed_policy": reports[0].seed_policy if reports else None,
             },
+            business_case=business_case,
         )
 
-    def add_optimization(self, result: OptimizationResult, task: TaskProfile) -> ExperimentRecord:
+    def add_optimization(
+        self,
+        result: OptimizationResult,
+        task: TaskProfile,
+        *,
+        business_case: BusinessCaseRecord | None = None,
+    ) -> ExperimentRecord:
         return self._add(
             kind="optimization",
             task=task,
@@ -246,6 +278,7 @@ class ExperimentStore:
             },
             prompt=result.compiled_prompt,
             reproducibility={},
+            business_case=business_case,
         )
 
     def compare(
@@ -254,6 +287,12 @@ class ExperimentStore:
         before, after = self.get(before_id), self.get(after_id)
         if before is None or after is None:
             raise ValueError("Both experiment ids must exist")
+        if before.business_case_id != after.business_case_id:
+            raise ValueError("Choose runs from the same business case")
+        if before.prompt_id != after.prompt_id:
+            raise ValueError("Choose runs from the same prompt family")
+        if before.dataset != after.dataset:
+            raise ValueError("Choose runs measured on the same dataset")
         common = sorted(set(before.metrics) & set(after.metrics))
         selected = technique_id or (common[0] if len(common) == 1 else None)
         if selected is None or selected not in common:
@@ -295,17 +334,37 @@ class ExperimentStore:
         prompt: Any,
         reproducibility: dict[str, str | None],
         authored_hash: str | None = None,
+        business_case: BusinessCaseRecord | None = None,
     ) -> ExperimentRecord:
         clean_task = task.model_dump(mode="json", exclude={"model": {"api_key"}})
+        prompt_hash = _hash(prompt) if prompt else None
+        prompt_id = _prompt_id(technique_ids, winner)
         signature = {
             "kind": kind,
             "provider": task.model.provider,
             "model_id": task.model.model_id,
             "dataset": dataset,
             "techniques": sorted(technique_ids),
+            "business_case_id": business_case.id if business_case else None,
+            "prompt_id": prompt_id,
         }
         with advisory_lock(self.lock_path):
             records = self._load_unlocked()
+            prompt_scope = business_case.id if business_case else f"unassigned:{_hash(clean_task)}"
+            prior_prompt_records = [
+                item
+                for item in records
+                if item.prompt_id == prompt_id
+                and (item.business_case_id or f"unassigned:{item.config_hash}") == prompt_scope
+            ]
+            same_prompt = next(
+                (item for item in prior_prompt_records if item.prompt_hash == prompt_hash), None
+            )
+            prompt_version = (
+                same_prompt.prompt_version
+                if same_prompt is not None and same_prompt.prompt_version is not None
+                else max((item.prompt_version or 0 for item in prior_prompt_records), default=0) + 1
+            )
             matching = [item.version for item in records if _signature(item) == signature]
             record = ExperimentRecord(
                 id=uuid.uuid4().hex[:12],
@@ -315,11 +374,15 @@ class ExperimentStore:
                 provider=task.model.provider,
                 model_id=task.model.model_id,
                 dataset=dataset,
+                business_case_id=business_case.id if business_case else None,
+                business_case_name=business_case.name if business_case else None,
+                prompt_id=prompt_id,
+                prompt_version=prompt_version,
                 technique_ids=technique_ids,
                 winner=winner,
                 metrics=metrics,
                 config_hash=_hash(clean_task),
-                prompt_hash=_hash(prompt) if prompt else None,
+                prompt_hash=prompt_hash,
                 authored_hash=authored_hash,
                 task=clean_task,
                 dataset_revision=reproducibility.get("dataset_revision"),
@@ -360,7 +423,15 @@ def _signature(item: ExperimentRecord) -> dict[str, Any]:
         "model_id": item.model_id,
         "dataset": item.dataset,
         "techniques": sorted(item.technique_ids),
+        "business_case_id": item.business_case_id,
+        "prompt_id": item.prompt_id,
     }
+
+
+def _prompt_id(technique_ids: list[str], winner: str | None) -> str:
+    if winner in technique_ids:
+        return str(winner)
+    return technique_ids[0] if technique_ids else "prompt"
 
 
 def _hash(value: Any) -> str:

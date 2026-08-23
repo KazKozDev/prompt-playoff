@@ -43,7 +43,10 @@ const screenMeta = {
   analysis:['Evaluation', 'Significance', 'Check whether a difference between two runs is real or just noise. Paste the per-example scores and you get a confidence interval, plus the score broken down by tag.'],
   'test-lab':['Evaluation', 'Test lab', 'Challenge the same prompt by changing one condition at a time: the model that runs it or the context placed in front of it.'],
   regressions:['Evaluation', 'Regressions', 'Compare two recorded runs and fail the newer one if quality dropped, or latency rose, by more than you allow. Run it before shipping a change.'],
-  reviews:['Production', 'Reviews', 'The queue of things waiting for your yes or no: generated rows, judge verdicts, failed gates and registered releases. Nothing in it proceeds until you answer.'],
+  // Releases were taken out of this queue and must stay out of the sentence
+  // that describes it: the screen's own panel explains at length that they do
+  // not land here, and the lead above it went on promising they would.
+  reviews:['Production', 'Reviews', 'The queue of decisions a model asked a person to make: generated rows, judge verdicts and breached gates. Nothing in it proceeds until you answer. Registering a release does not land here.'],
   releases:['Production', 'Releases', 'A register of prompt versions, moved by hand from draft to tested, approved and production. Use it to freeze the exact text you shipped, and to roll back to the previous one.'],
   ship:['Production', 'Ship', 'Freeze a prompt against the run that measured it, export the manifest and the check block your repository enforces, and spot-check what production is really sending.'],
   // Named for what it does rather than for what the word "monitoring" promises:
@@ -75,7 +78,7 @@ const screenActions = {
   // The file the server writes is the whole history, so when the screen is
   // showing one set the link says which of the two it is about to hand over.
   results: () => state.experiments.length
-    ? `<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download CSV${showingOn('results') ? ' (all runs)' : ''}</a>`
+    ? '<a class="export-link" href="/v1/experiments.csv" download="prompt-playoff-history.csv">Download all runs CSV</a>'
     : '',
   logs: () => '<button type="button" class="ghost log-refresh">Refresh</button>'
 };
@@ -347,12 +350,12 @@ document.querySelectorAll('.bottom-nav a[data-screen]').forEach(link => {
  * through a menu. Only one section opens at a time, so the rail never grows
  * past ten rows, and the open one always follows where you actually are.
  *
- * The rail names the five and nothing more. Their drawings belong where a
- * section is being introduced rather than navigated: the home tile and the
- * section's own screen, which is the only place one is shown at full size.
+ * The rail names the five and nothing more, and so does everything that stands
+ * for a section elsewhere. The drawings that used to sit on the home tile and
+ * on the section's own screen went when the flat visual language did: both call
+ * sites had been painted out in CSS long before this, so the pictures were
+ * being fetched on every visit to Home and never shown once.
  * -------------------------------------------------------------------------- */
-const sectionArt = (section, size) =>
-  `<img class="section-art" src="/assets/section-${section}.webp" alt="" width="${size}" height="${size}" decoding="async">`;
 /* Which section a screen belongs to. It is read off the rail, so the rail and
  * the path can never disagree. Two screens sit outside the five: Models & keys
  * and Jobs & logs live in the rail's foot, because their door is the model in
@@ -534,6 +537,16 @@ function wireSmartStart(button, status) {
         if (node) { node.textContent = text; node.className = `${node.classList[0]} ${kind}`; }
       });
     };
+    // Both inputs, in the order the work needs them: there is nothing to
+    // measure a set of examples against until the task exists. The task was
+    // not checked at all, which only stayed invisible while the field arrived
+    // with an example already written into it.
+    if (!($('description')?.value || '').trim()) {
+      selectTab('prompt', {focus:true});
+      $('description')?.focus();
+      say('error-text', 'Describe the task first — the field is on this screen, then start again.');
+      return;
+    }
     if (!state.run.dataset) {
       selectTab('report', {focus:true});
       say('error-text', 'Choose a set of examples first — the field is on this screen, then start again.');
@@ -712,7 +725,7 @@ function sectionTiles() {
     ['s-reference', 'Docs', 'Evaluation methodology, fine-tuning trade-offs, and guides to understanding every score.',
       ['idle', `${MODE_SPECS.guides.modes.length} guides`]]
   ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
-      <span class="tile-top">${sectionArt(tab.slice(2), 34)}<strong>${esc(name)}</strong></span>
+      <span class="tile-top"><strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
       <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
     </a>`).join('');
@@ -816,59 +829,6 @@ const screenActionLabels = {
   techniques:'Browse', guides:'Read Guides', logs:'View Logs', evaluation:'Read Guide', help:'Learn More', 'prompt-vs-finetuning':'Read Guide', 'llm-or-not':'Read Guide', settings:'Set Models'
 };
 
-const sectionSpotlights = {
-  prompt: {
-    tag: 'Your Prompt',
-    statusTitle: (st) => {
-      const isReady = Boolean(st.program?.technique_id || st.chosen);
-      return `<span>Prompt Health:</span> <span class="state ${isReady ? 'ok' : 'wait'}">${isReady ? 'Ready' : 'Requires Attention'}</span><span class="info-dot" title="Prompt status">ℹ</span>`;
-    },
-    desc: (st) => st.chosen
-      ? 'Your prompt is written. Measure it on your examples, compare it with the other methods, or search for better wording.'
-      : 'No prompt yet. Describe the task in plain words and one gets written for you, using a method picked for that kind of work.'
-  },
-  examples: {
-    tag: 'Your Datasets',
-    statusTitle: (st) => {
-      const count = st.datasetSizes.size || 0;
-      return `<span>Dataset Health:</span> <span class="state ${count ? 'ok' : 'wait'}">${count ? `${plural(count, 'set')} loaded` : 'No datasets'}</span><span class="info-dot" title="Dataset health">ℹ</span>`;
-    },
-    desc: (st) => st.datasetSizes.size
-      ? 'Any set here can be measured against. If none of them looks like your real inputs, twenty rows of your own beat a public set of two hundred.'
-      : 'Nothing loaded yet. Upload a JSONL file of your own rows, import a public set, or generate rows from your task.'
-  },
-  check: {
-    tag: 'Evaluation Suite',
-    statusTitle: (st) => {
-      const count = st.experiments.length || 0;
-      return `<span>Validation Health:</span> <span class="state ${count ? 'ok' : 'idle'}">${count ? `${plural(count, 'run')} recorded` : 'Ready to test'}</span><span class="info-dot" title="Validation status">ℹ</span>`;
-    },
-    desc: (st) => st.experiments.length
-      ? 'Come here with a result you are about to act on, and check it survives another model, another context, or a confidence interval.'
-      : 'Nothing measured yet. Run the prompt on your examples first; these screens all compare something against something else.'
-  },
-  ship: {
-    tag: 'Release Gate',
-    statusTitle: (st) => {
-      const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
-      return `<span>Release Health:</span> <span class="state ${pending ? 'wait' : 'ok'}">${pending ? `${pending} Pending` : 'All Clear'}</span><span class="info-dot" title="Release status">ℹ</span>`;
-    },
-    desc: (st) => {
-      const pending = st.quality.reviews.filter(item => item.status === 'pending').length;
-      return pending
-        ? `${pending} waiting for a yes or no. Nothing moves until you give one.`
-        : 'Nothing is waiting. Register a version, compare two recorded runs, or spot-check the inputs you have seen since.';
-    }
-  },
-  reference: {
-    tag: 'Knowledge Base',
-    statusTitle: (st) => {
-      const count = st.techniqueCatalog?.size || 0;
-      return `<span>Documentation:</span> <span class="state ok">${count ? `${count} Techniques · 3 Guides` : '3 Guides'}</span><span class="info-dot" title="Documentation">ℹ</span>`;
-    },
-    desc: () => 'Techniques catalogue, evaluation methodology, and architectural decisions.'
-  }
-};
 
 function renderSectionTile(entry) {
   const {tab, mode:requestedMode, label} = typeof entry === 'string' ? {tab:entry} : entry;
@@ -1178,35 +1138,23 @@ function renderSection(tab) {
     mode:link.dataset.mode || null,
     label:link.textContent.trim()
   })) : [];
-  const spotlight = sectionSpotlights[section];
-
-  if (!spotlight) {
-    return `<div class="tiles">${screens.map(screenTile).join('')}</div>`;
-  }
-
-  const statusTitle = typeof spotlight.statusTitle === 'function' ? spotlight.statusTitle(state) : spotlight.statusTitle;
-  const desc = typeof spotlight.desc === 'function' ? spotlight.desc(state) : spotlight.desc;
-
-  return `
-    <div class="section-showcase">
-      <div class="section-spotlight">
-        <div class="spotlight-aura">
-          <div class="spotlight-ring">
-            ${sectionArt(section, 218)}
-          </div>
-          <span class="spotlight-tag">${esc(spotlight.tag)}</span>
-        </div>
-        <div class="spotlight-footer">
-          <div class="spotlight-status-title">${statusTitle}</div>
-          <p class="spotlight-desc">${esc(desc)}</p>
-        </div>
-      </div>
-      <div class="section-tiles-stack">
-        ${screens.map(renderSectionTile).join('')}
-      </div>
+  return `<div class="section-showcase">
+      <div class="section-tiles-stack">${screens.map(renderSectionTile).join('')}</div>
       ${renderSectionMap(section)}
-    </div>
-  `;
+    </div>`;
+}
+
+/* The two things Smart run consumes, said before it is pressed rather than
+ * after. Neither of them is on this screen — the task is written in the
+ * composer and the set is chosen on the screens that run something — so the
+ * tile states what the button is holding. A control whose inputs live
+ * elsewhere either shows them or refuses as a surprise. */
+function smartRunHolds() {
+  const task = ($('description')?.value || '').trim();
+  return [
+    task ? ['ok', 'Task written'] : ['wait', 'No task yet'],
+    state.run.dataset ? ['ok', state.run.dataset] : ['wait', 'No examples chosen']
+  ];
 }
 
 function renderHome() {
@@ -1215,6 +1163,8 @@ function renderHome() {
         <div>
           <strong>Smart run</strong>
           <p>Writes the prompt, measures it on your examples, improves it over a few rounds, and stops at the first step that needs you. Minutes, not seconds.</p>
+          <span class="tile-foot">${smartRunHolds().map(([tone, label]) =>
+            `<span class="state ${tone}">${esc(label)}</span>`).join('')}</span>
         </div>
         <button type="button" class="primary smart-start" data-testid="smart-run">Start</button>
       </div>
@@ -1454,6 +1404,9 @@ function activateDetailTab() {
 function renderDetail() {
   renderDetailPanel(state.tab);
   activateDetailTab();
+  // Every path that changes the prompt ends in a render, so this is the one
+  // place the draft has to be written down from.
+  rememberDraft();
 }
 
 function showDetailMessage(tab, body) {
@@ -1517,7 +1470,14 @@ function updateWorkspaceContext() {
   const prompt = technique ? (state.techniqueCatalog.get(technique)?.title || technique) : 'Draft';
   const dataset = state.run.dataset || 'Not selected';
   const model = state.settings.evaluation.model_id.trim() || 'Not set';
-  [['context-prompt', prompt], ['context-dataset', dataset], ['context-model', model], ['rail-model-name', model]].forEach(([id, value]) => { const node=$(id); if (node) node.textContent=value; });
+  const businessCase = typeof activeBusinessCase === 'function' ? activeBusinessCase() : null;
+  const caseName = businessCase?.name || 'Unassigned';
+  [['context-case', caseName], ['context-prompt', prompt], ['context-dataset', dataset], ['context-model', model], ['rail-model-name', model]].forEach(([id, value]) => { const node=$(id); if (node) node.textContent=value; });
+  const caseLink = document.querySelector('[data-testid="context-case-link"]');
+  if (caseLink) {
+    caseLink.title = businessCase ? `Open results for ${caseName}` : 'This prompt is not assigned to a business case';
+    caseLink.setAttribute('aria-label', caseLink.title);
+  }
   // The chip is labelled Prompt and the value beside it is the name of a method,
   // which read as the method being the prompt. It is not: it is which method the
   // prompt was written with, and that is what the chip now says in full.
@@ -1767,8 +1727,9 @@ function renderLogs() {
 }
 
 async function refreshHistory() {
+  state.historyError = '';
   try { state.experiments = await api('/v1/experiments'); }
-  catch (e) { state.experiments = []; state.experimentComparison = {error:e.message}; }
+  catch (e) { state.experiments = []; state.historyError = e.message; }
   if (state.tab === 'results') renderDetailPanel('results');
 }
 
@@ -1803,39 +1764,224 @@ function renderExperimentComparison(result) {
   return `<div class="stage-title">Version comparison · ${esc(result.technique_id)}</div><div class="table-scroll" role="region" aria-label="Version comparison table" tabindex="0"><table><thead><tr><th>Metric</th><th>Before</th><th>After</th><th>Delta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+const UNASSIGNED_CASE_ID = '__unassigned__';
+
+function historyCaseKey(record) {
+  return record.business_case_id == null || record.business_case_id === ''
+    ? UNASSIGNED_CASE_ID : String(record.business_case_id);
+}
+
+function historyPromptKey(record) {
+  return String(record.prompt_id || record.technique_id || record.technique_ids?.join('+') || record.winner || 'legacy-prompt');
+}
+
+function historyPromptName(record) {
+  const legacyId = record.technique_id || record.technique_ids?.join(' + ') || record.winner;
+  const id = record.prompt_id || legacyId || 'Legacy prompt';
+  const title = record.technique_id ? techniqueTitle(record.technique_id) : id;
+  return title === id ? String(id) : `${title} · ${id}`;
+}
+
+function portfolioCases(records) {
+  const rowsByCase = new Map();
+  records.forEach(record => {
+    const key = historyCaseKey(record);
+    if (!rowsByCase.has(key)) rowsByCase.set(key, []);
+    rowsByCase.get(key).push(record);
+  });
+  const cases = state.businessCases.map(item => ({
+    id:String(item.id), name:item.name, description:item.description || '', records:rowsByCase.get(String(item.id)) || []
+  }));
+  rowsByCase.forEach((caseRecords, id) => {
+    if (id === UNASSIGNED_CASE_ID || cases.some(item => item.id === id)) return;
+    cases.push({id, name:caseRecords[0]?.business_case_name || 'Unknown case', description:'', records:caseRecords});
+  });
+  cases.sort((a, b) => {
+    const aDate = a.records[0]?.created_at || ''; const bDate = b.records[0]?.created_at || '';
+    return bDate.localeCompare(aDate) || a.name.localeCompare(b.name);
+  });
+  cases.push({id:UNASSIGNED_CASE_ID, name:'Unassigned', description:'Legacy and deliberately unassigned runs', records:rowsByCase.get(UNASSIGNED_CASE_ID) || []});
+  return cases;
+}
+
+function latestQuality(records) {
+  const metric = records.length ? experimentMetric(records[0]) : null;
+  return metric ? Number(metric.quality).toFixed(3) : '—';
+}
+
+function historyPromptGroups(records) {
+  const groups = new Map();
+  records.forEach(record => {
+    const key = historyPromptKey(record);
+    if (!groups.has(key)) groups.set(key, {id:key, name:historyPromptName(record), records:[]});
+    groups.get(key).records.push(record);
+  });
+  return [...groups.values()];
+}
+
+// A pair is comparable only when the server has the same measured series on
+// both records. Optimization records often contain `baseline` and a search
+// winner while benchmark records contain the authored technique, so sharing a
+// prompt family alone is not enough to offer a working comparison.
+function historyComparisonSeries(records) {
+  const byTechnique = new Map();
+  records.forEach(record => Object.keys(record.metrics || {}).forEach(technique => {
+    if (!byTechnique.has(technique)) byTechnique.set(technique, []);
+    byTechnique.get(technique).push(record);
+  }));
+  return [...byTechnique.entries()]
+    .filter(([, items]) => items.length > 1)
+    .map(([id, items]) => ({id, records:items}));
+}
+
 function renderHistory() {
-  if (!state.experiments.length) return '<div class="empty">No recorded benchmarks, comparisons, or optimizations yet.</div>';
-  // Arriving from the section map means arriving to look at one set: the chart,
-  // the two version pickers and the table all speak about that set alone, so
-  // the line you came to read is not one point among eleven.
-  // Arrived on a set, or on one run: a release names the run that justified it,
-  // and the link has to land on that row rather than on the whole file.
+  // A route may point at one dataset or run, but it still lands inside the
+  // portfolio that owns it rather than replacing the portfolio with a flat list.
   const only = showingOn('results');
-  const records = only
+  const pointed = only ? state.experiments.find(item => item.id === only) : null;
+  const visibleRecords = only
     ? state.experiments.filter(item => item.dataset === only || item.id === only)
     : state.experiments;
-  if (!records.length) {
+  if (only && !visibleRecords.length) {
     return `<div class="empty">No run recorded under ${esc(only)}. Records live in this server's history
       file; one registered before the file was cleared cannot be shown.</div>`;
   }
-  // One row per measured variant, numbers unformatted. The server writes the
-  // file; the link only names it.
-  const options = records.map(item => `<option value="${esc(item.id)}">${esc(item.created_at)} · ${esc(item.kind)} v${item.version} · ${esc(item.model_id)}</option>`).join('');
-  const rows = records.map(item => { const m = experimentMetric(item); return `<tr><td>v${item.version}</td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${esc(item.dataset)}</td><td>${m ? m.quality.toFixed(3) : '—'}</td><td>${m ? m.mean_latency_seconds.toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${m.mean_cost_usd.toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
-  return `${historyChart(records)}
-    <div class="quality-form"><label for="history-before">Before<select id="history-before">${options}</select></label><label for="history-after">After<select id="history-after">${options}</select></label></div>
-    <div class="form-actions"><button type="button" class="primary history-compare">Compare versions</button></div>
-    ${renderExperimentComparison(state.experimentComparison)}
-    <p class="table-scroll-hint" id="history-scroll-hint">Scroll the table horizontally to inspect every measurement.</p>
-    <div class="table-scroll" role="region" aria-label="Experiment history table" aria-describedby="history-scroll-hint" tabindex="0"><table><thead><tr><th>Version</th><th>Recorded</th><th>Kind</th><th>Model</th><th>Dataset</th><th>Quality</th><th>Latency s</th><th>Mean cost</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const records = only ? visibleRecords : state.experiments;
+  const cases = portfolioCases(records);
+  const validCaseIds = new Set(cases.map(item => item.id));
+  if (pointed) state.historyCaseId = historyCaseKey(pointed);
+  if (!state.historyCaseId || !validCaseIds.has(state.historyCaseId)) {
+    // A named case that has runs, then any group that has runs, and only then
+    // an empty one. The middle step is what was missing: one empty business
+    // case on the server was enough to open this screen on it, so the body said
+    // "No runs yet" directly under a summary counting every run there is — all
+    // of them one row below, under Unassigned. A screen that lands on nothing
+    // while it is reporting fifty-three of something is answering a question
+    // nobody asked.
+    state.historyCaseId = cases.find(item => item.id !== UNASSIGNED_CASE_ID && item.records.length)?.id
+      || cases.find(item => item.records.length)?.id
+      || cases.find(item => item.id !== UNASSIGNED_CASE_ID)?.id || UNASSIGNED_CASE_ID;
+  }
+  const selectedCase = cases.find(item => item.id === state.historyCaseId) || cases[cases.length - 1];
+  const prompts = historyPromptGroups(selectedCase.records);
+  if (pointed) state.historyPromptId = historyPromptKey(pointed);
+  if (!prompts.some(item => item.id === state.historyPromptId)) state.historyPromptId = prompts[0]?.id || null;
+  const selectedPrompt = prompts.find(item => item.id === state.historyPromptId) || null;
+  const datasets = selectedPrompt ? [...new Set(selectedPrompt.records.map(item => item.dataset))] : [];
+  if (pointed) state.historyDataset = pointed.dataset;
+  if (!datasets.includes(state.historyDataset)) state.historyDataset = datasets[0] || null;
+  const datasetRecords = selectedPrompt?.records.filter(item => item.dataset === state.historyDataset) || [];
+  const compareSeries = historyComparisonSeries(datasetRecords);
+  if (!compareSeries.some(item => item.id === state.historyTechnique)) state.historyTechnique = compareSeries[0]?.id || null;
+  const selectedSeries = compareSeries.find(item => item.id === state.historyTechnique) || null;
+  const comparableRecords = selectedSeries?.records || [];
+  const latest = datasetRecords[0] || selectedPrompt?.records[0] || null;
+  const versions = new Set(state.experiments.map(item => `${historyCaseKey(item)}:${historyPromptKey(item)}:${item.prompt_version ?? item.version}`));
+  const datasetCount = new Set(state.experiments.map(item => item.dataset)).size;
+  const summary = `<dl class="portfolio-summary" aria-label="Portfolio summary">
+    <!-- Named for what it counts. "Cases: 1" over a list of two rows read as a
+         list that had lost one; the second row is Unassigned, which is where
+         runs go when no case was named and therefore not a case. -->
+    <div><dt>Business cases</dt><dd>${cases.filter(item => item.id !== UNASSIGNED_CASE_ID).length}</dd></div>
+    <div><dt>Prompt versions</dt><dd>${versions.size}</dd></div>
+    <div><dt>Datasets</dt><dd>${datasetCount}</dd></div>
+    <div><dt>Runs</dt><dd>${state.experiments.length}</dd></div>
+  </dl>`;
+  const caseList = cases.map(item => `<button type="button" class="portfolio-case-row${item.id === UNASSIGNED_CASE_ID ? ' unassigned' : ''}" data-history-case="${esc(item.id)}" aria-current="${item.id === selectedCase.id ? 'true' : 'false'}">
+    <span><strong>${esc(item.name)}</strong><small>${item.records.length ? `Latest ${latestQuality(item.records)}` : 'No runs yet'}</small></span>
+    <span class="case-health"><b>${item.records.length}</b><small>${item.records.length ? historyDate(item.records[0].created_at) : '—'}</small></span>
+  </button>`).join('');
+  const promptList = prompts.map(item => {
+    const versionCount = new Set(item.records.map(record => record.prompt_version ?? record.version)).size;
+    return `<button type="button" class="portfolio-prompt-row" data-history-prompt="${esc(item.id)}" aria-current="${item.id === state.historyPromptId ? 'true' : 'false'}">
+      <strong>${esc(item.name)}</strong><small>${plural(versionCount, 'version')} · ${plural(item.records.length, 'run')}</small>
+    </button>`;
+  }).join('');
+  const datasetList = datasets.map(name => {
+    const count = selectedPrompt.records.filter(item => item.dataset === name).length;
+    return `<button type="button" class="portfolio-dataset-row" data-history-dataset="${esc(name)}" aria-current="${name === state.historyDataset ? 'true' : 'false'}"><span>${esc(name)}</span><small>${count}</small></button>`;
+  }).join('');
+  const seriesOptions = compareSeries.map(item => `<option value="${esc(item.id)}"${item.id === state.historyTechnique ? ' selected' : ''}>${esc(techniqueTitle(item.id))} · ${esc(item.id)}</option>`).join('');
+  const options = comparableRecords.map(item => `<option value="${esc(item.id)}">prompt v${esc(item.prompt_version ?? item.version)} · ${esc(historyDate(item.created_at))} · ${esc(item.model_id)}</option>`).join('');
+  const runRows = datasetRecords.map(item => { const m = experimentMetric(item); return `<tr${pointed?.id === item.id ? ' class="pointed-run"' : ''}><td><code>v${esc(item.prompt_version ?? item.version)}</code></td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${m ? Number(m.quality).toFixed(3) : '—'}</td><td>${m ? Number(m.mean_latency_seconds).toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${Number(m.mean_cost_usd).toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
+  const compareKey = selectedCase && selectedPrompt && state.historyDataset
+    ? `${selectedCase.id}:${selectedPrompt.id}:${state.historyDataset}:${state.historyTechnique || ''}` : '';
+  const comparison = state.historyCompareContext === compareKey ? renderExperimentComparison(state.experimentComparison) : '';
+  const detail = selectedPrompt ? `<nav class="portfolio-lineage" aria-label="Selected result lineage">
+      <span>${esc(selectedCase.name)}</span><b>/</b><span>${esc(selectedPrompt.name)} <em>v${esc(latest?.prompt_version ?? latest?.version ?? '—')}</em></span><b>/</b><span>${esc(state.historyDataset)}</span><b>/</b><span>${latest ? `run ${esc(historyDate(latest.created_at))}` : 'no run'}</span>
+    </nav>
+    <div class="portfolio-depth">
+      <nav class="portfolio-dataset-list" aria-label="Datasets for selected prompt"><div class="portfolio-rail-label">Datasets</div>${datasetList}</nav>
+      <section class="portfolio-runs" aria-label="Runs for ${esc(state.historyDataset)}">
+        <div class="portfolio-section-head"><div><span class="eyebrow">Measured on</span><h3>${esc(state.historyDataset)}</h3></div><span class="meta">${plural(datasetRecords.length, 'compatible run')}</span></div>
+        ${historyChart(datasetRecords)}
+        ${selectedSeries ? `<div class="quality-form portfolio-compare">
+          <label class="wide" for="history-technique">Measured series<select id="history-technique">${seriesOptions}</select></label>
+          <label for="history-before">Before<select id="history-before">${options}</select></label>
+          <label for="history-after">After<select id="history-after">${options}</select></label>
+          <button type="button" class="primary history-compare">Compare versions</button>
+          <div class="meta compare-status wide" role="status" aria-live="polite"></div>
+        </div>` : `<p class="meta portfolio-compare-note">No two runs share the same measured series yet. Run another version on this dataset to compare it here.</p>`}
+        ${comparison}
+        <p class="table-scroll-hint" id="history-scroll-hint">Scroll horizontally to inspect every measurement.</p>
+        <div class="table-scroll" role="region" aria-label="Compatible experiment runs" aria-describedby="history-scroll-hint" tabindex="0"><table><thead><tr><th>Prompt</th><th>Recorded</th><th>Kind</th><th>Model</th><th>Quality</th><th>Latency s</th><th>Mean cost</th></tr></thead><tbody>${runRows}</tbody></table></div>
+      </section>
+    </div>` : `<div class="empty">${selectedCase.id === UNASSIGNED_CASE_ID ? 'No unassigned runs.' : 'No runs yet. Assign a prompt to this case in Prompt Studio, then measure it.'}</div>`;
+  const status = state.historyError
+    ? `<div class="error portfolio-status">Run history could not be loaded: ${esc(state.historyError)}</div>`
+    : state.businessCasesError
+      ? `<div class="warning portfolio-status">Saved cases could not be loaded. Recorded runs remain available: ${esc(state.businessCasesError)}</div>`
+      : state.businessCasesLoading ? '<div class="meta portfolio-status">Loading saved business cases…</div>' : '';
+  return `${status}${summary}<div class="portfolio-workspace">
+    <aside class="portfolio-cases" aria-label="Business cases"><div class="portfolio-rail-label">Business cases</div>${caseList}</aside>
+    <section class="portfolio-case-detail"><header class="portfolio-case-head"><div><span class="eyebrow">Selected case</span><h2>${esc(selectedCase.name)}</h2><p>${esc(selectedCase.description || 'Prompt runs grouped by version and dataset.')}</p></div></header>
+      <div class="portfolio-prompt-layout"><nav class="portfolio-prompt-list" aria-label="Prompts in ${esc(selectedCase.name)}"><div class="portfolio-rail-label">Prompts</div>${promptList || '<p class="meta">No prompts measured</p>'}</nav><div class="portfolio-prompt-detail">${detail}</div></div>
+    </section>
+  </div>`;
 }
 
 function wireHistoryControls(panel) {
+  panel.querySelectorAll('[data-history-case]').forEach(button => button.addEventListener('click', () => {
+    state.historyCaseId = button.dataset.historyCase; state.historyPromptId = null; state.historyDataset = null; state.historyTechnique = null;
+    state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');
+  }));
+  panel.querySelectorAll('[data-history-prompt]').forEach(button => button.addEventListener('click', () => {
+    state.historyPromptId = button.dataset.historyPrompt; state.historyDataset = null; state.historyTechnique = null;
+    state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');
+  }));
+  panel.querySelectorAll('[data-history-dataset]').forEach(button => button.addEventListener('click', () => {
+    state.historyDataset = button.dataset.historyDataset; state.historyTechnique = null;
+    state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');
+  }));
+  panel.querySelector('#history-technique')?.addEventListener('change', event => {
+    state.historyTechnique = event.currentTarget.value;
+    state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');
+  });
   const before = panel.querySelector('#history-before'); const after = panel.querySelector('#history-after');
-  if (before && state.experiments[1]) before.value = state.experiments[1].id;
-  panel.querySelector('.history-compare')?.addEventListener('click', async () => {
-    try { state.experimentComparison = await api('/v1/experiments/compare', {before_id:before.value, after_id:after.value}); }
-    catch (e) { state.experimentComparison = {error:e.message}; }
+  if (before && before.options.length > 1) before.selectedIndex = 1;
+  const compareButton = panel.querySelector('.history-compare');
+  const compareStatus = panel.querySelector('.compare-status');
+  const syncComparisonButton = () => {
+    if (!compareButton || !before || !after) return;
+    const same = before.value === after.value;
+    compareButton.disabled = same;
+    if (same && compareStatus) compareStatus.textContent = 'Choose two different runs.';
+    else if (compareStatus && !compareStatus.textContent.startsWith('Compar')) compareStatus.textContent = '';
+  };
+  before?.addEventListener('change', syncComparisonButton);
+  after?.addEventListener('change', syncComparisonButton);
+  syncComparisonButton();
+  compareButton?.addEventListener('click', async () => {
+    const context = `${state.historyCaseId}:${state.historyPromptId}:${state.historyDataset}:${state.historyTechnique || ''}`;
+    compareButton.disabled = true;
+    if (compareStatus) compareStatus.textContent = 'Comparing these two recorded runs…';
+    try {
+      state.experimentComparison = await api('/v1/experiments/compare', {
+        before_id:before.value, after_id:after.value, technique_id:state.historyTechnique
+      });
+    }
+    catch (e) { state.experimentComparison = {error:`Comparison failed: ${e.message}`}; }
+    state.historyCompareContext = context;
     renderDetailPanel('results');
   });
 }

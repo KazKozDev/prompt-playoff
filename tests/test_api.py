@@ -277,6 +277,32 @@ def test_home_exposes_stable_lifecycle_shell_destinations(client):
     assert 'id="context-prompt"' in html
 
 
+def test_results_exposes_business_case_prompt_dataset_run_lineage(client):
+    html = client.get("/").text
+    selector = client.get("/assets/selector.js").text
+    measurements = client.get("/assets/measurements.js").text
+    navigation = client.get("/assets/navigation.js").text
+
+    assert 'id="business-case-select"' in html
+    assert 'id="business-case-name"' in html
+    assert 'id="context-case"' in html
+    assert "api('/v1/business-cases')" in selector
+    assert "api('/v1/business-cases', {name, description:description.trim()})" in selector
+    assert "business_case_id:state.businessCaseId || null" in selector
+    for action in ("/v1/benchmark", "/v1/compare", "/v1/optimize"):
+        request = measurements.split(f"api('{action}'", 1)[1].split("});", 1)[0]
+        assert "businessCaseRequestFields()" in request
+    assert "portfolioCases(records)" in navigation
+    assert "historyPromptGroups(selectedCase.records)" in navigation
+    assert "selectedPrompt.records.filter(item => item.dataset" in navigation
+    assert "historyCaseKey(item)}:${historyPromptKey(item)}" in navigation
+    assert "historyComparisonSeries(datasetRecords)" in navigation
+    assert "const options = comparableRecords.map" in navigation
+    assert "technique_id:state.historyTechnique" in navigation
+    assert 'aria-label="Selected result lineage"' in navigation
+    assert "Legacy and deliberately unassigned runs" in navigation
+
+
 def test_add_dataset_unifies_sources_and_keeps_legacy_hash_aliases(client):
     html = client.get("/").text
     navigation = client.get("/assets/navigation.js").text
@@ -482,13 +508,21 @@ def test_static_asset_route_rejects_unknown_or_unsupported_files(client, path):
 
 
 @pytest.mark.parametrize("section", ["prompt", "examples", "check", "ship", "reference"])
-def test_section_drawings_are_packaged_and_served(client, section):
-    # The frontend builds these paths from the section id, so nothing else here
-    # would notice a drawing that was left out of the package or misnamed.
-    response = client.get(f"/assets/section-{section}.webp")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("image/webp")
-    assert response.content[:4] == b"RIFF"
+def test_no_section_drawing_is_fetched_for_a_screen_that_cannot_show_one(client, section):
+    """The drawings went when the flat visual language arrived.
+
+    Both call sites — the home tile and the section spotlight — had been painted
+    out in CSS, so five images were fetched on every visit to Home and never
+    drawn once. This is the old packaging test turned around: the guarantee now
+    is that nothing asks for them.
+    """
+    javascript = client.get("/assets/navigation.js").text
+    styles = client.get("/assets/styles.css").text
+
+    assert f"section-{section}.webp" not in javascript
+    assert "sectionArt" not in javascript
+    assert "spotlight" not in javascript
+    assert "spotlight" not in styles
 
 
 def test_home_exposes_the_complete_technique_catalog(client):
@@ -1152,6 +1186,10 @@ def test_adopting_a_template_needs_either_material_or_the_input_slot(client):
 
 def test_a_recorded_benchmark_hands_back_the_run_it_was_filed_as(client):
     """A release has to be able to name the run that justified it."""
+    business_case = client.post(
+        "/v1/business-cases",
+        json={"name": "Entity extraction", "description": "Extract entities"},
+    ).json()
     task = client.post(
         "/v1/recommend", json={"description": "Extract entities", "model": MODEL}
     ).json()["task"]
@@ -1162,6 +1200,7 @@ def test_a_recorded_benchmark_hands_back_the_run_it_was_filed_as(client):
             "task": task,
             "technique_id": "structured.schema-first",
             "dataset": "entity-extraction",
+            "business_case_id": business_case["id"],
         },
     )
     job = wait_for_job(client, started.json()["id"])
@@ -1169,7 +1208,10 @@ def test_a_recorded_benchmark_hands_back_the_run_it_was_filed_as(client):
 
     experiment_id = job["result"]["experiment_id"]
     assert experiment_id
-    assert client.get(f"/v1/experiments/{experiment_id}").status_code == 200
+    experiment = client.get(f"/v1/experiments/{experiment_id}")
+    assert experiment.status_code == 200
+    assert experiment.json()["business_case_id"] == business_case["id"]
+    assert experiment.json()["prompt_version"] == 1
 
 
 def test_optimize_refuses_a_prompt_written_from_another_technique(client):
@@ -1422,3 +1464,164 @@ def test_a_saved_technique_travels_with_the_client_that_needs_it(client):
 def test_importing_something_that_is_not_a_technique_is_refused(client):
     assert client.post("/v1/techniques/import", json={"yaml": ": : ["}).status_code == 422
     assert client.post("/v1/techniques/import", json={"yaml": "id: x\n"}).status_code == 422
+
+
+def test_the_empty_method_panel_does_not_offer_a_method_to_switch_to(client):
+    """A screen with nothing on it must not describe the screen with something.
+
+    The lead read "One is in use; you can switch to another at any time" and
+    printed directly above "No method satisfies the constraints you set", which
+    invited the user to switch between nothing and nothing. The empty state has
+    its own lead, and it names where the constraints are set: they come from the
+    task and from Settings, and neither is on this panel.
+    """
+    selector = client.get("/assets/selector.js").text
+
+    assert "const RESULTS_LEAD_EMPTY =" in selector
+    assert "resultsHead(RESULTS_LEAD_EMPTY)" in selector
+    # The head takes the lead as an argument, so there is one heading, not two
+    # copies of one drifting apart.
+    assert "function resultsHead(lead = RESULTS_LEAD)" in selector
+    assert selector.count("<h2>Method</h2>") == 1
+    assert "Change one of them and create the prompt again." in selector
+
+
+def test_the_library_can_pick_the_set_it_says_it_picks(client):
+    """The screen's lead promises the choice; one field has to receive it.
+
+    The library said "this is where you pick what a score will be computed
+    against" while the only control that wrote ``state.run.dataset`` was the
+    ``Measure against`` select on the three run screens. Two doors onto one
+    field are fine; a door that opens onto nothing is what this guards.
+    """
+    platform = client.get("/assets/platform.js").text
+    measurements = client.get("/assets/measurements.js").text
+
+    assert "function measureAgainstBand(name)" in platform
+    assert "measureAgainstBand(only)" in platform
+    assert "${measureCell(name)}${deleteCell(name)}" in platform
+    # The same field the run screens write, so the two can never disagree.
+    assert "state.run.dataset = name;" in platform
+    assert "field.dataset.runField] = field.value" in measurements
+
+
+def test_the_set_field_is_grouped_by_where_the_rows_came_from(client):
+    """A flat alphabetical list opened on the class the screen warns about."""
+    measurements = client.get("/assets/measurements.js").text
+
+    groups = measurements.split("const DATASET_GROUPS = [", 1)[1].split("];", 1)[0]
+    assert groups.index("Your sets") < groups.index("Ready-made datasets by business task")
+    business = groups.index("Ready-made datasets by business task")
+    assert business < groups.index("Shipped with the tool")
+    assert "<optgroup label=" in measurements
+
+
+def test_results_opens_on_a_case_that_has_runs(client):
+    """One empty business case was enough to open the screen on nothing.
+
+    The body said "No runs yet" under a summary counting every run on the
+    server, all of them one row below under Unassigned.
+    """
+    navigation = client.get("/assets/navigation.js").text
+
+    opener = "if (!state.historyCaseId || !validCaseIds.has(state.historyCaseId)) {"
+    default = navigation.split(opener, 1)[1].split("}", 1)[0]
+    named_with_runs = default.index("item.id !== UNASSIGNED_CASE_ID && item.records.length")
+    any_with_runs = default.index("cases.find(item => item.records.length)")
+    named_empty = default.index("cases.find(item => item.id !== UNASSIGNED_CASE_ID)?.id")
+    assert named_with_runs < any_with_runs < named_empty
+
+
+def test_reviews_does_not_promise_the_releases_it_refuses(client):
+    """The lead listed registered releases; the screen's own panel denies them."""
+    navigation = client.get("/assets/navigation.js").text
+
+    lead = navigation.split("reviews:['Production', 'Reviews', '", 1)[1].split("']", 1)[0]
+    assert "registered releases" not in lead
+    assert "Registering a release does not land here." in lead
+    assert "Releases do not land here" in client.get("/assets/platform.js").text
+
+
+def test_smart_run_consumes_nothing_the_reader_has_not_seen(client):
+    """Its one input used to arrive already filled in, on a hidden screen.
+
+    The task field carried the same sentence as both its placeholder and its
+    value, and Smart run — pressed from Home, where the composer is hidden —
+    checked only the dataset. So the default outcome of the app's headline
+    button was a full measure-and-optimize cycle over the example text.
+    """
+    html = client.get("/").text
+    navigation = client.get("/assets/navigation.js").text
+
+    field = html.split('<textarea id="description"', 1)[1].split("</textarea>", 1)[0]
+    assert "placeholder=" in field
+    assert field.rstrip().endswith(">"), "the field must open empty"
+
+    smart = navigation.split("function wireSmartStart(", 1)[1].split("\nconst routeAliases", 1)[0]
+    # The task is asked for before the examples, because there is nothing to
+    # measure a set against until it exists.
+    task_check = smart.index("Describe the task first")
+    dataset_check = smart.index("Choose a set of examples first")
+    assert task_check < dataset_check
+    # Each refusal lands on the screen carrying the field it names.
+    assert "selectTab('prompt', {focus:true});" in smart
+    assert "selectTab('report', {focus:true});" in smart
+    # And Home says what the button is holding before it is pressed.
+    assert "function smartRunHolds()" in navigation
+    assert "smartRunHolds().map" in navigation
+
+
+def test_the_opening_run_is_one_the_scorecard_will_stand_behind(client):
+    """At one run per example the verdict disowns its own number."""
+    core = client.get("/assets/core.js").text
+    measurements = client.get("/assets/measurements.js").text
+
+    assert "repeats:3" in core.split("run:{", 1)[1].split("}", 1)[0]
+    # The caution that made the old default wrong is still there to be earned.
+    assert "One run per example" in measurements
+
+
+def test_ship_does_not_offer_a_form_it_will_refuse(client):
+    """The register form stood under its own "author a prompt first" band."""
+    platform = client.get("/assets/platform.js").text
+
+    releases = platform.split("function renderReleases()", 1)[1].split("\nfunction ", 1)[0]
+    assert '${state.program ? `<section class="screen-body">' in releases
+    assert "Author a prompt before registering a release." in releases
+    # Reading the register needs no prompt, so that half is not behind the gate.
+    assert releases.index("<h2>The register</h2>") > releases.index("${state.program ?")
+
+
+def test_the_narrow_window_keeps_what_every_number_depends_on(client):
+    """Hiding the artifacts bar took the model picker with it."""
+    styles = client.get("/assets/styles.css").text
+
+    assert ".context-artifacts { display:none; }" not in styles
+    assert ".context-case { display:none !important; }" not in styles
+    assert ".context-artifacts { order:1; flex:1 0 100%;" in styles
+
+
+def test_a_structured_right_answer_is_shown_as_json_not_as_object_object(client):
+    """`String({})` is "[object Object]", which is the one thing a row cannot say.
+
+    Both surfaces that print a dataset row — the library's preview table and the
+    measurement report's example cards — used to stringify the expected answer
+    directly, so every extraction set showed "[object Object]" in the column
+    headed "Right answer". The fix is one shared helper, not two: a second copy
+    is how these two screens would drift apart again.
+    """
+    core = client.get("/assets/core.js").text
+    platform = client.get("/assets/platform.js").text
+    measurements = client.get("/assets/measurements.js").text
+
+    assert "const asText = value =>" in core
+    assert "JSON.stringify(value, null, 2)" in core
+
+    assert "const cell = value => esc(asText(value).slice(0, 240));" in platform
+    assert "const cut = (value, limit) => esc(asText(value).slice(0, limit));" in measurements
+
+    # No second implementation, and nothing left rendering a row through String().
+    assert "JSON.stringify(value, null, 2)" not in platform
+    assert "JSON.stringify(value, null, 2)" not in measurements
+    for source in (platform, measurements):
+        assert "String(value ?? '')" not in source

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Auditable provenance for all 50 business cases: every card resolves to a dated public source,
+  exposes whether the exact wording is verified, qualified, or unverified, and links the source in
+  the Dataset Library instead of presenting a vendor claim as an uncited fact.
+- Dataset redistribution metadata with pinned Hugging Face revisions, upstream licence URLs,
+  `THIRD_PARTY_NOTICES.md`, and source-only catalogue entries for datasets whose terms do not permit
+  republication. The release artifact audit prevents those rows from entering a wheel.
+- Complete technique catalogue and technique-card assets, HTTP API guide, environment template,
+  business-case evidence policy, and automated local/external publication link checks.
+- Release artifact validation, checksums, GitHub Release creation, and an attached SBOM in the tag
+  workflow.
+
 - `selector-eval`: the ranking is now graded, and the grade is a number. Every weight in the
   selector was set by hand in reaction to a case somebody noticed, and nothing in the project could
   say whether any of them helped. Wherever the measurement store holds two techniques benchmarked
@@ -163,6 +174,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The prompt is readable at every step, and survives the tab that wrote it. The compiled prompt was
+  held in page memory alone and drawn on one screen: the measurement column faded out after 260
+  characters, the run history stores a preview and a fingerprint, the release register stored a
+  fingerprint by itself, and a reload emptied the one screen that had the text — so the prompt was
+  unopenable everywhere, including where it had just been written. The draft is now written to the
+  browser and read back before the first render (the task profile is not, because it carries an API
+  key); the column beside a measurement opens the whole text where it claims "this exact text is
+  what runs"; and a fingerprint in the release register opens the wording it stands for.
+- A release manifest carries the prompt as text. The workbench registers a compiled program, and
+  that shape fell through every branch of the manifest's reader to a JSON dump — so the one file
+  meant to carry the exact wording out of this tool carried it in the least readable form the tool
+  can produce.
 - Approving a release is refused when the examples have changed since the run it cites. The numbers
   described rows that no longer exist, and a bar cleared on them proves nothing about today's data.
 - A comparison run records the fingerprint of the arm that was authored, so a release citing one is
@@ -354,5 +377,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cloud provider failures now identify the credential or endpoint configuration to fix.
 
 [Unreleased]: https://github.com/KazKozDev/prompt-playoff/compare/v0.3.0...HEAD
+[0.4.0]: https://github.com/KazKozDev/prompt-playoff/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/KazKozDev/prompt-playoff/releases/tag/v0.3.0
 [0.2.0]: https://github.com/KazKozDev/prompt-playoff/releases/tag/v0.2.0

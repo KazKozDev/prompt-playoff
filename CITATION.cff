@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: If you use Prompt Playoff in published work, please cite the software release.
+title: Prompt Playoff
+type: software
+authors:
+  - family-names: Kazakov Kozlov
+    given-names: Artem
+repository-code: https://github.com/KazKozDev/prompt-playoff
+url: https://github.com/KazKozDev/prompt-playoff
+license: MIT
+version: 0.4.0

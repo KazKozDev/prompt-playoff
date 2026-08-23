@@ -31,6 +31,7 @@ import yaml
 from prompt_playoff.registry import default_data_root
 
 MATCHES = ("direct", "partial", "none")
+EVIDENCE_STATUSES = ("verified_official", "qualified_official", "unverified")
 
 
 class CatalogError(RuntimeError):
@@ -58,6 +59,36 @@ def _check(payload: dict[str, Any], path: Path) -> None:
     """
     known = {item["name"] for item in payload["sets"]}
     referenced = {item["id"] for item in payload.get("references", [])}
+    sources = payload.get("case_sources")
+    if not isinstance(sources, list) or not sources:
+        raise CatalogError(f"{path}: business catalogue has no case_sources")
+    source_ids: set[str] = set()
+    for source in sources:
+        for field in ("id", "title", "publisher", "url", "source_type", "accessed_at"):
+            if not str(source.get(field, "")).strip():
+                raise CatalogError(f"{path}: case source has no {field}")
+        if source["id"] in source_ids:
+            raise CatalogError(f"{path}: duplicate case source {source['id']}")
+        source_ids.add(source["id"])
+        if not str(source["url"]).startswith("https://"):
+            raise CatalogError(f"{path}: case source {source['id']} is not HTTPS")
+    for spec in payload["sets"]:
+        for field in (
+            "license",
+            "license_status",
+            "license_url",
+            "redistribution",
+            "source_revision",
+        ):
+            if not str(spec.get(field, "")).strip():
+                raise CatalogError(f"{path}: dataset {spec['name']} has no {field}")
+        if not isinstance(spec.get("bundled"), bool):
+            raise CatalogError(f"{path}: dataset {spec['name']} has no boolean bundled flag")
+        if spec["bundled"] and spec["license_status"] != "verified_upstream":
+            raise CatalogError(
+                f"{path}: dataset {spec['name']} cannot be bundled with "
+                f"license_status {spec['license_status']!r}"
+            )
     # A task may route to a business set or to one of the packaged benchmarks
     # named alongside them. Anything else is a typo, and a typo here degrades
     # into "No dataset" — a gap the screen states as if it were deliberate.
@@ -109,6 +140,17 @@ def _check(payload: dict[str, Any], path: Path) -> None:
             for ref in case.get("references", []):
                 if ref not in referenced:
                     raise CatalogError(f"{path}: case {case['number']} cites unknown ref {ref}")
+            if case.get("source_ref") not in source_ids:
+                raise CatalogError(
+                    f"{path}: case {case['number']} cites unknown source {case.get('source_ref')!r}"
+                )
+            if case.get("evidence_status") not in EVIDENCE_STATUSES:
+                raise CatalogError(
+                    f"{path}: case {case['number']} has invalid evidence_status "
+                    f"{case.get('evidence_status')!r}"
+                )
+            if not str(case.get("evidence_note", "")).strip():
+                raise CatalogError(f"{path}: case {case['number']} has no evidence_note")
 
 
 def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any]:
@@ -117,6 +159,7 @@ def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any
     `available` maps dataset name -> example count, as /v1/datasets reports it.
     """
     payload = _load(root)
+    sources = {source["id"]: source for source in payload["case_sources"]}
     homes = _homes(payload)
     sets = [
         {
@@ -166,6 +209,8 @@ def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any
             {
                 **case,
                 "story": " ".join(case["story"].split()),
+                "evidence_note": " ".join(case["evidence_note"].split()),
+                "source_record": sources[case["source_ref"]],
                 "sets": list(case.get("sets", [])),
                 "references": list(case.get("references", [])),
                 # A case is measurable when at least one of its sets is here —
@@ -205,6 +250,7 @@ def catalog(available: dict[str, int], root: str | None = None) -> dict[str, Any
         "groups": groups,
         "sets": sets,
         "references": payload.get("references", []),
+        "case_sources": payload.get("case_sources", []),
         "counts": {
             "cases": sum(group["counts"]["cases"] for group in groups),
             "measurable": sum(group["counts"]["measurable"] for group in groups),
