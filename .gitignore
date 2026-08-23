@@ -15,6 +15,7 @@ uv.lock
 # Local agent/tooling state: machine-specific paths, not project configuration
 .claude/
 .playwright-cli/
+.serena/
 benchmark-results/*.json
 benchmark-results/*.lock
 benchmark-results/*.corrupt-*
@@ -28,6 +29,7 @@ references/papers/
 # Local working material: design drafts and the source document behind the
 # business catalogue. Kept on disk, out of the history.
 design-preview/
+assets/design/
 llm_business_50_cases_datasets.pdf
 node_modules/
 .npm-cache/
