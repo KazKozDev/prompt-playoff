@@ -115,6 +115,102 @@ async function createPrompt() {
   return Boolean(state.chosen);
 }
 
+/* --------------------------------------------------------------------------
+ * Deleting the prompt.
+ *
+ * Everything else here creates or rewrites; there was no way to end up with
+ * nothing. Writing a second prompt meant typing over the first one and pressing
+ * Create, which leaves the measurements of the first one on their screens —
+ * scorecards, a matrix, a judge verdict — all of them now about a prompt that
+ * no longer exists anywhere. So the delete takes the prompt and everything
+ * measured from it in page memory, in one go.
+ *
+ * What it does not touch is the history. A recorded run is a measurement that
+ * happened; deleting the prompt does not un-happen it, and Results is filed
+ * under business cases, which are archived rather than erased for exactly that
+ * reason. Releases are not touched either — a frozen version is deleted on its
+ * own row, where the register is.
+ * -------------------------------------------------------------------------- */
+function renderPromptDelete() {
+  const host = $('composer-delete');
+  if (!host) return;
+  const holding = Boolean(state.program || state.chosen || $('description')?.value.trim());
+  host.hidden = !holding;
+  if (!holding) { state.pendingPromptDelete = false; host.innerHTML = ''; return; }
+  host.innerHTML = state.pendingPromptDelete
+    ? `<span class="delete-confirm">
+        <button type="button" class="danger" data-action="delete-prompt-now">Delete for good</button>
+        <button type="button" class="ghost" data-action="delete-prompt-cancel">Keep</button>
+        <small>The prompt, the task, the recommendations and every number measured
+          on this machine's memory. Recorded runs and registered releases stay.</small>
+      </span>`
+    : '<button type="button" class="ghost" data-action="delete-prompt-arm">Delete this prompt</button>';
+}
+
+function deletePrompt() {
+  state.program = null;
+  state.chosen = null;
+  state.ranking = null;
+  state.recs = [];
+  state.task = null;
+  state.provenance = null;
+  // The three measurements are of the prompt that has just gone. Left behind,
+  // each screen would report a number for something with no text to read.
+  state.report = state.comparison = state.optimization = null;
+  state.readinessNotice = null;
+  state.adoptError = '';
+  state.showing = null;
+  state.inputSource = 'task';
+  // The judge verdict, the model matrix and the context runs are the same kind
+  // of leftover, held on the platform screens rather than here.
+  if (typeof q === 'object' && q) q.results = {};
+  $('description').value = '';
+  $('task-error').textContent = '';
+  $('business-case-error').textContent = '';
+  const mode = document.querySelector('input[name="creation-mode"][value="task"]');
+  if (mode) mode.checked = true;
+  if ($('task-helper')) $('task-helper').innerHTML = CREATION_HELP.task;
+  // The case is a folder for runs, and the runs stay — but the composer is
+  // blank now, so it says Unassigned rather than naming a case for a prompt
+  // that is not there.
+  state.businessCaseId = '';
+  renderBusinessCaseControl();
+  $('results').innerHTML = '<div class="empty">The recommended method and alternatives will appear here.</div>';
+  state.pendingPromptDelete = false;
+  forgetDraft();
+  // A screen is drawn once and then left alone, so clearing the state above
+  // does not by itself reach the screens already holding a picture of it: the
+  // prompt would still be readable on the screen it was deleted from, and the
+  // scorecard would still be sitting on Measurement. Each screen that was
+  // reporting on the prompt is marked to be drawn again the next time it is
+  // opened. The rest are left alone — a half-typed dataset upload has nothing
+  // to do with this.
+  PROMPT_DEPENDENT_SCREENS.forEach(tab => {
+    const panel = document.querySelector(`[data-tab-panel="${tab}"]`);
+    if (panel) panel.dataset.rendered = 'false';
+  });
+  // Land on the screen where a prompt starts, and draw it now rather than
+  // leaving the deleted prompt on it for as long as nobody navigates away.
+  selectTab('prompt');
+  renderDetail();
+  renderPromptDelete();
+  $('description').focus();
+}
+
+// Everything that reads the prompt or a number measured on it. Ship is not
+// here: a release froze its own copy of the text and goes on being the record
+// of something that shipped, whatever the composer holds now.
+const PROMPT_DEPENDENT_SCREENS = ['prompt', 'report', 'comparison', 'optimization',
+  'results', 'test-lab', 'judge', 'reviews'];
+
+document.addEventListener('click', event => {
+  const arm = event.target.closest('[data-action="delete-prompt-arm"]');
+  if (arm) { state.pendingPromptDelete = true; return renderPromptDelete(); }
+  const cancel = event.target.closest('[data-action="delete-prompt-cancel"]');
+  if (cancel) { state.pendingPromptDelete = false; return renderPromptDelete(); }
+  if (event.target.closest('[data-action="delete-prompt-now"]')) deletePrompt();
+});
+
 $('select-btn').addEventListener('click', createPrompt);
 
 $('business-case-select')?.addEventListener('change', event => {
@@ -358,6 +454,9 @@ async function chooseTechnique(id, focusReady = false) {
 $('description').addEventListener('input', () => {
   state.task = null;
   if ($('description').value.trim()) $('task-error').textContent = '';
+  // Typing the first character is the first moment there is something to
+  // delete, and deleting it back to nothing is the last.
+  renderPromptDelete();
 });
 // On change rather than on input: the draft carries the compiled prompt with
 // it, and that is not worth rewriting once per keystroke.

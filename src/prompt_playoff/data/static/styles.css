@@ -156,6 +156,8 @@
     .tile.wide:hover { transform:none; }
     .tile.wide p { margin:4px 0 0; max-width:64ch; color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
     .tile.wide strong { font-size:var(--fs-lead); font-weight:600; }
+    .smart-tile-dataset { max-width:360px; }
+    .smart-tile-dataset label { margin:10px 0 4px; }
     button.smart-start { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:10px 22px; }
     /* A long chain has to say which link it is on, or it reads as a hang. */
     .smart-status { grid-column:1/-1; margin:0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
@@ -468,6 +470,8 @@
     .rail-smart-status:empty { display:none; }
     .rail-smart-status.done { color:var(--good); }
     .rail-smart-status.error-text { color:var(--bad); }
+    .rail-smart-dataset label { margin:10px 0 4px; font-size:var(--fs-micro); }
+    .rail-smart-dataset select { padding:8px 10px; font-size:var(--fs-sm); }
     /* The rail carries no marks at all: it is a list of names, and a name is
        what you are looking for there. Weight, indent, and the caret are what
        separate its two levels. */
@@ -1033,10 +1037,11 @@
     .prompt-msg.picked pre { background:var(--accent-soft); }
     .prompt-foot { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:12px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
     .prompt-foot strong { color:var(--text-2); font-weight:600; }
-    /* The one step that has not been taken yet, at the foot of the thing it is
-       about. It is a claim about the prompt, not a part of it, so it sits on the
-       sunken ground below the panel's own footer rather than inside the prompt. */
-    .next-step { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:18px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--r-md); background:var(--sunken); }
+    /* The one step that has not been taken yet, stated above the prompt it is
+       about — the foot of a compiled prompt is off the bottom of the screen. It
+       is a claim about the prompt, not a part of it, so it sits on the sunken
+       ground, banded off from the messages that follow it. */
+    .next-step { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:18px 0 24px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--r-md); background:var(--sunken); }
     .next-step strong { display:block; color:var(--text); font-size:var(--fs-base); font-weight:600; }
     .next-step small { display:block; margin-top:3px; max-width:52ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     /* A filled grey chip, not the accent: this leads to the screen that runs
@@ -1610,7 +1615,15 @@
        above left them sharing an edge, which read as one wide split control. */
     .dataset-list td.row-actions button + button { margin-left:6px; }
     .dataset-list td.row-actions button[aria-current="true"] { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-ink); }
-    .delete-confirm { display:inline-flex; gap:6px; }
+    /* Under the button that creates, separated by a rule: it is the same
+       subject and the opposite move, and it is not a second thing to try. */
+    .composer-delete { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+    .composer-delete > button { width:auto; margin:0; padding:6px 10px; }
+    .delete-confirm { display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    /* What the click costs, beside the button that costs it. A row in a table
+       has no room for a paragraph, and a confirmation that does not say what it
+       destroys is a second click and nothing more. */
+    .delete-confirm small { flex-basis:100%; max-width:34ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     button.danger { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
     button.danger:hover:not(:disabled) { border-color:var(--bad); background:var(--bad); color:var(--panel); }
 
@@ -1760,6 +1773,8 @@
     }
     .rail-smart strong { font-size:12px; }
     .rail-smart small { font-size:10px; }
+    .rail-smart-dataset label { margin:8px 0 3px; font-size:10px; }
+    .rail-smart-dataset select { padding:6px 8px; font-size:11px; }
     button.rail-smart-start { margin-top:8px; padding:6px 9px; }
     .sidebar-system { gap:0; padding-bottom:6px; }
     .sidebar-system a { min-height:28px; padding:5px 7px; border-radius:3px; font-size:11px; }

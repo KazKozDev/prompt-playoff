@@ -112,6 +112,7 @@
     </div>
     <div class="rail-smart">
       <strong>Smart run</strong><small>Write, measure, improve — one pass</small>
+      <div class="rail-smart-dataset" data-testid="rail-smart-dataset"></div>
       <button type="button" class="primary block rail-smart-start" data-testid="smart-run">Start</button>
       <p class="rail-smart-status" role="status" aria-live="polite"></p>
     </div>
@@ -250,6 +251,11 @@
         <p class="task-helper" id="task-helper">We will include your exact words in the finished prompt.</p>
         <div class="task-error" id="task-error" role="alert" aria-live="assertive"></div>
         <button id="select-btn" class="primary block" type="button" data-action="create-prompt" data-testid="create-prompt">Create my prompt</button>
+        <!-- The way back out. Written from state rather than sitting here as
+             markup, because there is nothing to delete until there is a prompt,
+             and a Delete button over an empty composer is a button that does
+             nothing to something that is not there. -->
+        <div class="composer-delete" id="composer-delete" data-testid="delete-prompt" hidden></div>
 
       </section>
 

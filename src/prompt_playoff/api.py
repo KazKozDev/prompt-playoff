@@ -2139,6 +2139,22 @@ def act_on_release(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.delete("/v1/releases/{release_id}", response_model=ReleaseRecord)
+def delete_release(release_id: str, request: Request) -> ReleaseRecord:
+    """Erase, unlike a business case, which is archived.
+
+    A case is what recorded runs are filed under, so erasing one strands their
+    lineage. A release is a row this app keeps about a prompt somebody froze;
+    the record of what shipped is the exported manifest, the `checks:` block and
+    the commit that carries them. So a wrong row here can go, and the run it
+    cited is untouched — the numbers were never the register's to hold.
+    """
+    try:
+        return _quality(request).delete_release(release_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/v1/drift", response_model=DriftReport)
 def analyze_drift(payload: DriftRequest) -> DriftReport:
     return production_drift(payload)

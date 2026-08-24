@@ -997,6 +997,38 @@ function releaseGateControl(release) {
     <button data-release-action="approve"${blocked ? ' disabled title="' + esc(gate.reason || '') + '"' : ''}>Approve</button>`;
 }
 
+/* Taking a row out of the register for good.
+ *
+ * Every other control on a release row moves it along the line — test, approve,
+ * release, roll back, deprecate — and none of them can express the row that
+ * should never have existed: a name typed twice, a prompt frozen against the
+ * wrong run, a draft registered to see what the button did. Deprecating those
+ * leaves them in the table forever, saying something that was never true.
+ *
+ * Armed before it fires, like a dataset, and for the same reason: this is the
+ * only control here that destroys something. What it destroys is a row — the
+ * run the release cited stays in the history, and the manifest already exported
+ * is a file in somebody's repository, which is where the record of a shipped
+ * prompt was supposed to live anyway.
+ */
+function releaseDeleteControl(release) {
+  if (q.pendingReleaseDelete !== release.id) {
+    return `<button type="button" class="ghost" data-release-delete-arm="${esc(release.id)}"
+      title="Take this version out of the register">Delete</button>`;
+  }
+  // A production row is the app's answer to "what is live". Deleting it leaves
+  // that name with no answer, and no earlier version to roll back to, so the
+  // sentence says so before the click rather than the column going quiet after.
+  const cost = release.status === 'production'
+    ? `${release.name} has nothing in production after this, and nothing to roll back to.`
+    : 'The run it cited stays in the history; only this row goes.';
+  return `<span class="delete-confirm">
+      <button type="button" class="danger" data-release-delete-now="${esc(release.id)}">Delete for good</button>
+      <button type="button" class="ghost" data-release-delete-cancel="1">Keep</button>
+      <small>${esc(cost)}</small>
+    </span>`;
+}
+
 /* The frozen text itself, under the fingerprint that stands for it.
  *
  * The row said `a41f0c9e2b` and nothing else. The whole point of a release is
@@ -1029,7 +1061,7 @@ function renderReleases() {
   // buttons, and holds only the releases sitting in that stage.
   const only = showingOn('ship');
   const releases = only ? q.releases.filter(item => item.status === only) : q.releases;
-  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><button type="button" class="link-hash" data-release-text="${esc(item.id)}" aria-expanded="false" title="Read the text this fingerprint stands for"><code>${esc(item.prompt_hash.slice(0, 10))}</code></button></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}<button class="ghost" data-release-action="export" title="Download the manifest and the checks block">Export</button></div></td></tr>${releasePromptRow(item)}`).join('');
+  const rows = releases.map(item => `<tr data-release-id="${esc(item.id)}"${item.status === 'production' ? ' class="row-win"' : ''}><td>${esc(item.name)} v${item.version}</td><td><span class="status-chip ${esc(item.status)}">${esc(item.status)}</span></td><td>${esc(item.technique_id)}</td><td><button type="button" class="link-hash" data-release-text="${esc(item.id)}" aria-expanded="false" title="Read the text this fingerprint stands for"><code>${esc(item.prompt_hash.slice(0, 10))}</code></button></td><td>${releaseEvidenceCell(item)}</td><td><div class="quality-actions">${item.status === 'draft' ? '<button data-release-action="test">Test</button>' : ''}${item.status === 'tested' ? releaseGateControl(item) : ''}${item.status === 'approved' ? '<button data-release-action="release">Release</button>' : ''}${item.status === 'production' ? '<button data-release-action="rollback">Rollback</button><button class="ghost" data-release-action="deprecate">Deprecate</button>' : ''}<button class="ghost" data-release-action="export" title="Download the manifest and the checks block">Export</button>${releaseDeleteControl(item)}</div></td></tr>${releasePromptRow(item)}`).join('');
   // With no prompt to register, the band below is the whole of what this half
   // of the screen can say. The form used to stand under it anyway — a heading
   // claiming to register "the prompt you are holding" when nothing was being
@@ -2346,6 +2378,23 @@ function wirePlatformTab(tab, panel) {
     if (!row) return;
     row.hidden = !row.hidden;
     button.setAttribute('aria-expanded', String(!row.hidden));
+  }));
+  // Arming, disarming and firing the delete. Only the last one reaches the
+  // server; the first two redraw the table and nothing else.
+  panel.querySelectorAll('[data-release-delete-arm]').forEach(button => button.addEventListener('click', () => {
+    q.pendingReleaseDelete = button.dataset.releaseDeleteArm;
+    renderDetailPanel(parentForLegacyTab(tab));
+  }));
+  panel.querySelectorAll('[data-release-delete-cancel]').forEach(button => button.addEventListener('click', () => {
+    q.pendingReleaseDelete = null;
+    renderDetailPanel(parentForLegacyTab(tab));
+  }));
+  panel.querySelectorAll('[data-release-delete-now]').forEach(button => button.addEventListener('click', () => {
+    const id = button.dataset.releaseDeleteNow;
+    return qualityAction(tab, async () => {
+      await api(`/v1/releases/${id}`, undefined, 'DELETE');
+      q.pendingReleaseDelete = null;
+    });
   }));
   panel.querySelectorAll('[data-release-action]').forEach(button => button.addEventListener('click', () => {
     const id = button.closest('tr').dataset.releaseId;

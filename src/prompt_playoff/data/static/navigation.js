@@ -420,8 +420,11 @@ function renderSectionCounts() {
   });
 }
 
-// The home tiles report state that arrives after the first paint.
+// The home tiles report state that arrives after the first paint. The rail
+// card is not a tile — it is on screen no matter which tab this is — so it is
+// refreshed here too rather than only when home happens to be open.
 function refreshHomeIfVisible() {
+  refreshRailDatasetField();
   if (state.tab === 'home' || sectionTabs.includes(state.tab)) renderDetailPanel(state.tab);
 }
 
@@ -527,13 +530,84 @@ document.addEventListener('click', event => {
   if (crumb && crumb.dataset.crumb) selectTab(crumb.dataset.crumb, {focus:true});
 });
 
+/* A refusal has to expire with the thing it refused.
+ *
+ * Smart run's two refusals were written into the rail card and left there: the
+ * card said "Describe the task first" under the button for the rest of the
+ * session, past the task being typed, past the prompt being compiled, past the
+ * measurement. A red line that outlives its own cause is worse than no line,
+ * because the one place that reports the button's state is the place that is
+ * now lying about it.
+ *
+ * So the line records which field it is waiting for, and goes the moment that
+ * field arrives. Nothing else is cleared: progress and completion lines are
+ * about a run that really happened.
+ */
+function smartRefusalMet(waitingFor) {
+  if (waitingFor === 'task') return !!($('description')?.value || '').trim();
+  if (waitingFor === 'dataset') return !!state.run.dataset;
+  return false;
+}
+
+function clearSmartRefusal() {
+  document.querySelectorAll('[data-waiting-for]').forEach(node => {
+    if (!smartRefusalMet(node.dataset.waitingFor)) return;
+    delete node.dataset.waitingFor;
+    node.textContent = '';
+    node.className = node.classList[0] || '';
+  });
+}
+
+// The task arrives by typing, which is the one input no other redraw notices.
+let taskFitDebounce = null;
+document.addEventListener('input', event => {
+  if (event.target.id !== 'description') return;
+  clearSmartRefusal();
+  // Debounced: the suggestion is read off whole words, so redrawing on every
+  // keystroke would rebuild three selects to answer a question that has not
+  // finished being typed yet.
+  clearTimeout(taskFitDebounce);
+  taskFitDebounce = setTimeout(() => { if (typeof refreshDatasetSuggestions === 'function') refreshDatasetSuggestions(); }, 300);
+});
+
+/* The set to measure against can now be chosen from three places — the rail
+ * card, the home tile and the run setup on Report — because Smart run reads
+ * whichever one was filled in last. They all write the one field this reads,
+ * so a choice made in any of them has to show up in the other two, or picking
+ * a set on the card and then opening Report would look like the pick did not
+ * take. */
+function syncDatasetFields(source) {
+  document.querySelectorAll('[data-run-field="dataset"]').forEach(field => {
+    if (field !== source) field.value = state.run.dataset || '';
+  });
+}
+
+// The rail card is not a tab panel — nothing re-renders it when the dataset
+// list changes underneath it, so it gets its own redraw rather than inheriting
+// one meant for whichever screen is open.
+function refreshRailDatasetField() {
+  const host = document.querySelector('.rail-smart-dataset');
+  if (host) host.innerHTML = datasetField('rail-run-dataset');
+}
+
+document.addEventListener('change', event => {
+  const field = event.target.closest('[data-run-field="dataset"]');
+  if (!field) return;
+  state.ownRowsNote = '';
+  state.run.dataset = field.value;
+  syncDatasetFields(field);
+  updateEstimates();
+  updateWorkspaceContext();
+  refreshActions();
+});
+
 /* One chain, two doors: the rail card and the home tile run the same thing.
  *
- * Both doors can be pressed from anywhere, and the chain reads two things that
- * live on particular screens — the task, out of the composer, and the set of
- * examples, out of the run setup. So a refusal here has to be a refusal you can
- * act on: the button goes to the screen carrying the missing field before it
- * says what is missing, rather than naming a field that is not on screen.
+ * Both doors can be pressed from anywhere, and the chain reads two things: the
+ * set of examples, which is now a field on the door itself, and the task, which
+ * still only exists on the composer — writing one deserves more than a field
+ * borrowed onto a card. So only that refusal has to leave the door it was
+ * pressed on; the other one just points at the field beside it.
  */
 function wireSmartStart(button, status) {
   button?.addEventListener('click', async () => {
@@ -541,9 +615,15 @@ function wireSmartStart(button, status) {
     // away from home. The rail card is on screen throughout, so every word is
     // said there too and the run is never running silently.
     const rail = document.querySelector('.rail-smart-status');
-    const say = (kind, text) => {
+    // `waitingFor` names the field a refusal is holding out for, so the line
+    // can retire itself once that field is filled.
+    const say = (kind, text, waitingFor = null) => {
       [status, status === rail ? null : rail].forEach(node => {
-        if (node) { node.textContent = text; node.className = `${node.classList[0]} ${kind}`; }
+        if (!node) return;
+        node.textContent = text;
+        node.className = `${node.classList[0]} ${kind}`;
+        if (waitingFor) node.dataset.waitingFor = waitingFor;
+        else delete node.dataset.waitingFor;
       });
     };
     // Both inputs, in the order the work needs them: there is nothing to
@@ -553,12 +633,14 @@ function wireSmartStart(button, status) {
     if (!($('description')?.value || '').trim()) {
       selectTab('prompt', {focus:true});
       $('description')?.focus();
-      say('error-text', 'Describe the task first — the field is on this screen, then start again.');
+      say('error-text', 'Describe the task first — the field is on this screen, then start again.', 'task');
       return;
     }
+    // No navigation for this one: the field the button needs is the field
+    // right above it, on both doors, so pointing at it beats leaving for it.
     if (!state.run.dataset) {
-      selectTab('report', {focus:true});
-      say('error-text', 'Choose a set of examples first — the field is on this screen, then start again.');
+      button.closest('.smart-tile, .rail-smart')?.querySelector('[data-run-field="dataset"]')?.focus();
+      say('error-text', 'Choose a set of examples first — the field above.', 'dataset');
       return;
     }
     if (state.tab !== 'prompt') selectTab('prompt');
@@ -733,11 +815,16 @@ function sectionTiles() {
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
     ['s-reference', 'Docs', 'Evaluation methodology, fine-tuning trade-offs, and guides to understanding every score.',
       ['idle', `${MODE_SPECS.guides.modes.length} guides`]]
-  ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
+  // Each tile used to open the section's own hub, one click short of anything
+  // you could actually do — so it opens where that hub's own "next step" link
+  // would have sent you instead. The hub is still there for whoever wants the
+  // section whole; the breadcrumb above every screen in it still leads back.
+  ].map(([tab, name, lead, [tone, label]]) => { const next = sectionNextTarget(tab.slice(2));
+    return `<a class="tile" href="${next.href}" ${next.attrs}>
       <span class="tile-top"><strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
       <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
-    </a>`).join('');
+    </a>`; }).join('');
 }
 
 // What a tile says is not what the screen says. A tile is read while scanning
@@ -1079,10 +1166,21 @@ function stockBubbles(items) {
   return shown;
 }
 
+// Where "next" points to, as an href plus the data attributes the global
+// click handler reads for it — shared by the section map's own next-step link
+// and by the home tiles, which jump straight there instead of stopping at the
+// section hub first.
+function sectionNextTarget(section) {
+  const [tab, label, hint, showing, mode] = sectionNextStep[section]();
+  const href = mode ? canonicalModePath(tab, mode, showing) : `#${tab}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
+  const attrs = `data-global-tab="${tab}" data-screen="${tab}"${mode ? ` data-mode="${esc(mode)}"` : ''}${showing ? ` data-showing="${esc(showing)}"` : ''}`;
+  return {tab, label, hint, href, attrs};
+}
+
 function renderSectionMap(section) {
   const stock = sectionStock[section]?.();
   if (!stock) return '';
-  const [nextTab, nextLabel, nextHint, nextShowing, nextMode] = sectionNextStep[section]();
+  const next = sectionNextTarget(section);
   const bubbles = stockBubbles(stock.items);
   const packed = packCircles(bubbles.map(item => item.value));
   // The tally of everything that did not fit can outweigh any single thing in
@@ -1128,11 +1226,10 @@ function renderSectionMap(section) {
       </div>
       ${plot}
       ${bubbles.length ? `<p class="map-legend">${esc(stock.legend)}</p>` : ''}
-      <a class="map-next" href="${nextMode ? canonicalModePath(nextTab, nextMode, nextShowing) : `#${nextTab}${nextShowing ? `/${encodeURIComponent(nextShowing)}` : ''}`}"
-        data-global-tab="${nextTab}" data-screen="${nextTab}"${nextMode ? ` data-mode="${esc(nextMode)}"` : ''}${nextShowing ? ` data-showing="${esc(nextShowing)}"` : ''}>
+      <a class="map-next" href="${next.href}" ${next.attrs}>
         <span class="map-next-kicker">Next step</span>
-        <strong>${esc(nextLabel)}</strong>
-        <small>${esc(nextHint)}</small>
+        <strong>${esc(next.label)}</strong>
+        <small>${esc(next.hint)}</small>
       </a>
     </aside>`;
 }
@@ -1153,27 +1250,24 @@ function renderSection(tab) {
     </div>`;
 }
 
-/* The two things Smart run consumes, said before it is pressed rather than
- * after. Neither of them is on this screen — the task is written in the
- * composer and the set is chosen on the screens that run something — so the
- * tile states what the button is holding. A control whose inputs live
- * elsewhere either shows them or refuses as a surprise. */
+/* The one thing Smart run still cannot take here: the task is written in the
+ * composer, a page of its own, and that stays a click away. The set is not —
+ * it is one field, so it is on the card itself now, and the button only ever
+ * has one reason left to refuse. */
 function smartRunHolds() {
   const task = ($('description')?.value || '').trim();
-  return [
-    task ? ['ok', 'Task written'] : ['wait', 'No task yet'],
-    state.run.dataset ? ['ok', state.run.dataset] : ['wait', 'No examples chosen']
-  ];
+  return task ? ['ok', 'Task written'] : ['wait', 'No task yet'];
 }
 
 function renderHome() {
+  const [tone, label] = smartRunHolds();
   return `<div class="tiles">
       <div class="tile wide smart-tile">
         <div>
           <strong>Smart run</strong>
           <p>Writes the prompt, measures it on your examples, improves it over a few rounds, and stops at the first step that needs you. Minutes, not seconds.</p>
-          <span class="tile-foot">${smartRunHolds().map(([tone, label]) =>
-            `<span class="state ${tone}">${esc(label)}</span>`).join('')}</span>
+          <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
+          <div class="smart-tile-dataset">${datasetField('home-run-dataset')}</div>
         </div>
         <button type="button" class="primary smart-start" data-testid="smart-run">Start</button>
       </div>
@@ -1418,6 +1512,9 @@ function renderDetail() {
   // of the prompt standing on screens already drawn are brought up to date.
   rememberDraft();
   if (typeof refreshPromptBands === 'function') refreshPromptBands();
+  // The composer offers Delete only while there is something to delete, so it
+  // is written from the same place the prompt is written down.
+  if (typeof renderPromptDelete === 'function') renderPromptDelete();
 }
 
 function showDetailMessage(tab, body) {

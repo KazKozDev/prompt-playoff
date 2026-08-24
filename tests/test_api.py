@@ -1623,12 +1623,55 @@ def test_smart_run_consumes_nothing_the_reader_has_not_seen(client):
     task_check = smart.index("Describe the task first")
     dataset_check = smart.index("Choose a set of examples first")
     assert task_check < dataset_check
-    # Each refusal lands on the screen carrying the field it names.
+    # The task still only exists on the composer, so its refusal still leaves
+    # for it. The set is now a field on the card the button lives on, so its
+    # refusal points at that field instead of leaving for a different screen.
     assert "selectTab('prompt', {focus:true});" in smart
-    assert "selectTab('report', {focus:true});" in smart
+    assert "querySelector('[data-run-field=\"dataset\"]')?.focus();" in smart
     # And Home says what the button is holding before it is pressed.
     assert "function smartRunHolds()" in navigation
-    assert "smartRunHolds().map" in navigation
+
+
+def test_a_smart_run_refusal_expires_with_the_field_it_named(client):
+    """The rail card kept its refusal for the rest of the session.
+
+    Both of Smart run's refusals were written into the one line that reports
+    the button's state and left there — "Describe the task first" stayed under
+    the button past the task being typed, past the prompt being compiled, past
+    the measurement. So each refusal now records the field it is waiting for,
+    and the line retires itself once that field arrives.
+    """
+    navigation = client.get("/assets/navigation.js").text
+    measurements = client.get("/assets/measurements.js").text
+
+    smart = navigation.split("function wireSmartStart(", 1)[1].split("\nconst routeAliases", 1)[0]
+    # Neither refusal is printed without naming what would satisfy it.
+    assert "'Describe the task first" in smart and "'task');" in smart
+    assert "'Choose a set of examples first" in smart and "'dataset');" in smart
+    assert "node.dataset.waitingFor = waitingFor" in smart
+
+    # And the line is cleared by both of the things that can satisfy it: typing
+    # the task, and any redraw that follows a dataset being chosen.
+    assert "function clearSmartRefusal()" in navigation
+    assert "if (event.target.id !== 'description') return;" in navigation
+    assert "clearSmartRefusal();" in navigation
+    assert "clearSmartRefusal();" in measurements.split("function refreshActions(", 1)[1]
+
+
+def test_the_next_step_is_stated_before_the_prompt_and_not_under_it(client):
+    """At the foot of a compiled prompt, the next step is off the screen.
+
+    The block naming the one step not yet taken sat after the messages, the
+    footer and the notes: on the rendered page it landed at 919px of a 2418px
+    column, below the fold and behind a wall of monospace. The only pointer out
+    of the screen was in its least-read place, so it stands above the prompt
+    now, beside the copy buttons.
+    """
+    measurements = client.get("/assets/measurements.js").text
+
+    program = measurements.split("function renderProgram(", 1)[1].split("\nfunction ", 1)[0]
+    assert program.count("${nextStep()}") == 1
+    assert program.index("${nextStep()}") < program.index("${stages}")
 
 
 def test_the_opening_run_is_one_the_scorecard_will_stand_behind(client):

@@ -61,6 +61,7 @@ function renderProgram(p) {
       <div class="export-actions">${demos ? `<button type="button" class="copy-btn" data-action="drop-demos">Remove ${plural(demos, 'example')}</button>` : ''}<button type="button" class="copy-btn" data-runtime-export="python">Export Python</button><button type="button" class="copy-btn" data-runtime-export="typescript">Export TypeScript</button><button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button></div>
     </div>
     <div class="copy-status" data-copy-status="compiled" role="status" aria-live="polite"></div>
+    ${nextStep()}
     ${demos ? `<p class="prompt-lead">${plural(demos, 'worked example')} sit ahead of your request — the search
       found ${demos > 1 ? 'them' : 'it'} helped and kept ${demos > 1 ? 'them' : 'it'}. Your own text is untouched
       underneath, and removing ${demos > 1 ? 'them' : 'it'} leaves exactly what you wrote.</p>` : ''}
@@ -73,8 +74,7 @@ function renderProgram(p) {
         <div>${esc(p.technique_id)} v${esc(p.technique_version)} · strategy ${esc(p.strategy)} · ${p.expected_calls} model call(s) · validators: ${esc(p.validators.join(', ') || 'none')}</div>
       </details>
     </footer>
-    ${notes}
-    ${nextStep()}`;
+    ${notes}`;
 }
 
 /* --------------------------------------------------------------------------
@@ -82,10 +82,17 @@ function renderProgram(p) {
  *
  * The screen ended at a copy button, and the whole argument of the tool — that
  * a prompt nobody measured is a prompt nobody can defend — was left to whoever
- * thought to open the rail. It is stated here instead, at the foot of the thing
- * it is about, and it names the state the prompt is actually in: unmeasured,
- * measured, or measured and improved. Only the step that has not been taken is
- * offered, so the block disappears rather than turning into a row of buttons.
+ * thought to open the rail. It is stated on the screen instead, and it names
+ * the state the prompt is actually in: unmeasured, measured, or measured and
+ * improved. Only the step that has not been taken is offered, so the block
+ * disappears rather than turning into a row of buttons.
+ *
+ * It sits under the copy buttons rather than at the foot of the prompt, because
+ * the foot of a compiled prompt is a screen and a half down: measured on the
+ * rendered page, the block landed at 919px of a 2418px column, below the fold
+ * and behind a wall of monospace. The two things you can do with a prompt that
+ * has just appeared — take it away, or find out whether it works — now stand
+ * together, where the eye already is.
  * -------------------------------------------------------------------------- */
 function nextStep() {
   const step = (tab, title, lead, label) => `<aside class="next-step" data-testid="next-step">
@@ -486,29 +493,89 @@ const DATASET_GROUPS = [
   ['Shipped with the tool', () => true]
 ];
 
+// The whole name stays the value — it is what the server is asked for — while
+// the label drops the prefix the group above it already carries.
+function datasetOption(name, size) {
+  const shown = name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
+  return `<option value="${esc(name)}"${name === state.run.dataset ? ' selected' : ''}>${esc(shown)} — ${size} examples</option>`;
+}
+
+const TASK_FIT_STOPWORDS = new Set(['this','that','with','from','into','your','their',
+  'using','used','then','than','have','will','each','which','about','when','they',
+  'them','what','also','only','just','some','more','over','under','without','make',
+  'need','like','answer','text','output','input','write','model']);
+
+// Loose enough to catch "extract"/"extraction" as the same idea, strict enough
+// that four-letter overlaps stop being noise: every word truncates to a root of
+// five letters, so a shared root has to be a real word, not a fragment of one.
+function taskFitWords(text) {
+  return new Set((text || '').toLowerCase().match(/[a-z]{4,}/g)
+    ?.filter(word => !TASK_FIT_STOPWORDS.has(word)).map(word => word.slice(0, 5)) || []);
+}
+
+/* The catalogue exists to answer exactly this — which public set measures the
+ * business work a sentence describes — and until now that answer lived only on
+ * the Dataset library's own browse-by-category screen, a detour from the field
+ * that actually needs it. So the same taxonomy is read here: a task's name is
+ * a few real words about real work ("Ticket classification", "Invoice
+ * extraction"), and a root shared with the description is a hint worth
+ * surfacing, not a claim of certainty — which is why it is a separate group
+ * above the rest rather than a reordering of it. */
+function taskFitSuggestions(description) {
+  const words = taskFitWords(description);
+  if (!words.size || !state.catalog?.taxonomy) return [];
+  const scored = [];
+  for (const category of state.catalog.taxonomy) {
+    for (const task of category.tasks) {
+      if (!task.dataset || !state.datasetSizes.has(task.dataset)) continue;
+      const score = [...taskFitWords(`${category.name} ${task.name}`)].filter(word => words.has(word)).length;
+      if (score > 0) scored.push({dataset:task.dataset, score});
+    }
+  }
+  const seen = new Set();
+  return scored.sort((a, b) => b.score - a.score)
+    .filter(item => !seen.has(item.dataset) && seen.add(item.dataset)).slice(0, 3);
+}
+
 function datasetOptions() {
   const sets = [...state.datasetSizes.entries()];
-  return DATASET_GROUPS.map(([label, belongs], index) => {
+  const description = ($('description')?.value || '').trim();
+  const suggestions = description ? taskFitSuggestions(description) : [];
+  const suggested = suggestions.length
+    ? `<optgroup label="Fits your task">${suggestions
+        .map(item => datasetOption(item.dataset, state.datasetSizes.get(item.dataset))).join('')}</optgroup>`
+    : '';
+  return suggested + DATASET_GROUPS.map(([label, belongs], index) => {
     const mine = sets.filter(([name]) =>
       belongs(name) && !DATASET_GROUPS.slice(0, index).some(([, earlier]) => earlier(name)));
     if (!mine.length) return '';
-    const options = mine.map(([name, size]) => {
-      // The whole name stays the value — it is what the server is asked for —
-      // while the label drops the prefix the group above it already carries.
-      const shown = name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
-      return `<option value="${esc(name)}"${name === state.run.dataset ? ' selected' : ''}>${esc(shown)} — ${size} examples</option>`;
-    }).join('');
-    return `<optgroup label="${esc(label)}">${options}</optgroup>`;
+    return `<optgroup label="${esc(label)}">${mine.map(([name, size]) => datasetOption(name, size)).join('')}</optgroup>`;
   }).join('');
 }
 
-function runField(name) {
-  const options = datasetOptions();
-  // The empty row is the opening state and stays in the list afterwards: a set
-  // can be un-chosen the same way it was chosen, and nothing runs until one is.
+// Smart run needs this same field wherever its Start button lives — the rail
+// card and the home tile — so a click there never has to leave for a screen
+// whose only job was picking a set. One markup, several ids: the value is the
+// same field in `state.run`, kept level by `syncDatasetFields`.
+function datasetField(id, label = 'Measure against') {
   const placeholder = `<option value=""${state.run.dataset ? '' : ' selected'}>Choose a set of examples…</option>`;
+  return `<label for="${id}">${esc(label)}<select id="${id}" data-run-field="dataset">${placeholder}${datasetOptions()}</select></label>`;
+}
+
+// The suggestions above depend on the task, which can change without the
+// dataset list changing at all — so this is the one redraw keyed to typing
+// rather than to a set arriving or leaving the server.
+function refreshDatasetSuggestions() {
+  document.querySelectorAll('[data-run-field="dataset"]').forEach(field => {
+    const value = field.value;
+    field.innerHTML = `<option value=""${value ? '' : ' selected'}>Choose a set of examples…</option>${datasetOptions()}`;
+    field.value = value;
+  });
+}
+
+function runField(name) {
   switch (name) {
-    case 'dataset': return `<label for="run-dataset">Measure against<select id="run-dataset" data-run-field="dataset">${placeholder}${options}</select></label>`;
+    case 'dataset': return datasetField('run-dataset');
     case 'repeats': return `<label for="run-repeats">Runs per example<input id="run-repeats" type="number" min="1" max="10" value="${esc(state.run.repeats)}" data-run-field="repeats"></label>`;
     case 'rounds': return `<label for="run-rounds">Rounds<input id="run-rounds" type="number" min="1" max="6" value="${esc(state.run.rounds)}" data-run-field="rounds"></label>`;
     case 'backend': return `<label for="run-backend">How to search<select id="run-backend" data-run-field="backend">${state.backendOptions}</select></label>`;
@@ -618,8 +685,10 @@ function wireRunSetup(panel) {
   panel.querySelector('[data-action="save-technique"]')
     ?.addEventListener('click', event => exportTechnique(event.currentTarget, true));
   panel.querySelector('[data-action="use-own-rows"]')?.addEventListener('click', () => useOwnRows(panel));
-  panel.querySelectorAll('[data-run-field]').forEach(field => field.addEventListener('change', () => {
-    if (field.dataset.runField === 'dataset') state.ownRowsNote = '';
+  // The dataset field is wired once, globally — it now also lives on the rail
+  // card and the home tile, and a per-panel listener would either miss those
+  // or double-fire on this one. Repeats, rounds and backend live nowhere else.
+  panel.querySelectorAll('[data-run-field]:not([data-run-field="dataset"])').forEach(field => field.addEventListener('change', () => {
     state.run[field.dataset.runField] = field.value;
     updateEstimates();
     // The bar names the set every number is computed from, so it is rewritten
@@ -697,6 +766,9 @@ function refreshActions(running = false) {
   // open, so what the screen says it is working on is redrawn with the buttons
   // that would run it.
   refreshRunSubject();
+  // A dataset chosen or a prompt compiled is exactly what Smart run was waiting
+  // for, and both land here. The refusal it printed goes with them.
+  if (typeof clearSmartRefusal === 'function') clearSmartRefusal();
   refreshHomeIfVisible();
   updateEstimates();
 }

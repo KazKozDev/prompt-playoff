@@ -120,6 +120,10 @@ const state = {
   // What the last technique export did, kept so the message survives the
   // re-render the export itself triggers.
   techniqueNote:'',
+  // Whether the composer's Delete has been armed. Same reason as the one on a
+  // release row: the control is written from state, so the confirm has to be
+  // state too or the next redraw disarms it under the cursor.
+  pendingPromptDelete:false,
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
   openLogs:new Set(), selectedJobId:null, logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
   // Saved cases organize prompt lineage without making assignment mandatory.
@@ -129,6 +133,11 @@ const state = {
   historyCaseId:null, historyPromptId:null, historyDataset:null, historyTechnique:null,
   historyCompareContext:null, historyError:'',
   quality:{projects:[], reviews:[], releases:[], gates:{}, results:{}, error:'', loading:false, loaded:new Set(),
+    // The one release whose Delete has been armed, or null. Arming lives
+    // here rather than on the button because the table is redrawn from
+    // state on every refresh, and a confirm that survives one redraw and
+    // not the next is a confirm nobody can trust.
+    pendingReleaseDelete:null,
     // The builder form lives here rather than in the DOM: the cost of the
     // settings is quoted before the button is pressed, so a keystroke has to
     // re-render the quote, and a re-render would otherwise wipe the fields.

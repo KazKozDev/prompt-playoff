@@ -731,6 +731,36 @@ class QualityStore:
             self._save_unlocked(data)
             return record
 
+    def delete_release(self, release_id: str) -> ReleaseRecord:
+        """Take a version out of the register for good.
+
+        The register is not a system of record — git and CI are — so a row in it
+        can be wrong in a way no status covers: a name typed twice, a prompt
+        registered against the wrong run, a draft nobody ever meant to keep.
+        Deprecating those leaves them in the table forever, saying something
+        that was never true.
+
+        Two things go with the row. A release that cited this one as the version
+        it replaced loses that citation rather than keeping a pointer to nothing
+        — a fingerprint you cannot resolve is exactly the fault this register
+        was built to avoid. And a production release taken out leaves that name
+        with nothing in production, so the caller is told what it is deleting
+        rather than finding out from an empty column.
+        """
+        with advisory_lock(self.lock_path):
+            data = self._load_unlocked()
+            records = [ReleaseRecord.model_validate(item) for item in data["releases"]]
+            record = next((item for item in records if item.id == release_id), None)
+            if record is None:
+                raise ValueError("Unknown release")
+            kept = [item for item in records if item.id != release_id]
+            for item in kept:
+                if item.previous_production_id == release_id:
+                    item.previous_production_id = None
+            data["releases"] = [item.model_dump(mode="json") for item in kept]
+            self._save_unlocked(data)
+            return record
+
     def act_on_release(self, release_id: str, action: str) -> ReleaseRecord:
         transitions = {
             ("draft", "test"): "tested",

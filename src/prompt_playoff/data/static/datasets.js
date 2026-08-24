@@ -28,6 +28,8 @@ async function loadDatasets(selectedName) {
     refreshRunSetup();
     updateEstimates();
     updateWorkspaceContext();
+    refreshActions();
+    refreshHomeIfVisible();
     if (selectedName) throw e;
     return [];
   }
