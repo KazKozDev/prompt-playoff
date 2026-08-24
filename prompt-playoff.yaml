@@ -16,3 +16,45 @@ checks:
       reliability_min: 0.95
       mean_total_tokens_max: 300
       p95_latency_seconds_max: 2.0
+
+# Gating open-ended generation — a reply, a summary, an email — works the same
+# way, with one difference: `quality_min` is not the bar to write.
+#
+# On a task with one right answer, quality is the grader that decides it. On a
+# drafted reply there is no such grader: the run falls back to `token_f1`, which
+# scores how many words the answer shares with the one reference the row holds.
+# A good reply worded differently scores 0.14 there, and a copy of the reference
+# scores 1.0 — so a `quality_min` would pin how closely the model echoes one
+# person's wording, which a better prompt can lose and a worse one can hold.
+# `prompt-playoff check` refuses that bar rather than enforcing it, and says so.
+#
+# What it enforces instead is a bar on a named grader — `grade.<grader>_min` —
+# which is how a requirement nobody has a reference answer for still becomes a
+# CI failure. Give the rows requirements a rule can decide:
+#
+#   {"id": "reply-1",
+#    "input": "Where is order A-4471?",
+#    "graders": ["contains_all", "forbidden_content", "length_limit"],
+#    "grader_options": {"contains": ["A-4471"],
+#                       "forbidden": ["refund", "guarantee"],
+#                       "forbidden_patterns": ["\\[INSERT [A-Z ]+\\]"],
+#                       "max_chars": 700}}
+#
+# and gate those:
+#
+#   - name: support-replies
+#     technique: direct
+#     task: summarization
+#     dataset: uploaded:replies
+#     repeats: 3
+#     require:
+#       grade.contains_all_min: 1.0        # every reply cites the order number
+#       grade.forbidden_content_min: 1.0   # none of them promises a refund
+#       grade.length_limit_min: 0.98       # they fit the channel
+#       p95_latency_seconds_max: 4.0
+#
+# `grade.token_f1_min` is allowed too, and means what it says: watch this metric
+# for drift between runs of the same prompt. It is not a bar on quality, and
+# writing it is how you say you know the difference. `prompt-playoff list-datasets`
+# prints what word overlap already scores by chance on each set — where that
+# number is high, the metric cannot tell your answers apart at all.

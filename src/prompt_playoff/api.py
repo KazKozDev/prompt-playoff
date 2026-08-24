@@ -5,6 +5,7 @@ import json
 import random
 import re
 import uuid
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -22,6 +23,7 @@ from prompt_playoff import __version__
 from prompt_playoff.business_cases import BusinessCaseRecord
 from prompt_playoff.business_catalog import CatalogError, catalog
 from prompt_playoff.checks import ReleaseGate, release_gate
+from prompt_playoff.contracts import apply_requirements
 from prompt_playoff.deployment import (
     DeploymentBundle,
     ReleaseManifest,
@@ -52,14 +54,20 @@ from prompt_playoff.evals import (
     ExampleRun,
     dataset_revision,
     load_jsonl_text,
+    overlap_scored_references,
     prompt_fingerprint,
 )
 from prompt_playoff.experiments import ExperimentComparison, ExperimentRecord, experiments_csv
 from prompt_playoff.graders import (
+    GRADER_CAVEATS,
     GRADER_HELP,
+    PASS_RATE_GRADERS,
     QUALITY_PREFERENCE,
+    REFERENCE_OVERLAP_GRADERS,
     RELIABILITY_GRADERS,
     grader_names,
+    headline_grader,
+    token_f1_chance_level,
 )
 from prompt_playoff.integrations import hub
 from prompt_playoff.integrations.huggingface import CODE_PRESETS as HF_CODE_PRESETS
@@ -69,7 +77,11 @@ from prompt_playoff.integrations.tracing import import_langfuse_dataset
 from prompt_playoff.jobs import Job, JobStore
 from prompt_playoff.lint import lint_registry, registry_summary
 from prompt_playoff.model_profiles import SavedModelProfile
-from prompt_playoff.optimizer import BACKENDS
+from prompt_playoff.optimizer import (
+    BACKENDS,
+    UnmeasurableObjective,
+    refuse_unmeasurable,
+)
 from prompt_playoff.providers import (
     ConnectionCheck,
     InstalledModel,
@@ -107,6 +119,7 @@ from prompt_playoff.quality import (
     slice_analysis,
 )
 from prompt_playoff.registry import Registry, RegistryError
+from prompt_playoff.rubric import judge_rows
 from prompt_playoff.service import PromptSelectorService, TechniqueNameConflict
 from prompt_playoff.strategies import aggregator_names, strategy_names
 from prompt_playoff.technique_examples import compiled_examples
@@ -196,6 +209,11 @@ class OptimizeRequest(BenchmarkRequest):
     #: DSPy backends only.
     auto: str = "light"
     max_metric_calls: int | None = Field(default=None, ge=4, le=2000)
+    #: Search even when the number being maximised cannot tell a good answer
+    #: from an answer to a different question. Refused by default, because such
+    #: a search reliably raises the score and does not reliably improve the
+    #: prompt; sending this says the result will be read as drift.
+    allow_noisy_objective: bool = False
 
     @model_validator(mode="after")
     def fold_legacy_optimizer_model(self) -> OptimizeRequest:
@@ -290,6 +308,23 @@ class PairwiseJudgeRequest(BaseModel):
     subject_models: list[str] = Field(default_factory=list, max_length=8)
     seed: int = 20260816
     timeout_seconds: float = Field(default=120, gt=0, le=1800)
+
+
+class RubricRunRequest(BaseModel):
+    """Judge a whole recorded run against the reference answers its rows carry."""
+
+    #: The rows, as `(id, input, answer, reference)` is assembled from them.
+    dataset: str = Field(min_length=1, max_length=200)
+    runs: list[dict[str, Any]] = Field(min_length=1, max_length=2000)
+    rubric: list[str] = Field(min_length=1, max_length=12)
+    judge_model: ModelProfile
+    subject_models: list[str] = Field(default_factory=list, max_length=8)
+    seed: int = 20260816
+    timeout_seconds: float = Field(default=120, gt=0, le=1800)
+    #: Judging every repeat of every row costs as many calls as the run itself
+    #: did. One repeat per row is the default, because a judge asked the same
+    #: question three times mostly answers it three times.
+    repeat: int = Field(default=0, ge=0, le=9)
 
 
 class PairwiseJudgeScores(BaseModel):
@@ -499,6 +534,18 @@ def capabilities(request: Request) -> dict[str, Any]:
         #: What each grader measures, so a report can label its numbers in words
         #: instead of leaving the reader to look up a grader name.
         "grader_help": GRADER_HELP,
+        #: How each grader's number gets misread, for the ones where the obvious
+        #: reading is wrong. Served beside the help text so a report can print
+        #: the warning next to the number instead of leaving a reader to
+        #: discover on their own that word overlap does not mean correctness.
+        "grader_caveats": GRADER_CAVEATS,
+        #: Which graders score every answer 0 or 1. Their mean is a share of
+        #: answers; every other mean is an average score, and a page that says
+        #: "N in 100 were correct" over a partial-credit grader is inventing a
+        #: pass rate nobody measured.
+        "pass_rate_graders": sorted(PASS_RATE_GRADERS),
+        #: Graders that score by comparing an answer with one reference answer.
+        "reference_overlap_graders": sorted(REFERENCE_OVERLAP_GRADERS),
         #: How the graders become the two headline numbers. The Measurement
         #: screen names, before a run, which grader its quality will come from
         #: and which ones feed reliability — so both orderings are served from
@@ -617,6 +664,23 @@ def _provenance(name: str) -> dict[str, str] | None:
     return {"source": "built here", "licence": _package_licence()}
 
 
+def _free_text_facts(examples: list[BenchmarkExample]) -> dict[str, Any]:
+    """What word overlap can and cannot decide about these rows, before any run.
+
+    Rows whose right answer is prose get scored by comparing words with that one
+    reference, and on open-ended work that comparison has a floor: replies to
+    unrelated tickets already share most of their wording. The floor is measured
+    here, off the rows alone, so a set that cannot be scored this way says so on
+    the library shelf — before someone spends an evening improving a prompt
+    against a number that was never going to move.
+    """
+    references = overlap_scored_references(examples)
+    return {
+        "free_text": len(references),
+        "token_f1_chance_level": token_f1_chance_level(references),
+    }
+
+
 @app.get("/v1/datasets")
 def datasets(request: Request) -> list[dict[str, Any]]:
     service = _service(request)
@@ -633,6 +697,7 @@ def datasets(request: Request) -> list[dict[str, Any]]:
                 "examples": len(examples),
                 "has_expected": sum(1 for item in examples if item.expected is not None),
                 "has_schema": sum(1 for item in examples if item.response_schema is not None),
+                **_free_text_facts(examples),
                 "tags": sorted({tag for item in examples for tag in item.tags}),
                 "provenance": _provenance(name),
                 # Whether this set survives a restart. Only a set the user
@@ -706,6 +771,7 @@ async def upload_dataset(
         "examples": len(examples),
         "has_expected": sum(1 for item in examples if item.expected is not None),
         "has_schema": sum(1 for item in examples if item.response_schema is not None),
+        **_free_text_facts(examples),
         "kept": keep,
     }
 
@@ -796,8 +862,79 @@ async def hub_import(request: Request, payload: HubImportRequest) -> dict[str, A
         "split": payload.split,
         "examples": len(examples),
         "has_expected": sum(1 for item in examples if item.expected is not None),
+        **_free_text_facts(examples),
         "skipped": len(rows) - len(examples),
         "saved_to": str(saved) if saved else None,
+    }
+
+
+class RequirementsRequest(BaseModel):
+    #: What shape of work these rows hold, which is what decides which
+    #: requirements can honestly be read off them.
+    contract: Literal["reply", "summary", "draft"]
+
+
+@app.post("/v1/datasets/{name:path}/requirements")
+def derive_requirements(
+    name: str, payload: RequirementsRequest, request: Request
+) -> dict[str, Any]:
+    """Give a set of prose rows the requirements a rule can decide.
+
+    The rows arrive able to support one number — how many words an answer shares
+    with the one reference it was given — and that number cannot say whether an
+    answer is right. This reads the requirements off the rows themselves: the
+    identifier a reply has to carry back, the unfilled placeholder that must not
+    ship, the length the channel allows. Each is kept only where that row's own
+    reference answer already meets it, so nothing written here can mark a model
+    wrong for answering as well as the person did.
+
+    Only a set the user brought in: a bundled set lives inside the installed
+    package and already carries whatever contract its catalogue entry declares.
+    """
+    service = _service(request)
+    if name not in service.user_datasets:
+        raise HTTPException(
+            status_code=404 if name not in service.dataset_names else 409,
+            detail=(
+                f"{name} is not a set you brought in. Bundled sets carry the contract their "
+                "catalogue entry declares and are not edited here."
+            ),
+        )
+    before = service.dataset(name)
+    rows = apply_requirements([item.model_dump(mode="json") for item in before], payload.contract)
+    examples = [BenchmarkExample.model_validate(row) for row in rows]
+    kept = service.dataset_store.path_for(name).exists()
+    service.add_user_dataset(name, examples, persist=kept)
+
+    # The state the set is now in, not the difference this call made. Pressing
+    # the button twice is a reasonable thing to do, and the second press used to
+    # answer "nothing could be derived" about a set that was fully derived.
+    carried = Counter(
+        grader
+        for item in examples
+        for grader in item.graders
+        if grader not in REFERENCE_OVERLAP_GRADERS
+    )
+    heads = Counter(headline_grader(item.graders) for item in examples)
+    return {
+        "name": name,
+        "contract": payload.contract,
+        "examples": len(examples),
+        "requirements": dict(carried),
+        "added": dict(
+            Counter(
+                grader
+                for old, new in zip(before, examples, strict=True)
+                for grader in set(new.graders) - set(old.graders)
+            )
+        ),
+        #: How many rows still have nothing better than word overlap to answer
+        #: for them. Reported rather than hidden: on some corpora the answer is
+        #: most of them, and that is a fact about the rows, not a failure here.
+        "still_overlap_scored": sum(
+            count for grader, count in heads.items() if grader in REFERENCE_OVERLAP_GRADERS
+        ),
+        **_free_text_facts(examples),
     }
 
 
@@ -1327,6 +1464,23 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
         raise HTTPException(
             status_code=422, detail=f"Unknown backend. Known: {', '.join(BACKENDS)}"
         )
+    # Refused here rather than inside the job, so it arrives as an answer to the
+    # click instead of as a failed run — and carries a code, so the screen can
+    # offer to override it without matching on the wording of a sentence.
+    try:
+        examples, _ = service.resolve_dataset(payload.dataset, payload.examples or None)
+        refuse_unmeasurable(examples, allowed=payload.allow_noisy_objective)
+    except UnmeasurableObjective as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "unmeasurable_objective",
+                "message": str(exc),
+                "chance_level": token_f1_chance_level(overlap_scored_references(examples)),
+            },
+        ) from exc
+    except (ValueError, RegistryError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     job = store.create(f"optimize:{payload.backend}")
 
     async def work() -> dict[str, Any]:
@@ -1349,6 +1503,7 @@ async def start_optimize(payload: OptimizeRequest, request: Request) -> Job:
             progress=lambda event: store.note(job.id, event),
             prompt=payload.prompt,
             business_case=business_case,
+            allow_noisy_objective=payload.allow_noisy_objective,
         )
         return result.model_dump(mode="json")
 
@@ -1398,9 +1553,9 @@ def get_experiment(experiment_id: str, request: Request) -> ExperimentRecord:
 # --------------------------------------------------------------------------- #
 
 
-def _judge_leakage(payload: PairwiseJudgeRequest) -> str | None:
-    judge = payload.judge_model.model_id
-    same = [item for item in payload.subject_models if shares_family(judge, item)]
+def _family_warning(judge: str, subjects: list[str]) -> str | None:
+    """The one thing blinding cannot hide: a judge preferring its own lineage."""
+    same = [item for item in subjects if shares_family(judge, item)]
     if not same:
         return None
     return (
@@ -1409,6 +1564,10 @@ def _judge_leakage(payload: PairwiseJudgeRequest) -> str | None:
         "verdict as weaker evidence than a benchmark score, and prefer a judge from "
         "another family."
     )
+
+
+def _judge_leakage(payload: PairwiseJudgeRequest) -> str | None:
+    return _family_warning(payload.judge_model.model_id, payload.subject_models)
 
 
 def _judge_scale(first: float, second: float) -> float:
@@ -1421,6 +1580,79 @@ def _judge_scale(first: float, second: float) -> float:
     if top > 10:
         return 100.0
     return 10.0 if top > 1 else 1.0
+
+
+@app.post("/v1/evaluate/rubric")
+async def rubric_run(payload: RubricRunRequest, request: Request) -> dict[str, Any]:
+    """Blind rubric judging across a whole run, not one pair at a time.
+
+    The question a person has about a drafting prompt is whether it writes well
+    across the set, and the tool could previously only settle an argument about
+    one example. Every row is compared with the reference answer it already
+    carries, order hidden, and the result is a win rate against the person who
+    wrote those references.
+
+    It stays a model's opinion: one review item for the batch, and no route into
+    a benchmark number or a CI gate. What CI enforces is still only what a rule
+    decided.
+    """
+    service = _service(request)
+    try:
+        examples = {item.id: item for item in service.dataset(payload.dataset)}
+    except (KeyError, RegistryError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown dataset: {exc}") from exc
+
+    rows: list[tuple[str, str, str, str]] = []
+    for item in payload.runs:
+        try:
+            run = ExampleRun.model_validate(item)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=f"Unreadable run row: {exc}") from exc
+        example = examples.get(run.example_id)
+        if run.repeat != payload.repeat or example is None or run.error or not run.output.strip():
+            continue
+        reference = example.expected
+        if not isinstance(reference, str) or not reference.strip():
+            continue
+        rows.append((run.example_id, example.input, run.output, reference))
+    if not rows:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No row could be judged: a row needs an answer from the run and a written "
+                "reference answer in the dataset. Rows whose expected answer is a structure "
+                "are graded by rule, not judged."
+            ),
+        )
+
+    provider = service.provider(
+        TaskProfile(task_type=TaskType.summarization, model=payload.judge_model), phase="judge"
+    )
+    verdict = await judge_rows(
+        rows,
+        rubric=payload.rubric,
+        judge_model=payload.judge_model,
+        generate=provider.generate,
+        seed=payload.seed,
+        timeout_seconds=payload.timeout_seconds,
+        self_preference_warning=_family_warning(
+            payload.judge_model.model_id, payload.subject_models
+        ),
+    )
+    body = verdict.model_dump(mode="json") | {
+        "dataset": payload.dataset,
+        "summary": verdict.summary,
+    }
+    review = _quality(request).add_review(
+        ReviewItem(
+            id=f"review_{uuid.uuid4().hex[:12]}",
+            kind="judge",
+            created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            title=f"Confirm rubric verdict on {payload.dataset}",
+            payload=body,
+        )
+    )
+    return {**body, "review_id": review.id}
 
 
 @app.post("/v1/evaluate/pairwise")
@@ -1746,6 +1978,8 @@ def _release_gate(release: ReleaseRecord, request: Request) -> ReleaseGate:
         _service(request).experiments.get(release.experiment_id) if release.experiment_id else None
     )
     metrics = None
+    grades: dict[str, float] = {}
+    quality_grader: str | None = None
     if record is not None:
         snapshot = record.metrics.get(record.winner or "") or next(
             iter(record.metrics.values()), None
@@ -1756,11 +1990,15 @@ def _release_gate(release: ReleaseRecord, request: Request) -> ReleaseGate:
                 for name, value in snapshot.model_dump().items()
                 if isinstance(value, int | float)
             }
+            grades = dict(snapshot.grades)
+            quality_grader = snapshot.quality_grader
     return release_gate(
         release.technique_id,
         metrics,
         evidence=release.evidence,
         dataset_changed=_dataset_moved(record, request),
+        grades=grades,
+        quality_grader=quality_grader,
     )
 
 

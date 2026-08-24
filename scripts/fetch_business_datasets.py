@@ -34,6 +34,9 @@ from typing import Any
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from prompt_playoff.contracts import apply_requirements  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGUE = ROOT / "src/prompt_playoff/data/business_cases.yaml"
 OUT_DIR = ROOT / "src/prompt_playoff/data/datasets/business"
@@ -263,8 +266,22 @@ def build(spec: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
             if len(examples) >= wanted:
-                return examples
-    return examples
+                return _with_contract(spec, examples)
+    return _with_contract(spec, examples)
+
+
+def _with_contract(spec: dict[str, Any], examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the requirements a rule can decide, for a set that declares a shape.
+
+    Without this a drafting corpus arrives able to support exactly one number —
+    how many words an answer shares with the one reference it was given — which
+    is a similarity, not a verdict, and on templated rows barely even that. The
+    derivation is deterministic and refuses any requirement the human answer
+    does not itself meet, so a re-fetched corpus arrives gateable rather than
+    acquiring a contract by hand-editing afterwards.
+    """
+    kind = spec.get("contract")
+    return apply_requirements(examples, kind) if kind and examples else examples
 
 
 def write(spec: dict[str, Any], examples: list[dict[str, Any]]) -> Path:

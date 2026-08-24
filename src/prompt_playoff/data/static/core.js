@@ -104,6 +104,10 @@ const state = {
   // reports them: which grader becomes the headline quality, and which ones
   // are contract checks and therefore feed reliability.
   qualityPreference:[], contractGraders:new Set(),
+  // What each grader's number must not be read as, and which graders score
+  // every answer 0 or 1. Both are served rather than written here, so the
+  // warning beside a number is the one the grader itself carries.
+  graderCaveats:{}, passRateGraders:new Set(),
   installed:{ engine:{status:'idle', models:[], error:'', url:null}, judge:{status:'idle', models:[], error:'', url:null}, similarity:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
   // The recorded run that justifies the prompt currently held: what a release
   // registered from it points back to. Null means the prompt as it stands has
@@ -328,12 +332,32 @@ async function api(path, body, method) {
     ? {method:verb, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
     : {method:verb};
   const res = await fetch(path, init);
-  if (!res.ok) throw new Error(await apiError(res));
+  if (!res.ok) {
+    const failure = await apiFailure(res);
+    // The message is what a person reads; the code is what a screen can act on.
+    // A refusal that a screen is allowed to offer to override has to be told
+    // apart from a typo in a field, and matching on the wording would break the
+    // moment the wording improved.
+    const error = new Error(failure.message);
+    error.status = res.status;
+    error.code = failure.code;
+    error.detail = failure.detail;
+    throw error;
+  }
   return res.json();
 }
 
-async function apiError(res) {
+async function apiFailure(res) {
   const text = (await res.text()).slice(0, 2000);
+  let detail = null;
+  try { detail = JSON.parse(text).detail ?? null; } catch { /* plain text below */ }
+  const message = detail && typeof detail === 'object' && !Array.isArray(detail) && detail.message
+    ? detail.message
+    : errorText(text, res);
+  return {message, code: detail?.code || null, detail};
+}
+
+function errorText(text, res) {
   if (!text) return `${res.status} ${res.statusText}`.trim();
   try {
     const payload = JSON.parse(text);
@@ -343,6 +367,11 @@ async function apiError(res) {
     if (detail != null) return JSON.stringify(detail);
   } catch { /* The server returned plain text; show it as-is. */ }
   return text;
+}
+
+// For a caller that reads the response itself and only wants the sentence.
+async function apiError(res) {
+  return errorText((await res.text()).slice(0, 2000), res);
 }
 
 async function loadBackends() {

@@ -34,6 +34,16 @@ class MetricSnapshot(BaseModel):
     total_cost_usd: float | None = None
     failures: int = 0
     runs: int = 0
+    #: Every grader's mean, not only the one that became the headline. A release
+    #: gate for open-ended work is written against a named grader — every
+    #: required fact present, nothing the task forbids — and without these the
+    #: gate could only ever be applied to a headline that does not describe the
+    #: task. Runs recorded before this field existed carry none, and the gate
+    #: says so rather than treating an absent number as a cleared bar.
+    grades: dict[str, float] = Field(default_factory=dict)
+    #: Which grader the quality above came from, so the gate can refuse to
+    #: enforce a quality bar the grader cannot support.
+    quality_grader: str | None = None
 
     @classmethod
     def from_scorecard(cls, scorecard: Scorecard) -> MetricSnapshot:

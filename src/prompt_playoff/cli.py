@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Annotated
 
@@ -28,8 +29,21 @@ from prompt_playoff.domain import (
     TaskShape,
     TaskType,
 )
-from prompt_playoff.evals import BenchmarkReport, load_jsonl
-from prompt_playoff.graders import describe, grader_names
+from prompt_playoff.evals import (
+    BenchmarkReport,
+    Scorecard,
+    load_jsonl,
+    overlap_scored_references,
+)
+from prompt_playoff.graders import (
+    REFERENCE_OVERLAP_GRADERS,
+    caveat,
+    default_graders,
+    describe,
+    grader_names,
+    headline_grader,
+    token_f1_chance_level,
+)
 from prompt_playoff.lint import format_issues, has_errors, lint_registry, registry_summary
 from prompt_playoff.measurements import MeasurementStore
 from prompt_playoff.model_profiles import ModelProfileStore
@@ -192,6 +206,32 @@ def _print_program(program) -> None:
         console.print(f"[yellow]note[/yellow] {note}")
 
 
+def _print_quality_caveat(card: Scorecard) -> None:
+    """Say, under the table, what the headline number cannot mean.
+
+    A grader name and a number are enough for a reader to leave with the wrong
+    conclusion, and the commonest wrong conclusion is the expensive one: a 0.14
+    from word overlap reads as a broken prompt, so the next hour goes on fixing
+    a prompt that was working. The measured chance level goes first because it
+    settles the question the warning only describes — if answers about something
+    else already score about the same, this metric never saw the prompt at all.
+    """
+    if card.quality_chance_level is not None:
+        margin = card.quality - card.quality_chance_level
+        verdict = (
+            "so this number is not separating good answers from unrelated ones"
+            if margin <= 0.05
+            else f"so the prompt is worth {margin:+.3f} over an unrelated answer"
+        )
+        console.print(
+            f"\n[yellow]chance level[/yellow] Answers taken from other rows of this set "
+            f"already score {card.quality_chance_level:.3f} on {card.quality_grader} — "
+            f"{verdict}."
+        )
+    if note := caveat(card.quality_grader):
+        console.print(f"[yellow]about this number[/yellow] {note}")
+
+
 def _print_report(report: BenchmarkReport) -> None:
     card = report.scorecard
     table = Table(title=f"Measured: {report.technique_title} on {report.model_id}")
@@ -226,6 +266,15 @@ def _print_report(report: BenchmarkReport) -> None:
         marker = " (headline quality)" if name == card.quality_grader else ""
         grades.add_row(name + marker, describe(name), f"{value:.3f}")
     console.print(grades)
+    if report.inferred_graders:
+        rows = max(report.inferred_graders.values())
+        console.print(
+            f"\n[yellow]nobody chose this[/yellow] {rows} of {report.examples} examples name no "
+            f"grader, so these were picked from the shape of their answers: "
+            f"{', '.join(sorted(report.inferred_graders))}. Write `graders` into the rows — or run "
+            "`prompt-playoff annotate-dataset` — to make the choice yours."
+        )
+    _print_quality_caveat(card)
 
     if report.prior is not None:
         console.print(
@@ -729,6 +778,12 @@ def optimize_command(
         Path | None,
         typer.Option(help="Directory for every Pareto-front candidate, not just the winner."),
     ] = None,
+    allow_noisy_objective: Annotated[
+        bool,
+        typer.Option(
+            help="Search even when the score cannot tell a good answer from an unrelated one."
+        ),
+    ] = False,
 ) -> None:
     """Search for a better prompt using measured results as the fitness function."""
     if backend not in BACKENDS:
@@ -775,6 +830,7 @@ def optimize_command(
             max_metric_calls=max_metric_calls,
             auto=auto,
             progress=show,
+            allow_noisy_objective=allow_noisy_objective,
         )
     )
     _print_optimization(result, export, export_front)
@@ -1081,15 +1137,26 @@ def list_techniques() -> None:
 
 @app.command("list-datasets")
 def list_datasets() -> None:
-    """List benchmark datasets: how many examples, and how many carry gold answers."""
+    """List benchmark datasets, and say which of them word overlap cannot score.
+
+    A set whose right answers are prose gets scored by comparing words with that
+    one reference. The note under the table is what the same comparison already
+    gives an answer written for a *different* row — the floor the score starts
+    from rather than zero. Where that floor is high, the metric is measuring the
+    language and not the prompt, and no amount of prompt work will move it.
+    """
     service = PromptSelectorService(Registry.load())
     table = Table(title="Benchmark datasets")
     table.add_column("Name")
     table.add_column("Examples", justify="right")
     table.add_column("With expected", justify="right")
     table.add_column("With schema", justify="right")
+    floors: list[tuple[str, int, float]] = []
     for name in sorted(service.registry.datasets):
         examples = service.dataset(name)
+        references = overlap_scored_references(examples)
+        if (chance := token_f1_chance_level(references)) is not None:
+            floors.append((name, len(references), chance))
         table.add_row(
             name,
             str(len(examples)),
@@ -1097,6 +1164,103 @@ def list_datasets() -> None:
             str(sum(1 for item in examples if item.response_schema is not None)),
         )
     console.print(table)
+    if floors:
+        console.print(
+            "\n[bold]Sets whose quality number will be word overlap[/bold] — their rows are "
+            "prose and name no grader that outranks it.\nWhat an answer written for a "
+            "different row of the same set already scores there:"
+        )
+        for name, rows, chance in floors:
+            verdict = (
+                "[yellow]word overlap cannot tell a good answer here from an unrelated one[/yellow]"
+                if chance >= 0.35
+                else "the floor a score on these rows starts from"
+            )
+            console.print(f"  {name} — {chance:.2f} over {rows} prose rows; {verdict}")
+
+
+@app.command("annotate-dataset")
+def annotate_dataset(
+    path: Annotated[Path, typer.Argument(help="JSONL file to read.")],
+    contract: Annotated[
+        str | None,
+        typer.Option(
+            help="Shape of the work in these rows: reply, summary or draft. Derives the "
+            "requirements a rule can decide, which is what makes open-ended rows gateable."
+        ),
+    ] = None,
+    out: Annotated[Path | None, typer.Option(help="Write here instead of in place.")] = None,
+    in_place: Annotated[bool, typer.Option(help="Overwrite the file that was read.")] = False,
+) -> None:
+    """Write down what would otherwise be guessed, so the choice of grader is yours.
+
+    A row that names no grader gets one picked from the shape of its answer, and
+    on prose that pick is word overlap — a number that cannot say whether an
+    answer is right. This writes the picks into the rows, where you can read
+    them, change them, and commit them.
+
+    With `--contract` it does the other half: derives, per row, the checks a
+    rule can decide — the identifier that has to come back in a reply, the
+    unfilled `[INSERT NAME]` that must not ship, the length the channel allows.
+    A check is kept only when the row's own reference answer already meets it,
+    so nothing here can mark a model wrong for answering as well as a person
+    did. Those checks are what `prompt-playoff check` can gate on.
+    """
+    from prompt_playoff.contracts import apply_requirements
+
+    if contract and contract not in {"reply", "summary", "draft"}:
+        raise typer.BadParameter("contract must be reply, summary or draft")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise typer.BadParameter(f"Cannot read {path}: {exc}") from exc
+    rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+    if not rows:
+        raise typer.BadParameter(f"{path} holds no rows")
+
+    written = 0
+    for row in rows:
+        if row.get("graders"):
+            continue
+        row["graders"] = default_graders(
+            row.get("expected"), row.get("response_schema"), strict_json=False
+        )
+        written += 1
+    if contract:
+        rows = apply_requirements(rows, contract)
+
+    counts: Counter[str] = Counter(name for row in rows for name in row.get("graders") or [])
+    table = Table(title=f"{path.name}: {len(rows)} rows")
+    table.add_column("Grader")
+    table.add_column("What it measures")
+    table.add_column("Rows", justify="right")
+    for name, count in counts.most_common():
+        table.add_row(name, describe(name), str(count))
+    console.print(table)
+    console.print(f"[dim]{written} row(s) had no grader of their own and now name one.[/dim]")
+    heads = Counter(headline_grader(row.get("graders") or []) for row in rows)
+    overlap = sum(count for name, count in heads.items() if name in REFERENCE_OVERLAP_GRADERS)
+    if overlap:
+        console.print(
+            f"[yellow]{overlap} row(s) still have word overlap as their quality number.[/yellow] "
+            "Those rows carry no requirement a rule could decide"
+            + (
+                ". Pass --contract reply|summary|draft to derive one."
+                if not contract
+                else ", and none could be derived from what they hold — the reference is the "
+                "only thing there. Add `contains` or `forbidden` options by hand where the "
+                "work has a requirement you know about."
+            )
+        )
+
+    target = out or (path if in_place else None)
+    if target is None:
+        console.print("\n[dim]Nothing written. Pass --in-place or --out to keep this.[/dim]")
+        return
+    target.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8"
+    )
+    console.print(f"Wrote {len(rows)} rows to {target}")
 
 
 @app.command("selector-eval")

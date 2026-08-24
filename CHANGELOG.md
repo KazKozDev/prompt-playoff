@@ -7,7 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `prompt-playoff optimize` now **stops** when its objective cannot decide anything, instead of
+  warning and running anyway. A search maximises whatever number it is handed; handed word overlap
+  on rows whose answers already resemble each other, it reliably raises it by drifting towards the
+  wording every row shares — making the prompt worse while the score goes up. The refusal costs no
+  model call, arrives before the first one, and names what to give the rows instead.
+  `--allow-noisy-objective` runs it anyway and says the result is drift.
+
 ### Added
+
+- A measured **chance level** beside every quality number that comes from word overlap, and a gate
+  that works on open-ended generation. Bring a drafting task — a reply, a summary, a marketing
+  email — and every row holds one reference answer, so the run falls back to `token_f1` and a good
+  answer worded differently scores 0.14. Nothing said so. The report now prints what the same
+  metric already scores on an answer written for a *different row of the same set*: on the bundled
+  support-reply corpus that floor is **0.63**, because those replies are templated, and no prompt
+  work will move a number with that little room in it. It is computed from the rows, costs no model
+  call, and appears on the shelf, on an uploaded set, in `prompt-playoff list-datasets`, and beside
+  the score in both the CLI and the report. The report also stopped reading a partial-credit mean
+  out as "14 out of every 100 answers were judged correct", which is a pass rate nobody measured.
+- `grade.<grader>_min` / `_max` in `prompt-playoff.yaml`: a CI bar on one named grader rather than
+  on a headline. This is the gate open-ended work never had. `quality` on such a task is word
+  overlap, and a `quality_min` over it would commit CI to how closely answers echo one person's
+  wording — which a better prompt can lose and a worse one can keep — so `prompt-playoff check`
+  now refuses that bar and names what to write instead. What it enforces is the requirements a
+  rule can decide: `grade.contains_all_min: 1.0` for the order number that has to survive,
+  `grade.forbidden_content_min: 1.0` for the refund the draft may not promise. `grade.token_f1_min`
+  stays available and means what it says — watch the metric for drift. Release gates read the same
+  keys off the recorded run.
+- The bundled drafting sets now carry the requirements the work actually has, derived from the
+  rows themselves. A set that declares a `contract` in the catalogue gets, per row, the checks a
+  rule can decide — the order reference a reply has to carry back, the unfilled `[INSERT NAME]`
+  that must not ship, the length the channel allows — and a check is kept **only where the row's
+  own reference answer already meets it**, so the derivation cannot swap a metric that marks good
+  answers wrong for a rule that does the same thing. `business:support-reply` was the case that
+  showed why this matters: every reference in it is a template, its word-overlap floor was 0.63,
+  and it is now scored on whether the reply carries the order reference back. The derivation runs
+  inside `scripts/fetch_business_datasets.py`, so a re-downloaded corpus arrives gateable.
+- All of the above reaches the app, not only the terminal. **Datasets** carries the shape of the
+  work beside every set of prose rows and an **Add requirements** button that reads them off — and
+  says how many rows still have only word overlap answering for them, because on some corpora that
+  is most of them. **Answer judging** opens with *Judge a whole run* instead of a pair of textareas.
+  The prompt search's refusal arrives as an answer to the click rather than as a failed job, with
+  the measured floor in it and one button — *Search anyway, and read it as drift* — that gets past
+  it and relabels the result. And the report says which of its graders nobody chose.
+- `prompt-playoff annotate-dataset` does the same for your own rows: `--contract reply|summary|draft`
+  derives the requirements, and without it the command simply writes down the graders the tool
+  would otherwise have guessed — so what is on record is your choice rather than its. Every run
+  now also reports which of its graders nobody chose, in the CLI and on the report.
+- A checkable requirement outranks word overlap as the headline quality number. `token_f1` used to
+  sit third in the preference order, above every grader that can decide something, so giving a set
+  real requirements changed nothing about the number on the front of its report. It now sits at the
+  bottom of the meaning graders, which is what it is: the fallback for prose with nothing better.
+- `POST /v1/evaluate/rubric`: blind rubric judging across a whole recorded run instead of one pair
+  at a time. Every row is compared with the reference answer it already carries, order hidden, and
+  the result is a win rate against the person who wrote those references. It stays a model's
+  opinion — one review item for the batch, and deliberately no route into a scorecard or a
+  `require:` key, because a bar defended by a model's mood on the day is not a bar.
+- `forbidden_content`: what a draft may never say, as strings or patterns. Open-ended work is
+  rarely refused for wording; it is refused for promising a refund nobody authorised, naming a
+  competitor, or shipping with `[INSERT NAME]` still in it — none of which needs a reference
+  answer, which is what makes it enforceable where no reference answer exists.
 
 - Auditable provenance for all 50 business cases: every card resolves to a dated public source,
   exposes whether the exact wording is verified, qualified, or unverified, and links the source in

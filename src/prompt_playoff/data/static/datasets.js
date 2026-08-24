@@ -124,6 +124,22 @@ function updateEstimates() {
  * field with four hints under it, and what the file has to be holds the wider
  * half beside it — it is reference, and reference wants the room.
  * -------------------------------------------------------------------------- */
+// What word overlap will do to these rows, said at the moment they arrive.
+//
+// A set of prose answers gets scored by comparing words with the one reference
+// each row carries, and the score that comparison gives an unrelated answer is
+// measured off the rows themselves. When it is close to what a good answer can
+// reach, the metric cannot see the prompt at all — and the only cheap moment to
+// learn that is now, not after an evening of rewriting.
+function chanceNote(imported) {
+  const chance = imported.token_f1_chance_level;
+  if (chance == null || !imported.free_text) return '';
+  return ` ${imported.free_text} of them answer in prose, and answers taken from other rows of this set already`
+    + ` score ${chance.toFixed(2)} on word overlap${chance >= 0.35
+      ? ' — high enough that word overlap cannot tell a good answer here from an unrelated one. Score these rows on requirements a rule can check instead: facts that must appear, wording that must not, a length the answer has to fit.'
+      : ', which is the floor a quality number on them starts from rather than zero.'}`;
+}
+
 function renderDatasetUpload() {
   return `<div class="screen-split">
     <section class="screen-body">
@@ -206,7 +222,8 @@ async function runUpload() {
     // Which of the two promises was made is said back, because the difference
     // only shows up on the day the server restarts.
     status.textContent = `${uploaded.name} uploaded — ${uploaded.examples} examples. Selected for measurement.`
-      + (uploaded.kept ? ' Kept on this machine.' : ' Held for this server session only.');
+      + (uploaded.kept ? ' Kept on this machine.' : ' Held for this server session only.')
+      + chanceNote(uploaded);
   } catch (e) {
     status.className = 'upload-status error-text';
     status.textContent = e.message;
@@ -445,7 +462,7 @@ function wireHubDetail() {
         ? `${imported.has_expected} carry a right answer`
         : 'none carry a right answer, so quality cannot be scored';
       const kept = imported.saved_to ? ` Saved to ${imported.saved_to}, so it survives a restart.` : '';
-      hubMessage(`${imported.name} imported — ${plural(imported.examples, 'example')}, ${graded}. Selected for measurement.${kept}`, 'success');
+      hubMessage(`${imported.name} imported — ${plural(imported.examples, 'example')}, ${graded}. Selected for measurement.${kept}${chanceNote(imported)}`, 'success');
     } catch (e) {
       hubMessage(e.message, 'error-text');
       importBtn.disabled = false;

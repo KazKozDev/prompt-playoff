@@ -1,11 +1,16 @@
 from prompt_playoff.domain import ExecutionTrace
 from prompt_playoff.graders import (
+    GRADER_CAVEATS,
     GRADER_HELP,
+    PASS_RATE_GRADERS,
+    REFERENCE_OVERLAP_GRADERS,
     GradeContext,
+    caveat,
     default_graders,
     describe,
     grader_names,
     run_graders,
+    token_f1_chance_level,
     validate_schema,
 )
 
@@ -172,7 +177,7 @@ def test_every_grader_says_what_it_measures_in_words():
 
 
 def test_describe_falls_back_to_the_name_rather_than_going_blank():
-    assert describe("token_f1") == "word overlap with the reference answer"
+    assert describe("token_f1") == GRADER_HELP["token_f1"]
     assert describe("some_future_grader") == "some_future_grader"
     assert describe(None) == "no grader could score this data"
 
@@ -292,3 +297,85 @@ def test_comprehension_variables_do_not_leak():
     from prompt_playoff.sandbox import run_program
 
     assert run_program("x = 99\nys = [x for x in [1, 2]]\nanswer = x").value == 99
+
+
+# --------------------------------------------------------------------------- #
+# what a number cannot mean
+# --------------------------------------------------------------------------- #
+
+
+def test_token_f1_scores_a_correct_answer_low_when_it_is_worded_differently():
+    """The trap itself, stated as a test.
+
+    Both answers say the parcel arrives on Tuesday. One of them is the
+    reference, so the other scores like a failure — which is a fact about the
+    metric and about nothing else. Anything the tool says about this number has
+    to be built on top of this being true.
+    """
+    reference = "Your parcel is scheduled to arrive on Tuesday."
+    answer = "It should reach you Tuesday — thanks for waiting!"
+    score = run_graders(["token_f1"], ctx(answer, expected=reference))["token_f1"]
+    assert score < 0.35
+
+
+def test_the_chance_level_is_what_an_unrelated_answer_already_scores():
+    """Templated replies overlap heavily whatever they are about.
+
+    Four replies to four different tickets share almost every word, so word
+    overlap gives an answer to the wrong ticket a high score. Without this
+    number a reader has no way to see that the metric never had any room to
+    move; with it, "0.7" stops being a good result.
+    """
+    replies = [
+        "Thank you for contacting us about your order. We are looking into it now.",
+        "Thank you for contacting us about your invoice. We are looking into it now.",
+        "Thank you for contacting us about your refund. We are looking into it now.",
+        "Thank you for contacting us about your delivery. We are looking into it now.",
+    ]
+    assert token_f1_chance_level(replies) > 0.8
+    # Answers with nothing in common have a floor near zero, which is when word
+    # overlap is telling you something.
+    assert token_f1_chance_level(["alpha beta", "gamma delta", "epsilon zeta", "eta theta"]) == 0.0
+
+
+def test_the_chance_level_is_deterministic_and_declines_to_guess_from_too_few_rows():
+    replies = ["one two three", "two three four", "three four five", "four five six"]
+    assert token_f1_chance_level(replies) == token_f1_chance_level(replies)
+    assert token_f1_chance_level(replies[:3]) is None
+    assert token_f1_chance_level([]) is None
+
+
+def test_the_graders_that_mislead_carry_the_sentence_that_says_how():
+    assert set(GRADER_CAVEATS) <= set(grader_names())
+    assert "token_f1" in GRADER_CAVEATS
+    assert caveat("token_f1") == GRADER_CAVEATS["token_f1"]
+    assert caveat("label_accuracy") is None
+    assert caveat(None) is None
+    assert REFERENCE_OVERLAP_GRADERS <= set(grader_names())
+    # Every grader whose score is a similarity to one reference has to say so,
+    # because that is the family a reader mistakes for a mark out of ten.
+    assert REFERENCE_OVERLAP_GRADERS <= set(GRADER_CAVEATS)
+
+
+def test_no_partial_credit_grader_is_listed_as_a_pass_rate():
+    """A share of answers and an average score are different claims.
+
+    Only a grader that returns 0 or 1 may be read out as "N in 100 were right";
+    the rest are averages, and the UI picks its wording from this set.
+    """
+    assert PASS_RATE_GRADERS <= set(grader_names())
+    assert not PASS_RATE_GRADERS & {"token_f1", "field_f1", "coverage", "unit_tests"}
+
+
+def test_forbidden_content_fails_a_draft_outright_rather_than_by_degrees():
+    options = {"forbidden": ["refund"], "forbidden_patterns": [r"\[INSERT [A-Z ]+\]"]}
+    clean = ctx("Your order ships tomorrow.", options=options)
+    assert run_graders(["forbidden_content"], clean)["forbidden_content"] == 1.0
+    for bad in ("We will issue a full REFUND today.", "Dear [INSERT NAME], your order ships."):
+        assert (
+            run_graders(["forbidden_content"], ctx(bad, options=options))["forbidden_content"]
+            == 0.0
+        )
+    # Nothing declared, nothing claimed: the grader scores no task that did not
+    # ask it to, rather than handing out a free 1.0.
+    assert run_graders(["forbidden_content"], ctx("anything")) == {}

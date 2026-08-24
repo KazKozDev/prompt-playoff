@@ -37,6 +37,13 @@ from prompt_playoff.evals import (
     BenchmarkReport,
     BenchmarkRunner,
     Scorecard,
+    overlap_scored_references,
+)
+from prompt_playoff.graders import (
+    REFERENCE_OVERLAP_GRADERS,
+    chance_level_is_useless,
+    describe,
+    token_f1_chance_level,
 )
 from prompt_playoff.providers import ModelProvider, ProviderError
 
@@ -313,6 +320,41 @@ def mutation_biases(task: TaskProfile) -> tuple[str, ...]:
     return ACCURACY_BIASES
 
 
+class UnmeasurableObjective(ValueError):
+    """The search has no number worth maximising on this data."""
+
+
+def refuse_unmeasurable(dataset: list[BenchmarkExample], *, allowed: bool = False) -> None:
+    """Stop before the first model call when the objective cannot decide anything.
+
+    A prompt search moves whatever number it is handed. Handed word overlap on
+    rows whose answers already resemble each other, it will find a candidate
+    that scores higher — reliably, every time — by drifting towards the shared
+    wording of the corpus. That is not a slow way to improve a prompt; it is a
+    fast way to make one worse while the number rises, and it costs an evening
+    of calls to do it.
+
+    So the search refuses, in the same voice the CI gate refuses a quality bar
+    it cannot support, and for the same reason: reporting a result nobody can
+    act on is worse than reporting none. Nothing here calls a model — the floor
+    is computed from the rows — so the refusal is free and arrives first.
+    """
+    if allowed:
+        return
+    references = overlap_scored_references(dataset)
+    chance = token_f1_chance_level(references)
+    if not chance_level_is_useless(chance):
+        return
+    raise UnmeasurableObjective(
+        f"These rows would be scored by token_f1, and an answer written for a different row "
+        f"of this set already scores {chance:.2f} on it. A search against that number will "
+        "raise it by echoing the wording every row shares, not by answering better. Give the "
+        "rows requirements a rule can decide — contains_all, forbidden_content, length_limit, "
+        "regex_match — and the search will have something worth maximising; or pass "
+        "allow_noisy_objective to run anyway and read the result as drift."
+    )
+
+
 class PromptOptimizer:
     def __init__(
         self,
@@ -320,8 +362,13 @@ class PromptOptimizer:
         engine_provider: ModelProvider | None = None,
         engine_model: ModelProfile | None = None,
         compiler: PromptCompiler | None = None,
+        allow_noisy_objective: bool = False,
     ) -> None:
         self.provider = provider
+        #: Run even when the number being maximised cannot decide anything. Off,
+        #: because a search against such a number is not a slow way to improve a
+        #: prompt — it is a fast way to make one worse while the score rises.
+        self.allow_noisy_objective = allow_noisy_objective
         #: Falls back to the model under test, which means the model grades a prompt
         #: it wrote for itself. Legal, but the result says so out loud.
         self.engine_provider = engine_provider or provider
@@ -356,6 +403,7 @@ class PromptOptimizer:
         technique: what changes is what they have to beat."""
         if len(dataset) < 2:
             raise ValueError("Optimization needs at least two examples to split")
+        refuse_unmeasurable(dataset, allowed=self.allow_noisy_objective)
         started = time.perf_counter()
         train, validation = _split(dataset, validation_ratio)
         priorities = task.priorities.normalized()
@@ -556,6 +604,7 @@ class PromptOptimizer:
             notes=[
                 *_baseline_note(authored),
                 *self._engine_note(task),
+                *self._metric_note(winner_validation),
                 *self._diagnosis(technique, winner),
             ],
         )
@@ -623,9 +672,40 @@ class PromptOptimizer:
                 "The search rewrote the prompt itself rather than the recipe behind it, so "
                 "the winning text is what was measured and adopting it copies it verbatim.",
                 *self._engine_note(task),
+                *self._metric_note(winner_validation),
                 *_discard_note(self.proposal_failures),
             ],
         )
+
+    def _metric_note(self, winner_validation: Scorecard) -> list[str]:
+        """What the search was actually maximising, when that is not correctness.
+
+        A prompt search moves whatever number it is given. On open-ended work
+        that number is word overlap with one reference answer, and a candidate
+        can win it by echoing the reference's wording rather than by answering
+        better — which is how a search spends an evening of model calls to
+        produce a worse prompt with a higher score. The result says so, and
+        quotes the floor: a gain that sits inside what an answer to a different
+        question already earns is not a gain anybody can act on.
+        """
+        card = winner_validation
+        if card.quality_grader not in REFERENCE_OVERLAP_GRADERS:
+            return []
+        floor = (
+            f" On these rows an answer written for a different row already scores "
+            f"{card.quality_chance_level:.2f} on it, so a gain smaller than that gap is "
+            "inside the metric's own noise."
+            if card.quality_chance_level is not None
+            else ""
+        )
+        return [
+            f"The search maximised {card.quality_grader} — {describe(card.quality_grader)} — "
+            "because these rows carry prose answers and nothing better applied. A candidate "
+            "can win that by echoing the reference's wording rather than by answering better."
+            + floor
+            + " Give the rows requirements a rule can check (contains_all, forbidden_content, "
+            "length_limit) and the search will have something worth maximising."
+        ]
 
     def _engine_note(self, task: TaskProfile) -> list[str]:
         """Self-optimization is allowed, but it is never left implicit."""

@@ -404,6 +404,48 @@ function renderDatasetBuilder() {
  * verdict from a model is worth. The work takes the wide half — an input and
  * two answers are four text areas, and they do not fit a 380px column.
  * -------------------------------------------------------------------------- */
+/* The question people actually have about a drafting prompt is whether it
+ * writes well across the set. This screen could only ever settle an argument
+ * about one example, which is a different and much smaller question — so the
+ * run comes first and the pair stays underneath it.
+ *
+ * Every row of the last recorded run is compared with the reference answer that
+ * row already carries, order hidden. What comes back is a win rate against the
+ * person who wrote those references: 0.5 means the prompt writes about as well
+ * as they did, not that half its answers were wrong. */
+function judgeRunSection() {
+  const report = state.report;
+  const runnable = report && report.runs?.length && report.dataset;
+  const verdict = screenResult('judge');
+  const result = verdict?.kind === 'rubric' ? `<div class="quality-result">
+    <div class="quality-stats">
+      ${statusCard('Won', `${verdict.wins} of ${verdict.rows.length - verdict.errors}`)}
+      ${statusCard('Win rate', verdict.win_rate == null ? '—' : Number(verdict.win_rate).toFixed(2))}
+      ${statusCard('Human gate', 'Pending review', 'warning')}
+    </div>
+    ${verdict.self_preference_warning ? `<div class="warning">${esc(verdict.self_preference_warning)}</div>` : ''}
+    <p>${esc(verdict.summary)}</p>
+    <p class="meta">A win rate of 0.50 means this prompt writes about as well as whoever wrote the
+      reference answers — not that half of its answers were wrong. ${verdict.errors ? `${plural(verdict.errors, 'row')} could not be judged and count for nothing either way. ` : ''}This number is a model's
+      opinion and has no route into a scorecard or a committed threshold;
+      <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a> is where it is accepted or thrown out.</p>
+  </div>` : '';
+  return `<section class="screen-body">
+    <h2>Judge a whole run</h2>
+    ${runnable
+      ? `<p class="meta">Every row of <code>${esc(report.dataset)}</code> — ${plural(report.examples, 'example')} measured with
+          ${esc(techniqueTitle(report.technique_id))} — held against the reference answer it already carries, order hidden
+          from the judge.</p>
+        <div class="quality-form">
+          <label class="wide">Rubric, one criterion per line<textarea id="rubric-run-lines">Answers the question that was asked\nKeeps every fact the input gave\nReads as something you would send</textarea></label>
+        </div>
+        <div class="form-actions"><button class="primary" data-action="run-rubric">Judge ${plural(report.examples, 'answer')}</button></div>`
+      : `<p class="meta">Measure a prompt first — this judges the answers a run produced, against the reference
+          answers the rows carry. <a href="#report" data-global-tab="report" data-screen="report">Measurement</a> is where a run comes from.</p>`}
+    ${result}
+  </section>`;
+}
+
 function renderJudge() {
   const current = screenResult('judge');
   // The warning is printed with the verdict, not instead of it: the verdict is
@@ -439,8 +481,9 @@ function renderJudge() {
   return `<div class="screen-split work-wide">
     <div class="build-work">
       ${qualityError()}${gate}${kin}
+      ${judgeRunSection()}
       <section class="screen-body">
-        <h2>The pair to compare</h2>
+        <h2>Or one pair, by hand</h2>
         <div class="quality-form">
           <label class="wide">Input<textarea id="judge-input"></textarea></label>
           <label>Answer A<textarea id="judge-a"></textarea></label>
@@ -460,9 +503,10 @@ function renderJudge() {
  * arrives rather than argued with afterwards. */
 function judgeGuide() {
   return `<h2>How much a verdict is worth</h2>
-    <p class="guide-lead">One input, two answers, one model marking them: opinion held to a rubric. It is for
+    <p class="guide-lead">A model marking answers against a rubric: opinion, held to criteria you wrote. It is for
       work no grader can score — tone, judgement, whether an explanation explains. Anything a grader can decide
-      belongs in <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>.</p>
+      belongs in <a href="#report" data-global-tab="report" data-screen="report">Measurement</a>, where it costs
+      nothing and never changes its mind.</p>
     <dl class="guide-stack">
       <div><dt>Blind, and repeatable</dt><dd>The judge sees a first answer and a second, never A and B. Order
         comes from a fixed seed, so the same pair judged twice reads the same way.</dd></div>
@@ -472,8 +516,13 @@ function judgeGuide() {
         one with the model being measured, the screen says so before the run and the verdict repeats it.</dd></div>
       <div><dt>Nothing is settled by the model</dt><dd>Every verdict lands in <a href="#reviews" data-global-tab="reviews" data-screen="reviews">Reviews</a> as pending. Until a person approves it there, it is a
         reading, not a decision.</dd></div>
-      <div><dt>One comparison, not a score</dt><dd>Two answers to one input say nothing about the next hundred.
-        Take the pattern to a dataset before you act on it.</dd></div>
+      <div><dt>A whole run, or one pair</dt><dd>Judging a run compares every answer with the reference its row
+        carries and returns a win rate against whoever wrote those references — 0.50 means your prompt writes about
+        as well as they did. One pair settles an argument about one example and says nothing about the next
+        hundred.</dd></div>
+      <div><dt>It cannot become a gate</dt><dd>A judged number has no route into a scorecard or into
+        <code>prompt-playoff.yaml</code>. A bar defended by a model's mood on the day is not a bar; CI enforces what
+        a rule decided.</dd></div>
     </dl>
     <p class="guide-note">The judge model is set in <a href="#settings" data-global-tab="settings" data-screen="settings">Settings</a>, and runs at temperature zero.</p>`;
 }
@@ -485,7 +534,7 @@ function judgeGuide() {
  * -------------------------------------------------------------------------- */
 const REVIEW_KINDS = {
   dataset:'Generated rows waiting to be read',
-  judge:'A verdict one model gave about two answers',
+  judge:'A verdict one model gave about answers it was shown',
   regression:'A gate that failed on metrics you set',
   release:'A prompt registered for release'
 };
@@ -1596,7 +1645,7 @@ function renderBusinessZone(names, {collapsed = false, open = false} = {}) {
     return `<tr>
       <td>${title}<br><code class="meta">${esc(name)}</code></td>
       <td>${esc(spec.group || '—')}</td>
-      <td>${state.datasetSizes.get(name) ?? '—'}</td>
+      <td>${state.datasetSizes.get(name) ?? '—'}${overlapFloorNote(name)}</td>
       <td>${esc(spec.shape)}</td>
       <td><a href="${esc(spec.url)}" target="_blank" rel="noreferrer noopener">${esc(spec.source)} ↗</a><br>
         <a class="meta" href="${esc(spec.license_url)}" target="_blank" rel="noreferrer noopener">${esc(spec.license)} ↗</a><br>
@@ -1694,6 +1743,26 @@ function measureAgainstBand(name) {
 // says "In use" in the same place it offers the swap. A word of prose there
 // instead would be `.meta`, which is a block, and a block beside a button in a
 // cell one line tall puts the two on top of each other.
+/* The one action that turns a set of prose answers into a set that can be
+ * scored and gated. Offered only where it would change something: a set whose
+ * quality number would come from word overlap has nothing else to answer for
+ * it, and this reads the requirements off the rows — the identifier a reply has
+ * to carry back, the unfilled placeholder that must not ship, the length the
+ * channel allows. Each is kept only where the row's own reference answer
+ * already meets it, so the button cannot create a new way to be wrong. */
+function contractCell(name) {
+  const facts = state.datasetFacts.get(name);
+  if (!facts?.free_text) return '';
+  return `<div class="contract-cell">
+    <select data-contract-for="${esc(name)}" aria-label="Shape of the work in ${esc(name)}">
+      <option value="reply">answers to somebody</option>
+      <option value="summary">summaries of a source</option>
+      <option value="draft">drafts, format only</option>
+    </select>
+    <button type="button" class="ghost" data-action="derive-requirements" data-dataset="${esc(name)}">Add requirements</button>
+  </div>`;
+}
+
 function measureCell(name) {
   const current = state.run.dataset === name;
   return `<button type="button" class="ghost" data-measure-against="${esc(name)}"
@@ -1749,8 +1818,8 @@ function renderYoursZone(entries) {
       <a href="#dataset-add/hugging-face" data-global-tab="dataset-add" data-mode="hugging-face">import a public set</a>, or
       <a href="#dataset-add/generate" data-global-tab="dataset-add" data-screen="dataset-add" data-mode="generate">build one from your task</a>.</p></section>`;
   const rows = mine.map(([name, count]) => `<tr>
-    <td>${esc(name)}</td><td>${count}</td><td>${esc(datasetSource(name))}</td>
-    <td class="row-actions">${measureCell(name)}${deleteCell(name)}</td>
+    <td>${esc(name)}</td><td>${count}${overlapFloorNote(name)}</td><td>${esc(datasetSource(name))}</td>
+    <td class="row-actions">${contractCell(name)}${measureCell(name)}${deleteCell(name)}</td>
   </tr>`).join('');
   return `<section class="library-zone"><h3 class="zone-title">Your sets</h3>
     <p class="meta">Uploaded, imported or built here. These are the only ones this screen can delete.</p>
@@ -1770,7 +1839,7 @@ function renderBundledZone(entries, {heading = true} = {}) {
   // measuring against, and its rows live on the library screen.
   const rows = bundled.map(([name, count]) => `<tr>
     <td><a href="#dataset-library/${encodeURIComponent(name)}" data-global-tab="dataset-library" data-showing="${esc(name)}">${esc(name)}</a></td>
-    <td>${count}</td></tr>`).join('');
+    <td>${count}${overlapFloorNote(name)}</td></tr>`).join('');
   const head = heading
     ? `<h3 class="zone-title">Shipped with the tool</h3>
       <p class="meta">The tool's own test stand: its checks are written against these rows and its published numbers
@@ -1829,6 +1898,19 @@ function licenceCell(licence) {
     <span class="meta">${esc(condition)}</span>`;
 }
 
+// A set whose answers are prose gets its quality number from word overlap with
+// the one reference each row carries, and this is what that comparison already
+// gives an answer written for a different row. Said on the shelf, because
+// choosing the set is the decision this changes: a floor of 0.63 means no
+// prompt work will move the number, and the set has to be scored some other way.
+function overlapFloorNote(name) {
+  const facts = state.datasetFacts.get(name);
+  const chance = facts?.token_f1_chance_level;
+  if (chance == null) return '';
+  return `<br><span class="meta${chance >= 0.35 ? ' warn' : ''}">scored by word overlap; an answer
+    from another row already scores ${chance.toFixed(2)}</span>`;
+}
+
 function bundledShelf(entries, {title, lead, provenance = false}) {
   if (!entries.length) return '';
   const rows = entries.map(([name, count]) => {
@@ -1838,7 +1920,7 @@ function bundledShelf(entries, {title, lead, provenance = false}) {
       : esc(from.source || '—');
     return `<tr>
       <td><a href="#dataset-library/${encodeURIComponent(name)}" data-global-tab="dataset-library" data-showing="${esc(name)}">${esc(name)}</a></td>
-      <td>${count}</td>
+      <td>${count}${overlapFloorNote(name)}</td>
       ${provenance ? `<td>${source}${from.citation ? `<br><span class="meta">${esc(from.citation)}</span>` : ''}</td>
       <td>${licenceCell(from.licence)}</td>` : ''}
     </tr>`;
@@ -2062,6 +2144,30 @@ function wireDatasetLibrary(tab, panel) {
     if (typeof refreshActions === 'function') refreshActions();
     renderDetailPanel(tab);
   }));
+  panel.querySelectorAll('[data-action="derive-requirements"]').forEach(button => button.addEventListener('click', () => {
+    const name = button.dataset.dataset;
+    const contract = panel.querySelector(`[data-contract-for="${CSS.escape(name)}"]`)?.value || 'draft';
+    button.disabled = true;
+    button.textContent = 'Reading the rows';
+    qualityAction(tab, async () => {
+      const result = await api(`/v1/datasets/${encodeURIComponent(name)}/requirements`, {contract});
+      delete datasetCache[name];
+      await loadDatasets();
+      // What the set now holds, not what this press changed: pressing the button
+      // twice is reasonable, and the second press must not report a set that is
+      // fully derived as one nothing could be derived from.
+      const held = Object.entries(result.requirements || {});
+      // And the part that decides what to do next — how many rows are still
+      // answered for by word overlap alone. On some corpora that is most of
+      // them, which is a fact about the rows rather than a failure here.
+      state.datasetNote = held.length
+        ? `${name} now carries ${held.map(([grader, rows]) => `${grader} on ${rows} row${rows === 1 ? '' : 's'}`).join(', ')}.`
+          + (result.still_overlap_scored
+            ? ` ${result.still_overlap_scored} row${result.still_overlap_scored === 1 ? '' : 's'} still have only word overlap answering for quality — those rows hold no requirement a rule could read off them, so gate this set on the checks above rather than on quality.`
+            : ' Every row has a requirement a rule can decide, so this set can be gated in CI.')
+        : `${name}: nothing could be derived. These rows carry a reference answer and nothing a rule could check against it — add "contains" or "forbidden" options by hand where you know the requirement.`;
+    });
+  }));
   panel.querySelectorAll('[data-delete-arm]').forEach(button => button.addEventListener('click', () => {
     state.pendingDelete = button.dataset.deleteArm;
     state.datasetNote = '';
@@ -2199,6 +2305,24 @@ function wirePlatformTab(tab, panel) {
     project.querySelector('.dataset-review')?.addEventListener('click', () => review('review'));
     project.querySelector('.dataset-approve')?.addEventListener('click', () => review('approve'));
     project.querySelector('.dataset-publish')?.addEventListener('click', () => qualityAction(tab, async () => { const result=await api(`/v1/dataset-projects/${project.dataset.projectId}/publish`, {}); await loadDatasets(result.name); setScreenResult(tab, {kind:'dataset', message:`Published ${result.name} with ${result.examples} approved examples, and selected it for measurement.`}); }));
+  });
+  // The run first, because it answers the question people bring to this screen.
+  panel.querySelector('[data-action="run-rubric"]')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const report = state.report;
+    if (!report) return;
+    button.disabled = true;
+    button.textContent = 'Judging';
+    qualityAction(tab, async () => {
+      const result = await api('/v1/evaluate/rubric', {
+        dataset: report.dataset,
+        runs: report.runs,
+        rubric: panel.querySelector('#rubric-run-lines').value.split('\n').map(line => line.trim()).filter(Boolean),
+        judge_model: judgeRunProfile(panel),
+        subject_models: [report.model_id]
+      });
+      setScreenResult(tab, {kind:'rubric', ...result});
+    });
   });
   panel.querySelector('.judge-run')?.addEventListener('click', () => qualityAction(tab, async () => { const result = await api('/v1/evaluate/pairwise', {input:panel.querySelector('#judge-input').value, answer_a:panel.querySelector('#judge-a').value, answer_b:panel.querySelector('#judge-b').value, rubric:panel.querySelector('#judge-rubric').value.split('\n').filter(Boolean), judge_model:judgeRunProfile(panel), subject_models:[modelProfile().model_id]}); setScreenResult(tab, {kind:'judge', ...result}); }));
   panel.querySelectorAll('.review-card').forEach(card => ['approve','reject'].forEach(action => card.querySelector(`.review-${action}`)?.addEventListener('click', () => qualityAction(tab, async () => api(`/v1/reviews/${card.dataset.reviewId}`, {action})))));

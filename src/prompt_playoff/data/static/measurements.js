@@ -325,7 +325,9 @@ function measurementGraders(name) {
   const all = [...found.named, ...validators.filter(item => !found.named.includes(item))];
   if (!all.length) {
     return `<p class="how-note">No row here names a grader, so each answer is scored by graders inferred from the
-      shape of its expected answer — word overlap for prose, per-item overlap for a list, the label for a category.</p>`;
+      shape of its expected answer — word overlap for prose, per-item overlap for a list, the label for a category.</p>
+      <p class="how-note warn"><b>If these rows hold prose</b> — a reply, a summary, an email — the inferred score is
+      word overlap with your reference answer, and ${esc(graderCaveat('token_f1') || '')}</p>`;
   }
   const headline = state.qualityPreference.find(item => all.includes(item)) || null;
   const inferred = found.inferred
@@ -336,9 +338,14 @@ function measurementGraders(name) {
     ? `<p class="how-note">${validators.length === 1 ? 'The last one comes' : `The last ${validators.length} come`}
       from the method itself — its own contract checks, which score nothing when they do not apply.</p>`
     : '';
+  // Said before the run rather than after it. Learning that the headline number
+  // cannot decide this task is worth an hour when it arrives with the number,
+  // and worth the whole run when it arrives before one.
+  const warning = graderCaveat(headline);
   return `<ul class="grader-list">${all.map(item => graderChip(item, headline)).join('')}</ul>
     ${headline ? `<p class="how-note">Quality will be <code>${esc(headline)}</code>: the first of these in the order the
       scorecard prefers for a headline number. The rest are shown beside it on the report.</p>` : ''}
+    ${warning ? `<p class="how-note warn"><b>Before you read that number:</b> ${esc(warning)}</p>` : ''}
     ${inferred}${added}`;
 }
 
@@ -673,12 +680,44 @@ async function runOptimization() {
       task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
       dataset: state.run.dataset, repeats: Number(state.run.repeats),
       rounds: Number(state.run.rounds), backend: state.run.backend,
-      engine_model: engineProfile(), ...businessCaseRequestFields()
+      engine_model: engineProfile(), ...businessCaseRequestFields(),
+      allow_noisy_objective: state.run.allowNoisyObjective === true
     });
     state.optimization = await pollJob(job.id, showProgress);
     state.tab = 'optimization'; renderDetail();
-  } catch (e) { showDetailMessage('optimization', `<div class="error">${esc(e.message)}</div>`); }
+  } catch (e) { showDetailMessage('optimization', optimizeFailure(e)); }
   finally { busy(false); }
+}
+
+/* A search maximises whatever number it is handed. Handed word overlap on rows
+ * whose answers already resemble each other, it raises it by drifting towards
+ * the wording every row shares — the prompt gets worse while the score goes up.
+ * The server refuses that before spending a call, and this is where the refusal
+ * turns into something a person can act on: what to give the rows instead, and
+ * the one way to proceed anyway, which relabels what comes back. */
+// The override, wired once. The refusal is drawn into a panel that redraws
+// itself, so the button cannot be bound where it is written.
+document.addEventListener('click', event => {
+  if (!event.target.closest('[data-action="optimize-anyway"]')) return;
+  // Set for this search only. A run that opted out of the refusal is a run
+  // whose result is drift, and the next one should have to say so again.
+  state.run.allowNoisyObjective = true;
+  runOptimization().finally(() => { state.run.allowNoisyObjective = false; });
+});
+
+function optimizeFailure(error) {
+  if (error.code !== 'unmeasurable_objective') return `<div class="error">${esc(error.message)}</div>`;
+  const floor = error.detail?.chance_level;
+  return `<div class="error">
+    <p><strong>This set has no number worth searching against.</strong>${floor == null ? ''
+      : ` An answer written for a different row of it already scores ${Number(floor).toFixed(2)} on word overlap, which is what the search would be raising.`}</p>
+    <p>Give the rows requirements a rule can decide and the search has something real to maximise —
+      <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library">Datasets</a> can read them
+      off the rows for you.</p>
+    <div class="quality-actions">
+      <button type="button" class="ghost" data-action="optimize-anyway">Search anyway, and read it as drift</button>
+    </div>
+  </div>`;
 }
 
 // The exporter's own default collides with the next winner from the same recipe,
@@ -840,6 +879,26 @@ function verdictCautions(report) {
   if (c.failures) {
     notes.push(`${plural(c.failures, 'answer')} failed outright and count as zero — worth reading before trusting the average.`);
   }
+  // The measured floor under the headline metric, when the headline is a
+  // comparison against one reference answer. This is the note that stops
+  // someone rewriting a working prompt: if answers to other rows already score
+  // what this run scored, the number is about the metric, not the prompt.
+  if (c.quality_chance_level != null) {
+    const margin = c.quality - c.quality_chance_level;
+    notes.push(margin <= 0.05
+      ? `Answers copied from other rows of this set already score ${c.quality_chance_level.toFixed(2)} here — at or above what this run scored. This metric is not telling your prompt apart from an answer to a different question, so the number is not a verdict on the prompt at all.`
+      : `Answers copied from other rows of this set already score ${c.quality_chance_level.toFixed(2)} here, so ${c.quality.toFixed(2)} is ${margin.toFixed(2)} above what wording alone earns. 1.00 is not reachable by anything but a copy of the reference.`);
+  }
+  const graderNote = graderCaveat(c.quality_grader);
+  if (graderNote) notes.push(graderNote);
+  // Which of these numbers nobody chose. A row that names its graders said what
+  // it wanted measured; a row that did not had them picked from the shape of
+  // its answer, and the result reads the same either way unless it is said.
+  const inferred = Object.keys(report.inferred_graders || {});
+  if (inferred.length) {
+    const rows = Math.max(...Object.values(report.inferred_graders));
+    notes.push(`${rows} of ${report.examples} examples name no grader of their own, so ${inferred.join(', ')} ${inferred.length === 1 ? 'was' : 'were'} chosen for them from the shape of their answers — not by you. Write "graders" into the rows to make the choice yours.`);
+  }
   // A score over rows a model invented is a score about invented rows. It is
   // said here rather than on the builder screen, because here is where the
   // number gets read and believed.
@@ -881,10 +940,16 @@ function renderVerdict(report) {
         <svg viewBox="0 0 96 96" aria-hidden="true"><circle class="ring-track" cx="48" cy="48" r="43.5"></circle></svg>
         <b>—</b><span>unscored</span>
       </div>`
-    : `<div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1">
+    // The floor is marked on the ring, not only said underneath it. An arc
+    // filled to 0.66 reads as two thirds of the way to right; over a metric
+    // that already gives an answer to a different question 0.63, almost all of
+    // that arc was never the prompt's to earn. The tick is where that line
+    // falls, drawn over the fill so it shows on either side of it.
+    : `<div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1${c.quality_chance_level == null ? '' : `, where an answer written for a different row already scores ${c.quality_chance_level.toFixed(2)}`}">
         <svg viewBox="0 0 96 96" aria-hidden="true">
           <circle class="ring-track" cx="48" cy="48" r="43.5"></circle>
           <circle class="ring-fill" cx="48" cy="48" r="43.5" stroke-dasharray="${circumference}" stroke-dashoffset="${(circumference * (1 - Math.max(0, Math.min(1, c.quality)))).toFixed(1)}"></circle>
+          ${c.quality_chance_level == null ? '' : `<circle class="ring-chance" cx="48" cy="48" r="43.5" stroke-dasharray="2 ${circumference}" stroke-dashoffset="${(1 - circumference * Math.max(0, Math.min(1, c.quality_chance_level))).toFixed(1)}"><title>an answer written for a different row scores ${c.quality_chance_level.toFixed(2)}</title></circle>`}
         </svg>
         <b>${c.quality.toFixed(2)}</b><span>quality</span>
       </div>`;
@@ -892,7 +957,15 @@ function renderVerdict(report) {
     ? `<p class="verdict-line"><strong>Nothing here could score correctness.</strong> These rows carry no right
         answer and the task sets no shape to check against, so what was measured is repeatability, time and cost.</p>
       <p class="verdict-move">Add the right answer to some rows and the same run returns a quality number.</p>`
-    : `<p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.</p>
+    // A share of answers and an average score are two different claims, and the
+    // second one was being read out as the first. `token_f1` gives an answer
+    // partial credit for the words it shares with a reference, so "14 out of
+    // every 100 answers were correct" was a pass rate nobody measured — and the
+    // one sentence most likely to send a reader off to fix a working prompt.
+    : isPassRate(c.quality_grader)
+    ? `<p class="verdict-line"><strong>${percent} out of every 100 answers</strong> passed — ${esc(graderMeaning(c.quality_grader))}.</p>
+      <p class="verdict-move">${esc(movement)}</p>`
+    : `<p class="verdict-line">Answers scored <strong>${c.quality.toFixed(2)} out of 1 on average</strong>, where the score is ${esc(graderMeaning(c.quality_grader))}. That is an average, not a share of answers that were right.</p>
       <p class="verdict-move">${esc(movement)}</p>`;
   const headline = unscored
     ? stat('Same answer twice', c.stability.toFixed(3), report.repeats > 1 ? `over ${plural(report.repeats, 'run')}` : 'raise runs per example')
@@ -1046,6 +1119,10 @@ function renderReport(r) {
   const unscored = !c.quality_grader;
   const rows = [
     ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality, 'ratio'],
+    // Directly under quality, because it is the row that says where this
+    // metric's zero actually is: the score an answer about a different row
+    // already earns. Absent for every grader whose zero is at zero.
+    ...(c.quality_chance_level == null ? [] : [['chance level — what an unrelated answer scores here', c.quality_chance_level, null, 'ratio']]),
     ['reliability', c.reliability, r.declared.reliability, 'ratio'],
     ['contract pass rate', c.contract_pass_rate, null, 'ratio'],
     ['stability across repeats', c.stability, null, 'ratio'],
