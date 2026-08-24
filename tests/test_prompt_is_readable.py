@@ -130,3 +130,70 @@ def test_the_two_readers_of_a_frozen_prompt_know_the_same_shapes():
         assert f"'{key}'" in reader
     assert "program?.messages" in reader
     assert "program?.stages" in reader
+
+
+# The four screens that act on a prompt without a column to hold one. Each named
+# the prompt in a sentence and showed nothing: "every model runs the same
+# prompt" over a table of models, a queue of verdicts about answers nobody could
+# read the question for. The band is the text, put where the sentence is.
+BAND_SCREENS = ("results", "test-lab", "judge", "reviews")
+
+
+def test_the_screens_with_no_column_carry_the_prompt_as_a_band():
+    measurements = read("measurements.js")
+    band = measurements[
+        measurements.index("const PROMPT_BAND = {") : measurements.index("function promptBand(tab)")
+    ]
+    for tab in BAND_SCREENS:
+        key = f"'{tab}'" if "-" in tab else tab
+        assert f"{key}:" in band, f"{tab} has no entry in PROMPT_BAND"
+
+
+def test_the_band_is_drawn_by_the_shell_and_not_by_four_screens():
+    """One prompt, one implementation.
+
+    A band pasted into each of the four renderers is a band that goes missing
+    from whichever of them is edited next; the shell already draws the gate and
+    the showing band for every screen, so it draws this one too.
+    """
+    navigation = read("navigation.js")
+    shell = navigation[navigation.index("function screenShell(tab, body)") :]
+    shell = shell[: shell.index("\n}")]
+    assert "promptBand(tab)" in shell
+    assert "${band}" in shell
+    measurements = read("measurements.js")
+    assert measurements.count("function promptBand(tab)") == 1
+    # The band draws a prompt the same way every other surface does.
+    assert "parts.map(promptPartBlock)" in measurements
+
+
+def test_the_band_over_run_history_refuses_to_pass_for_the_recorded_wording():
+    """A run stores a fingerprint of its prompt, never the words.
+
+    So the text standing above the history is the prompt held today, and a row
+    below it may have been measured on something else. Saying that is the whole
+    difference between showing the prompt and implying a provenance the store
+    cannot support.
+    """
+    measurements = read("measurements.js")
+    band = measurements[
+        measurements.index("const PROMPT_BAND = {") : measurements.index("function promptBand(tab)")
+    ]
+    results = band[band.index("results:") : band.index("'test-lab':")]
+    assert "fingerprint" in results
+    assert "never the wording" in results
+
+
+def test_a_changed_prompt_reaches_the_screens_already_drawn():
+    """These screens are drawn once and left alone, holding half-typed forms.
+
+    Without this the band is a snapshot of whatever the prompt was the first
+    time the screen opened — the one failure mode that makes showing the prompt
+    worse than not showing it.
+    """
+    measurements = read("measurements.js")
+    navigation = read("navigation.js")
+    assert "function refreshPromptBands()" in measurements
+    render = navigation[navigation.index("function renderDetail()") :]
+    render = render[: render.index("\n}")]
+    assert "refreshPromptBands()" in render

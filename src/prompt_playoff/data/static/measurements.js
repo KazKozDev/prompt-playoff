@@ -187,6 +187,84 @@ function subjectFullText() {
     </details>`;
 }
 
+/* --------------------------------------------------------------------------
+ * The prompt on the four screens that cannot give it a column.
+ *
+ * Results, Test lab, Answer judging and Reviews all act on a prompt, and all
+ * four are full-width tables and queues with no left column to hold one. So
+ * each of them named the prompt in a sentence — "every model runs the same
+ * prompt", "the answers this run produced" — while the words themselves were
+ * two screens away. The band puts the text where the sentence is. It is closed
+ * by default: a table keeps its height, and the reader keeps the option.
+ *
+ * Each entry says *which* prompt, because they are not the same one. Test lab
+ * runs the prompt being held. Judging works on the answers of the last run.
+ * Results lists recorded runs, and a run stores a fingerprint of its prompt and
+ * never the words — so a row may well have been measured on a different
+ * wording, and the band says so rather than letting the text above a table pass
+ * for the text that produced the numbers in it.
+ * -------------------------------------------------------------------------- */
+const PROMPT_BAND = {
+  results: ['The prompt you are holding now',
+    () => 'A recorded run keeps a fingerprint of its prompt, never the wording. This is the text in Prompt Studio today; an older row below may have been measured on different words, and this screen cannot tell you which.'],
+  'test-lab': ['The prompt under test',
+    () => 'This exact text is what runs. Every model and every context variant below is scored on these words, unchanged — that is the whole point of the screen.'],
+  judge: ['The prompt behind the answers',
+    () => state.report
+      ? `The answers being judged came out of this text, run over ${state.report.dataset}. Edit the prompt and the answers already on this screen still belong to the wording that produced them.`
+      : 'Nothing has been judged yet. When a run is, its answers will have come out of this text.'],
+  reviews: ['The prompt this queue is about',
+    () => 'The text in Prompt Studio now. Every item below names its own subject in its payload — a judge verdict or a breached gate can belong to an earlier wording than this one.']
+};
+
+function promptBand(tab) {
+  const entry = PROMPT_BAND[tab];
+  if (!entry) return '';
+  const [kicker, note] = entry;
+  const parts = promptMessages(state.program);
+  if (!parts.length) {
+    return `<div class="prompt-band bandless" data-testid="prompt-band">
+        <span class="stage-title">${esc(kicker)}</span>
+        <span>Nothing is written yet — <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> is where a prompt starts.</span>
+      </div>`;
+  }
+  const key = registerCopy(`band:${tab}`, promptPlainText(state.program));
+  return `<details class="prompt-band" data-testid="prompt-band">
+      <summary>
+        <span class="stage-title">${esc(kicker)}</span>
+        <span class="band-name">${esc(techniqueTitle(state.chosen))} · ${plural(parts.length, 'message')}</span>
+      </summary>
+      <div class="prompt-band-body">
+        <p class="band-note">${esc(note())}</p>
+        ${parts.map(promptPartBlock).join('')}
+        <div class="subject-full-actions">${copyButton(key, 'Copy prompt', 'Copy the text this screen is working on')}</div>
+        <div class="copy-status" data-copy-status="band:${esc(tab)}" role="status" aria-live="polite"></div>
+      </div>
+    </details>`;
+}
+
+/* A screen carrying this band is drawn once and then left alone — half of them
+ * hold a half-typed rubric or a list of model ids. So when the prompt changes,
+ * the copy standing on a screen nobody is looking at is the one that goes
+ * stale, and a band showing last week's wording under the words "this exact
+ * text is what runs" is worse than no band at all. Only the band is redrawn,
+ * from state, rather than the screen holding it: throwing the screen away to
+ * correct one band would throw the half-typed rubric away with it. */
+function refreshPromptBands() {
+  document.querySelectorAll('[data-tab-panel]').forEach(panel => {
+    const tab = panel.dataset.tabPanel;
+    if (!PROMPT_BAND[tab] || panel.dataset.rendered !== 'true') return;
+    const band = panel.querySelector('[data-testid="prompt-band"]');
+    if (!band) return;
+    // Reading it open and finding it shut a moment later is the band losing
+    // your place, so being open survives the text underneath changing.
+    const open = band.open === true;
+    band.outerHTML = promptBand(tab);
+    const drawn = panel.querySelector('[data-testid="prompt-band"]');
+    if (open && drawn && 'open' in drawn) drawn.open = true;
+  });
+}
+
 // The third zone of the workspace: the rail, the screen, and — on every screen
 // of the Prompt section — the prompt itself, in the left column where the
 // composer that wrote it stands. Under it, on the screen that measures, how

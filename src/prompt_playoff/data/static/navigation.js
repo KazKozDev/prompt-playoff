@@ -115,7 +115,16 @@ function screenShell(tab, body) {
   // zone of the workspace, held in the left column where the composer that
   // wrote it stands. So one place to look for the prompt, on all four screens
   // of this section.
-  return `${head}${gate}${showingBand(tab)}${setup}${body}`;
+  //
+  // A screen outside that section can still be acting on a prompt, and four of
+  // them are: Results, Test lab, Answer judging and Reviews. They have no
+  // column to spare, so the prompt arrives as a band across the top — the same
+  // text, drawn by the same code, folded shut so a table below it keeps its
+  // place. `screenShell` is where both go, because a prompt shown on some
+  // screens by the shell and on others by the screen itself is a prompt that
+  // will go missing from one of them.
+  const band = typeof promptBand === 'function' ? promptBand(tab) : '';
+  return `${head}${gate}${showingBand(tab)}${band}${setup}${body}`;
 }
 
 /* One compact mode rail teaches the consolidated information architecture on
@@ -1405,8 +1414,10 @@ function renderDetail() {
   renderDetailPanel(state.tab);
   activateDetailTab();
   // Every path that changes the prompt ends in a render, so this is the one
-  // place the draft has to be written down from.
+  // place the draft has to be written down from — and the one place the copies
+  // of the prompt standing on screens already drawn are brought up to date.
   rememberDraft();
+  if (typeof refreshPromptBands === 'function') refreshPromptBands();
 }
 
 function showDetailMessage(tab, body) {

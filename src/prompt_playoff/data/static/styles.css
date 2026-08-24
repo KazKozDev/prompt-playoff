@@ -333,6 +333,25 @@
     }
     .showing-band b { color:var(--text); font-weight:600; overflow-wrap:anywhere; }
     .showing-band button { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:5px 12px; font-size:var(--fs-sm); }
+    /* The prompt, on a screen with no column to give it. Same grey band as the
+       one above, for the same reason: it reports what this screen is acting on
+       and asks for nothing. Shut by default — the table underneath is what the
+       reader came for, and a wall of prompt above it would be a screen that
+       had changed its mind about its own subject. */
+    .prompt-band { margin:0 0 16px; border-left:2px solid var(--border-strong); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--wash); }
+    .prompt-band > summary {
+      display:flex; align-items:baseline; gap:14px; padding:9px 14px;
+      cursor:pointer; list-style:none; font-size:var(--fs-sm); line-height:1.6;
+    }
+    .prompt-band > summary::-webkit-details-marker { display:none; }
+    .prompt-band > summary .stage-title { margin:0; color:var(--accent-ink); }
+    .prompt-band > summary:hover .stage-title { text-decoration:underline; }
+    .prompt-band .band-name { margin-left:auto; color:var(--muted); text-align:right; overflow-wrap:anywhere; }
+    .prompt-band-body { padding:2px 14px 14px; }
+    .prompt-band .band-note { margin:0 0 14px; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .prompt-band.bandless { display:flex; align-items:baseline; gap:14px; padding:9px 14px; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .prompt-band.bandless .stage-title { margin:0; }
+    .prompt-band.bandless a { color:var(--accent-ink); }
     /* The verdict. Tinted band, not coloured type: the border carries the
        direction and the words stay the same grey as the rest of the prose. */
     .verdict { margin-bottom:20px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius:0 var(--r-md) var(--r-md) 0; background:var(--panel2); }
