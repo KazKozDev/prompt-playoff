@@ -1970,7 +1970,9 @@ function historyPromptSnapshotRow(record) {
     ? 'First-example preview recorded by an automatic benchmark. This run compiled each dataset row separately.'
     : record.prompt_snapshot_kind === 'optimized'
       ? 'Exact optimized prompt recorded with this run.'
-      : 'Exact authored prompt recorded with this run.';
+      : record.prompt_snapshot_kind === 'mixed'
+        ? 'Exact authored prompt for the arm that ran it; the compiled arms show a first-example preview.'
+        : 'Exact authored prompt recorded with this run.';
   const body = prompts.map((program, index) => {
     const parts = promptMessages(program);
     const label = prompts.length > 1 ? `<div class="stage-title">Variant ${index + 1}</div>` : '';
