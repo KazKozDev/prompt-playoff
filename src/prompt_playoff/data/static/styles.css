@@ -983,6 +983,14 @@
     .portfolio-compare-note { margin:0 0 14px; }
     .portfolio-runs .stage-title { margin-top:16px; }
     .pointed-run { background:var(--accent-soft); }
+    .history-prompt-link { padding:0; }
+    .history-prompt-text > td { padding:0; border-top:0; }
+    .history-prompt-body { padding:14px 16px 16px; border-left:2px solid var(--accent-line); background:var(--sunken); }
+    .history-prompt-body .field-hint { margin:0 0 12px; }
+    .history-prompt-body .stage-title:first-child { margin-top:0; }
+    .history-prompt-body .prompt-part:last-of-type pre { margin-bottom:0; }
+    .legacy-prompt-snapshot { border-left-color:var(--border-strong); color:var(--muted); }
+    .legacy-prompt-snapshot p { margin:0; }
     .instruction-list { margin-top:6px; }
     .block-index { display:grid; gap:6px; margin-top:12px; }
     .block-index-item { display:grid; grid-template-columns:minmax(90px,.7fr) minmax(110px,1fr) auto; gap:8px; align-items:start; padding:8px 0; border-top:1px solid var(--border); font-size:var(--fs-sm); }

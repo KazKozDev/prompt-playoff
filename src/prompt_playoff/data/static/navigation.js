@@ -35,7 +35,7 @@ const screenMeta = {
   'dataset-add':['Datasets', 'Add dataset', 'Upload your own rows, import a public set, or generate examples for the gaps you still need to test.'],
   'dataset-builder':['Datasets', 'Build datasets', 'Generate example rows from your task description, or around the ones the last run got wrong. Use it when you have nothing of your own and nothing to import. You approve every row before it counts.'],
   'dataset-bundled':['Datasets', 'Shipped with the tool', 'The benchmark sets that ship inside the package. They are what the tool tests itself with, so use them to try the workflow out — a good score here describes the tool, not your prompt.'],
-  history:['Evaluation', 'Results', 'Every run this server has finished, newest first, with the numbers it produced. Come here to compare two versions or export the history. Prompts and raw answers are not stored.'],
+  history:['Evaluation', 'Results', 'Every run this server has finished, newest first, with the numbers and exact prompt snapshot it recorded. Come here to inspect or compare two versions, or export the history. Raw answers are not stored.'],
   results:['Evaluation', 'Results', 'Read the run history, compare versions, check whether a difference is larger than the noise in the examples, and gate a new run against the last one.'],
   judge:['Evaluation', 'Answer judging', 'Have a model mark answers against a rubric without knowing which is which — a whole run against its reference answers, or one pair by hand. Use it for work no grader can score, like tone or clarity. A judged number never becomes a benchmark score or a CI gate: every verdict goes to Reviews for a person to confirm.'],
   'model-matrix':['Evaluation', 'Model matrix', 'Run the same prompt and the same examples on several models. It tells you whether the prompt works anywhere else, or only on the model you wrote it for.'],
@@ -1942,6 +1942,54 @@ function historyComparisonSeries(records) {
     .map(([id, items]) => ({id, records:items}));
 }
 
+/* The immutable wording behind one recorded run.
+ *
+ * The composer draft is deliberately a different object: it answers "what am
+ * I editing now?", while this snapshot answers "what produced these numbers?".
+ * A comparison records one payload per arm, so the reader handles both the
+ * ordinary single prompt and that list without pretending the current draft is
+ * historical evidence. */
+function historyPromptSnapshotText(snapshot) {
+  const prompts = Array.isArray(snapshot) ? snapshot : [snapshot];
+  return prompts.filter(item => item != null).map((program, index) => {
+    const text = promptPlainText(program) || JSON.stringify(program, null, 2);
+    return prompts.length > 1 ? `VARIANT ${index + 1}\n${text}` : text;
+  }).join('\n\n');
+}
+
+function historyPromptSnapshotRow(record) {
+  if (record.prompt_snapshot == null) {
+    return `<tr class="history-prompt-text" data-history-prompt-text-for="${esc(record.id)}" hidden>
+      <td colspan="7"><div class="history-prompt-body legacy-prompt-snapshot">
+        <p>This run predates saved prompt snapshots. Its fingerprint remains verifiable, but the original wording cannot be recovered.</p>
+      </div></td>
+    </tr>`;
+  }
+  const prompts = Array.isArray(record.prompt_snapshot) ? record.prompt_snapshot : [record.prompt_snapshot];
+  const snapshotNote = record.prompt_snapshot_kind === 'preview'
+    ? 'First-example preview recorded by an automatic benchmark. This run compiled each dataset row separately.'
+    : record.prompt_snapshot_kind === 'optimized'
+      ? 'Exact optimized prompt recorded with this run.'
+      : 'Exact authored prompt recorded with this run.';
+  const body = prompts.map((program, index) => {
+    const parts = promptMessages(program);
+    const label = prompts.length > 1 ? `<div class="stage-title">Variant ${index + 1}</div>` : '';
+    const content = parts.length
+      ? parts.map(promptPartBlock).join('')
+      : `<div class="prompt-part"><span class="prompt-role">FROZEN PAYLOAD</span><pre>${esc(JSON.stringify(program, null, 2))}</pre></div>`;
+    return `${label}${content}`;
+  }).join('');
+  const key = registerCopy(`history:${record.id}`, historyPromptSnapshotText(record.prompt_snapshot));
+  return `<tr class="history-prompt-text" data-history-prompt-text-for="${esc(record.id)}" hidden>
+    <td colspan="7"><div class="history-prompt-body">
+      <p class="field-hint">${esc(snapshotNote)} · fingerprint <code>${esc(record.prompt_hash || 'unavailable')}</code></p>
+      ${body}
+      <div class="subject-full-actions">${copyButton(key, 'Copy recorded prompt', 'Copy the exact prompt that produced this run')}</div>
+      <div class="copy-status" data-copy-status="history:${esc(record.id)}" role="status" aria-live="polite"></div>
+    </div></td>
+  </tr>`;
+}
+
 function renderHistory() {
   // A route may point at one dataset or run, but it still lands inside the
   // portfolio that owns it rather than replacing the portfolio with a flat list.
@@ -2011,7 +2059,11 @@ function renderHistory() {
   }).join('');
   const seriesOptions = compareSeries.map(item => `<option value="${esc(item.id)}"${item.id === state.historyTechnique ? ' selected' : ''}>${esc(techniqueTitle(item.id))} · ${esc(item.id)}</option>`).join('');
   const options = comparableRecords.map(item => `<option value="${esc(item.id)}">prompt v${esc(item.prompt_version ?? item.version)} · ${esc(historyDate(item.created_at))} · ${esc(item.model_id)}</option>`).join('');
-  const runRows = datasetRecords.map(item => { const m = experimentMetric(item); return `<tr${pointed?.id === item.id ? ' class="pointed-run"' : ''}><td><code>v${esc(item.prompt_version ?? item.version)}</code></td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${m ? Number(m.quality).toFixed(3) : '—'}</td><td>${m ? Number(m.mean_latency_seconds).toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${Number(m.mean_cost_usd).toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
+  const runRows = datasetRecords.map(item => {
+    const m = experimentMetric(item);
+    const availability = item.prompt_snapshot == null ? 'Prompt text unavailable for this legacy run' : 'Open the prompt snapshot recorded with this run';
+    return `<tr${pointed?.id === item.id ? ' class="pointed-run"' : ''}><td><button type="button" class="link-hash history-prompt-link" data-history-prompt-text="${esc(item.id)}" aria-expanded="false" title="${esc(availability)}"><code>v${esc(item.prompt_version ?? item.version)}</code></button></td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${m ? Number(m.quality).toFixed(3) : '—'}</td><td>${m ? Number(m.mean_latency_seconds).toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${Number(m.mean_cost_usd).toFixed(6)}` : 'unknown'}</td></tr>${historyPromptSnapshotRow(item)}`;
+  }).join('');
   const compareKey = selectedCase && selectedPrompt && state.historyDataset
     ? `${selectedCase.id}:${selectedPrompt.id}:${state.historyDataset}:${state.historyTechnique || ''}` : '';
   const comparison = state.historyCompareContext === compareKey ? renderExperimentComparison(state.experimentComparison) : '';
@@ -2049,6 +2101,12 @@ function renderHistory() {
 }
 
 function wireHistoryControls(panel) {
+  panel.querySelectorAll('[data-history-prompt-text]').forEach(button => button.addEventListener('click', () => {
+    const row = panel.querySelector(`[data-history-prompt-text-for="${CSS.escape(button.dataset.historyPromptText)}"]`);
+    if (!row) return;
+    row.hidden = !row.hidden;
+    button.setAttribute('aria-expanded', String(!row.hidden));
+  }));
   panel.querySelectorAll('[data-history-case]').forEach(button => button.addEventListener('click', () => {
     state.historyCaseId = button.dataset.historyCase; state.historyPromptId = null; state.historyDataset = null; state.historyTechnique = null;
     state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');

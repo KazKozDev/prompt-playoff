@@ -206,14 +206,13 @@ function subjectFullText() {
  *
  * Each entry says *which* prompt, because they are not the same one. Test lab
  * runs the prompt being held. Judging works on the answers of the last run.
- * Results lists recorded runs, and a run stores a fingerprint of its prompt and
- * never the words — so a row may well have been measured on a different
- * wording, and the band says so rather than letting the text above a table pass
- * for the text that produced the numbers in it.
+ * Results lists recorded runs, each with its own immutable prompt snapshot.
+ * The band still identifies the current draft rather than letting the text
+ * above a table pass for the wording behind every historical row.
  * -------------------------------------------------------------------------- */
 const PROMPT_BAND = {
   results: ['The prompt you are holding now',
-    () => 'A recorded run keeps a fingerprint of its prompt, never the wording. This is the text in Prompt Studio today; an older row below may have been measured on different words, and this screen cannot tell you which.'],
+    () => 'This is the current draft in Prompt Studio. Open a run version below to read the exact snapshot that produced its numbers; legacy runs recorded before snapshots retain only their fingerprint.'],
   'test-lab': ['The prompt under test',
     () => 'This exact text is what runs. Every model and every context variant below is scored on these words, unchanged — that is the whole point of the screen.'],
   judge: ['The prompt behind the answers',

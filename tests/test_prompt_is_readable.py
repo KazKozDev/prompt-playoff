@@ -167,21 +167,38 @@ def test_the_band_is_drawn_by_the_shell_and_not_by_four_screens():
     assert "parts.map(promptPartBlock)" in measurements
 
 
-def test_the_band_over_run_history_refuses_to_pass_for_the_recorded_wording():
-    """A run stores a fingerprint of its prompt, never the words.
-
-    So the text standing above the history is the prompt held today, and a row
-    below it may have been measured on something else. Saying that is the whole
-    difference between showing the prompt and implying a provenance the store
-    cannot support.
-    """
+def test_the_band_over_run_history_distinguishes_the_draft_from_recorded_snapshots():
+    """The band is today's draft; each run owns the historical wording."""
     measurements = read("measurements.js")
     band = measurements[
         measurements.index("const PROMPT_BAND = {") : measurements.index("function promptBand(tab)")
     ]
     results = band[band.index("results:") : band.index("'test-lab':")]
-    assert "fingerprint" in results
-    assert "never the wording" in results
+    assert "current draft" in results
+    assert "exact snapshot" in results
+    assert "legacy runs" in results
+
+
+def test_each_history_run_opens_the_exact_prompt_snapshot_it_recorded():
+    navigation = read("navigation.js")
+    assert "function historyPromptSnapshotRow(record)" in navigation
+    assert "record.prompt_snapshot" in navigation
+    assert 'data-history-prompt-text="${esc(item.id)}"' in navigation
+    assert '${historyPromptSnapshotRow(item)}' in navigation
+    assert "Exact authored prompt recorded with this run" in navigation
+    assert "First-example preview recorded by an automatic benchmark" in navigation
+    assert "current draft" in navigation
+
+
+def test_legacy_history_never_claims_the_current_prompt_is_the_recorded_one():
+    navigation = read("navigation.js")
+    reader = navigation[
+        navigation.index("function historyPromptSnapshotRow(record)") : navigation.index(
+            "function renderHistory()"
+        )
+    ]
+    assert "predates saved prompt snapshots" in reader
+    assert "cannot be recovered" in reader
 
 
 def test_a_changed_prompt_reaches_the_screens_already_drawn():

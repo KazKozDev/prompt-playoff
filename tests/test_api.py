@@ -946,7 +946,7 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
         assert job["result"]["scorecard"]["failures"] >= 0
 
 
-def test_a_benchmark_measures_the_prompt_it_is_handed(client):
+def test_a_benchmark_measures_and_records_the_prompt_it_is_handed(client):
     """The authored prompt travels with the request and is what runs.
 
     The Prompt text screen can have an engine model write text into the compiled
@@ -978,7 +978,6 @@ def test_a_benchmark_measures_the_prompt_it_is_handed(client):
             "task": task,
             "technique_id": "structured.schema-first",
             "dataset": "entity-extraction",
-            "record": False,
             "prompt": compiled,
         },
     )
@@ -990,6 +989,16 @@ def test_a_benchmark_measures_the_prompt_it_is_handed(client):
     sent = job["result"]["prompt_preview"]["stages"][0]["user"]
     assert sent.startswith("HOUSE RULE: never invent a place.")
     assert "{input}" not in sent
+    recorded = client.get(f'/v1/experiments/{job["result"]["experiment_id"]}').json()
+    assert recorded["prompt_snapshot"] == compiled
+    assert recorded["prompt_snapshot_kind"] == "authored"
+    authored_user = next(
+        message["content"]
+        for message in recorded["prompt_snapshot"]["stages"][0]["messages"]
+        if message["role"] == "user"
+    )
+    assert authored_user.startswith("HOUSE RULE: never invent a place.")
+    assert "{input}" in authored_user
 
 
 def test_a_prompt_from_another_technique_is_refused(client):

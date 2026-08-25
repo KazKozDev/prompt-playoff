@@ -92,10 +92,32 @@ def test_experiment_history_versions_and_marks_degradation(tmp_path):
     assert first.dataset_revision == "dataset-sha256"
     assert first.grader_version == "graders-v2"
     assert first.seed_policy == "repeat-index:0..0"
+    assert first.prompt_snapshot == {"stages": [{"user": "Extract {input}"}]}
+    assert first.prompt_snapshot_kind == "preview"
     assert first.environment["python"]
     by_metric = {item.metric: item for item in comparison.deltas}
     assert by_metric["quality"].degraded is True
     assert by_metric["mean_latency_seconds"].degraded is True
+
+
+def test_prompt_snapshot_survives_store_restart_and_legacy_records_still_load(tmp_path):
+    path = tmp_path / "experiments.json"
+    store = ExperimentStore(path)
+    recorded = store.add_benchmark(report(card()), task())
+
+    restored = ExperimentStore(path).get(recorded.id)
+
+    assert restored is not None
+    assert restored.prompt_snapshot == {"stages": [{"user": "Extract {input}"}]}
+    assert restored.prompt_snapshot_kind == "preview"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["experiments"][0].pop("prompt_snapshot")
+    payload["experiments"][0].pop("prompt_snapshot_kind")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    legacy = ExperimentStore(path).get(recorded.id)
+    assert legacy is not None
+    assert legacy.prompt_snapshot is None
+    assert legacy.prompt_snapshot_kind is None
 
 
 def test_runtime_export_is_secret_free_and_preserves_server_orchestration():

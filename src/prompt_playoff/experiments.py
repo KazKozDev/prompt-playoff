@@ -1,4 +1,4 @@
-"""Append-only, privacy-preserving experiment history and version comparisons."""
+"""Append-only, secret-scrubbed experiment history and version comparisons."""
 
 from __future__ import annotations
 
@@ -67,6 +67,13 @@ class ExperimentRecord(BaseModel):
     metrics: dict[str, MetricSnapshot]
     config_hash: str
     prompt_hash: str | None = None
+    #: Exact immutable prompt payload measured by this run. Older records did
+    #: not retain it, so the field stays nullable for backwards compatibility.
+    #: Provider credentials live on the task/model profile and are excluded
+    #: separately; the prompt itself is the artifact Results must be able to
+    #: reopen after the browser and server have both restarted.
+    prompt_snapshot: Any | None = None
+    prompt_snapshot_kind: Literal["authored", "preview", "optimized"] | None = None
     #: Fingerprint of the authored prompt this run measured, when one was
     #: supplied. It is what makes a release's citation checkable instead of
     #: taken on trust — see `prompt_fingerprint`.
@@ -139,7 +146,7 @@ def _cell(value: Any) -> str:
         return ""
     if isinstance(value, bool):
         return "yes" if value else "no"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     text = str(value)
     return f"'{text}" if text.startswith(_FORMULA_LEAD) else text
@@ -218,6 +225,7 @@ class ExperimentStore:
         task: TaskProfile,
         *,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
     ) -> ExperimentRecord:
         return self._add(
             kind="benchmark",
@@ -234,6 +242,10 @@ class ExperimentStore:
             },
             authored_hash=report.authored_hash,
             business_case=business_case,
+            prompt_snapshot=(
+                prompt_snapshot if prompt_snapshot is not None else report.prompt_preview
+            ),
+            prompt_snapshot_kind="authored" if prompt_snapshot is not None else "preview",
         )
 
     def add_comparison(
@@ -243,6 +255,7 @@ class ExperimentStore:
         task: TaskProfile,
         *,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
     ) -> ExperimentRecord:
         return self._add(
             kind="comparison",
@@ -267,6 +280,12 @@ class ExperimentStore:
                 "seed_policy": reports[0].seed_policy if reports else None,
             },
             business_case=business_case,
+            prompt_snapshot=(
+                prompt_snapshot
+                if prompt_snapshot is not None
+                else [report.prompt_preview for report in reports]
+            ),
+            prompt_snapshot_kind="authored" if prompt_snapshot is not None else "preview",
         )
 
     def add_optimization(
@@ -289,6 +308,8 @@ class ExperimentStore:
             prompt=result.compiled_prompt,
             reproducibility={},
             business_case=business_case,
+            prompt_snapshot=result.compiled_prompt,
+            prompt_snapshot_kind="optimized",
         )
 
     def compare(
@@ -345,6 +366,8 @@ class ExperimentStore:
         reproducibility: dict[str, str | None],
         authored_hash: str | None = None,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
+        prompt_snapshot_kind: Literal["authored", "preview", "optimized"] | None = None,
     ) -> ExperimentRecord:
         clean_task = task.model_dump(mode="json", exclude={"model": {"api_key"}})
         prompt_hash = _hash(prompt) if prompt else None
@@ -393,6 +416,8 @@ class ExperimentStore:
                 metrics=metrics,
                 config_hash=_hash(clean_task),
                 prompt_hash=prompt_hash,
+                prompt_snapshot=prompt_snapshot,
+                prompt_snapshot_kind=prompt_snapshot_kind,
                 authored_hash=authored_hash,
                 task=clean_task,
                 dataset_revision=reproducibility.get("dataset_revision"),

@@ -160,9 +160,9 @@ const state = {
  * The compiled prompt was held in page memory and nowhere else. A reload — or a
  * closed tab, or a crash — took the only copy with it: the screen that writes
  * it came back saying "Nothing here yet", and no other screen could produce the
- * text, because the run history stores a preview and a fingerprint and the
- * release table stores a fingerprint. So the prompt was unopenable at every
- * step of the workflow, including the one step that had just written it.
+ * text. Historical runs now freeze their own prompt snapshots, but a prompt
+ * that has not run yet still needs this draft: it would otherwise be
+ * unopenable at the one step that had just written it.
  *
  * Only what the screens redraw from is written down. The task profile is not:
  * it carries the evaluation model, and that carries an API key, which has no

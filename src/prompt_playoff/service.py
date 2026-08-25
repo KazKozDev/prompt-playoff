@@ -377,7 +377,10 @@ class PromptSelectorService:
             # The report carries its own record id: a release registered from
             # this prompt has to be able to name the run that justified it.
             report.experiment_id = self.experiments.add_benchmark(
-                report, task, business_case=business_case
+                report,
+                task,
+                business_case=business_case,
+                prompt_snapshot=prompt.model_dump(mode="json") if prompt is not None else None,
             ).id
         return report
 
@@ -431,7 +434,13 @@ class PromptSelectorService:
         if record:
             for report in reports:
                 self.measurements.record(report.to_evidence())
-            self.experiments.add_comparison(comparison, reports, task, business_case=business_case)
+            self.experiments.add_comparison(
+                comparison,
+                reports,
+                task,
+                business_case=business_case,
+                prompt_snapshot=prompt.model_dump(mode="json") if prompt is not None else None,
+            )
         return comparison, reports
 
     async def optimize(
