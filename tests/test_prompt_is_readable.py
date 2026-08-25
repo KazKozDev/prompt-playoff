@@ -184,7 +184,7 @@ def test_each_history_run_opens_the_exact_prompt_snapshot_it_recorded():
     assert "function historyPromptSnapshotRow(record)" in navigation
     assert "record.prompt_snapshot" in navigation
     assert 'data-history-prompt-text="${esc(item.id)}"' in navigation
-    assert '${historyPromptSnapshotRow(item)}' in navigation
+    assert "${historyPromptSnapshotRow(item)}" in navigation
     assert "Exact authored prompt recorded with this run" in navigation
     assert "First-example preview recorded by an automatic benchmark" in navigation
     assert "current draft" in navigation
