@@ -58,11 +58,13 @@ dev = [
   "ruff>=0.14,<1",
 ]
 # DSPy as an alternative optimizer search backend (MIPROv2, GEPA, BootstrapFewShot).
-# litellm is pinned below 1.81 because newer releases build a Rust extension that
-# needs rustc >= 1.94; drop the pin once your toolchain is newer.
+# litellm used to be held below 1.81: those releases built a Rust extension from
+# source, so installing needed rustc >= 1.94. Upstream now publishes wheels for
+# macOS, Windows, glibc >= 2.28, musl and aarch64, so nothing is compiled here
+# and the toolchain no longer decides what installs.
 dspy = [
   "dspy>=3,<4",
-  "litellm<1.81",
+  "litellm<1.98",
   # MIPROv2 drives its search with optuna; without it that backend raises on the
   # third step, after already spending model calls.
   "optuna>=4,<5",
