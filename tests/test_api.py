@@ -330,7 +330,10 @@ def test_the_section_map_is_one_column_at_the_width_it_actually_gets(client):
     1100 — and splitting 340px in two left the words in a column of zero, so
     every caption wrapped one word per line on all five section screens.
     """
-    styles = client.get("/assets/styles.css").text
+    # HTTP text keeps the server's line endings: CRLF on Windows and LF on
+    # Unix. This assertion is about the CSS rule, not the runner's newline
+    # convention, so compare one normalized representation on every platform.
+    styles = client.get("/assets/styles.css").text.replace("\r\n", "\n")
 
     assert 'grid-template-areas:"head plot"' not in styles
     assert "@media (min-width:1100px) and (max-width:1479px)" not in styles
@@ -989,7 +992,7 @@ def test_a_benchmark_measures_and_records_the_prompt_it_is_handed(client):
     sent = job["result"]["prompt_preview"]["stages"][0]["user"]
     assert sent.startswith("HOUSE RULE: never invent a place.")
     assert "{input}" not in sent
-    recorded = client.get(f'/v1/experiments/{job["result"]["experiment_id"]}').json()
+    recorded = client.get(f"/v1/experiments/{job['result']['experiment_id']}").json()
     assert recorded["prompt_snapshot"] == compiled
     assert recorded["prompt_snapshot_kind"] == "authored"
     authored_user = next(
