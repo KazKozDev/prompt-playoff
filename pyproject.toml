@@ -43,7 +43,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = [
-  "rich>=14,<15",
+  "rich>=14,<16",
   "typer>=0.26,<1",
 ]
 serve = [
