@@ -92,7 +92,7 @@ Review the dataset before starting the benchmark: check the input format, verify
 
 - `business-catalogue` tag marks all business datasets
 - Each dataset has input/expected/graders structure
-- Benchmark graders are deterministic and include exact_match, contains_all, field_f1, chrF, JSON validity, and task-specific metrics
+- Benchmark graders are deterministic and include exact_match, contains_all, field_f1, token_f1, forbidden_content, JSON validity, and task-specific metrics
 
 The benchmark belongs to this task and model pair. Model-assisted pairwise judging is a separate review workflow: its verdicts are recorded as review evidence and never presented as deterministic benchmark scores.
 
@@ -137,7 +137,7 @@ Task → Technique selection → Prompt compilation → Benchmark → Human revi
 1. **Describe** — the parser reads your task description and extracts type, constraints, and capabilities. A structured extraction task gets different priors than a reasoning task.
 2. **Recommend** — the Selector scores all techniques against your task profile. Heuristics consider task type, model capabilities, and prior performance. The top 5 techniques are shown with reasons.
 3. **Compile** — the PromptCompiler renders the technique template with your task description. Each technique has stages (e.g., cot has reasoning → answer) that become numbered model calls.
-4. **Benchmark** — the dataset loader reads JSONL examples. The service runs each example through the compiled prompt. Deterministic graders score outputs: exact_match for classification, contains_all or field_f1 for extraction, and chrF or token overlap for summarization.
+4. **Benchmark** — the dataset loader reads JSONL examples. The service runs each example through the compiled prompt. Deterministic graders score outputs: exact_match for classification, contains_all or field_f1 for extraction, and word overlap for prose — reported next to what that metric already scores on an unrelated answer, because on open-ended work it is a similarity and not a verdict.
 5. **Optimize** — optional DSPy backend (MIPROv2, GEPA) searches for better prompt variants. The optimizer modifies instructions and demonstrations while preserving the technique structure.
 
 ```text
@@ -161,7 +161,7 @@ SQLite + JSON export
   `benchmark-results/jobs.json`, `benchmark-results/experiments.json`, and
   `benchmark-results/business-cases.json` store job history and the business-case → prompt version
   → dataset → run lineage shown in Results.
-- Quality is the headline grader's mean score (e.g., exact_match accuracy).
+- Quality is the headline grader's mean score (e.g., exact_match accuracy). Where that grader compares an answer with one reference — open-ended work has no other option — the run also reports the chance level: what the same metric scores on an answer written for a different row. A quality number near it is measuring the language, not the prompt.
 - Reliability measures variance across dataset subsets.
 - Grades break down performance by grader (e.g., terminology, fluency, completeness).
 
@@ -171,7 +171,7 @@ SQLite + JSON export
 - `src/prompt_playoff/service.py` — core optimization service, selection, compilation, benchmarking.
 - `src/prompt_playoff/selector.py` — technique ranking with heuristics and priors.
 - `src/prompt_playoff/optimizer.py` — prompt optimization with native and DSPy backends.
-- `src/prompt_playoff/graders.py` — the deterministic grader registry, including exact_match, contains_all, field_f1 and chrF.
+- `src/prompt_playoff/graders.py` — the deterministic grader registry, including exact_match, contains_all, field_f1, token_f1 and forbidden_content.
 - `src/prompt_playoff/business_catalog.py` — business dataset catalogue.
 - `src/prompt_playoff/technique_store.py` — technique registry from YAML files.
 - `src/prompt_playoff/data/techniques/` — 61 technique definitions; see the [complete catalogue](docs/techniques.md).
@@ -222,6 +222,8 @@ The launchers use an existing Python 3.11+ installation when available. Otherwis
 - Prompt Playoff accepts JSONL datasets. External datasets must be converted to input/expected/graders format.
 - Benchmarking a technique on 100 examples can take minutes to hours depending on model speed and dataset complexity.
 - Technique rankings can still miss edge cases or favor techniques that match the grader rather than your actual use case. Review compiled prompts before deploying.
+- Open-ended generation cannot be scored against a single reference answer, and nothing here pretends otherwise: word overlap is reported with its measured chance level, `prompt-playoff check` refuses a `quality_min` written over it, and `prompt-playoff optimize` refuses to search against it. Gate that work on requirements a rule can decide — `prompt-playoff annotate-dataset --contract reply` derives them from your rows, then `grade.contains_all_min` and `grade.forbidden_content_min` enforce them.
+- Tone and persuasiveness are judged by a model, never by a rule, and a judged number stays a model's opinion: it goes to review as one batch and has no route into a scorecard or a committed threshold.
 - Large Ollama models need substantial memory and disk space; Prompt Playoff cannot make a model fit hardware that is too small.
 - Model-assisted authoring, optimization and pairwise review send the supplied content to the selected provider and may cost money.
 - DSPy optimization is optional, requires additional dependencies, and may take many model calls to converge.

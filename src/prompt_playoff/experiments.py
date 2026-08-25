@@ -1,4 +1,4 @@
-"""Append-only, privacy-preserving experiment history and version comparisons."""
+"""Append-only, secret-scrubbed experiment history and version comparisons."""
 
 from __future__ import annotations
 
@@ -34,6 +34,16 @@ class MetricSnapshot(BaseModel):
     total_cost_usd: float | None = None
     failures: int = 0
     runs: int = 0
+    #: Every grader's mean, not only the one that became the headline. A release
+    #: gate for open-ended work is written against a named grader — every
+    #: required fact present, nothing the task forbids — and without these the
+    #: gate could only ever be applied to a headline that does not describe the
+    #: task. Runs recorded before this field existed carry none, and the gate
+    #: says so rather than treating an absent number as a cleared bar.
+    grades: dict[str, float] = Field(default_factory=dict)
+    #: Which grader the quality above came from, so the gate can refuse to
+    #: enforce a quality bar the grader cannot support.
+    quality_grader: str | None = None
 
     @classmethod
     def from_scorecard(cls, scorecard: Scorecard) -> MetricSnapshot:
@@ -57,6 +67,13 @@ class ExperimentRecord(BaseModel):
     metrics: dict[str, MetricSnapshot]
     config_hash: str
     prompt_hash: str | None = None
+    #: Exact immutable prompt payload measured by this run. Older records did
+    #: not retain it, so the field stays nullable for backwards compatibility.
+    #: Provider credentials live on the task/model profile and are excluded
+    #: separately; the prompt itself is the artifact Results must be able to
+    #: reopen after the browser and server have both restarted.
+    prompt_snapshot: Any | None = None
+    prompt_snapshot_kind: Literal["authored", "preview", "optimized", "mixed"] | None = None
     #: Fingerprint of the authored prompt this run measured, when one was
     #: supplied. It is what makes a release's citation checkable instead of
     #: taken on trust — see `prompt_fingerprint`.
@@ -129,7 +146,7 @@ def _cell(value: Any) -> str:
         return ""
     if isinstance(value, bool):
         return "yes" if value else "no"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     text = str(value)
     return f"'{text}" if text.startswith(_FORMULA_LEAD) else text
@@ -208,6 +225,7 @@ class ExperimentStore:
         task: TaskProfile,
         *,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
     ) -> ExperimentRecord:
         return self._add(
             kind="benchmark",
@@ -224,6 +242,10 @@ class ExperimentStore:
             },
             authored_hash=report.authored_hash,
             business_case=business_case,
+            prompt_snapshot=(
+                prompt_snapshot if prompt_snapshot is not None else report.prompt_preview
+            ),
+            prompt_snapshot_kind="authored" if prompt_snapshot is not None else "preview",
         )
 
     def add_comparison(
@@ -233,6 +255,7 @@ class ExperimentStore:
         task: TaskProfile,
         *,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
     ) -> ExperimentRecord:
         return self._add(
             kind="comparison",
@@ -257,6 +280,22 @@ class ExperimentStore:
                 "seed_policy": reports[0].seed_policy if reports else None,
             },
             business_case=business_case,
+            # A comparison has one payload per arm, and history renders it that
+            # way. Storing the authored prompt alone used to drop the text
+            # behind every other measurement in the run: the numbers stayed,
+            # the prompts that produced them did not. The authored payload
+            # belongs to the arm that actually ran it; the rest keep theirs.
+            prompt_snapshot=[
+                prompt_snapshot
+                if prompt_snapshot is not None and report.authored_hash
+                else report.prompt_preview
+                for report in reports
+            ],
+            prompt_snapshot_kind=(
+                "mixed"
+                if prompt_snapshot is not None and any(report.authored_hash for report in reports)
+                else "preview"
+            ),
         )
 
     def add_optimization(
@@ -279,6 +318,13 @@ class ExperimentStore:
             prompt=result.compiled_prompt,
             reproducibility={},
             business_case=business_case,
+            # `compiled_prompt` is a display projection: one system and one user
+            # string per stage. The winner carries more than that — further
+            # messages, demonstrations, a response schema, generation options —
+            # and a record labelled "exact" that quietly dropped them left no
+            # way back to the prompt that earned the score.
+            prompt_snapshot=result.winner_program or result.compiled_prompt,
+            prompt_snapshot_kind="optimized",
         )
 
     def compare(
@@ -335,9 +381,17 @@ class ExperimentStore:
         reproducibility: dict[str, str | None],
         authored_hash: str | None = None,
         business_case: BusinessCaseRecord | None = None,
+        prompt_snapshot: Any | None = None,
+        prompt_snapshot_kind: Literal["authored", "preview", "optimized", "mixed"] | None = None,
     ) -> ExperimentRecord:
         clean_task = task.model_dump(mode="json", exclude={"model": {"api_key"}})
-        prompt_hash = _hash(prompt) if prompt else None
+        # The fingerprint has to name the artifact the record shows. It used to
+        # be taken from the preview, which has the first dataset row already
+        # substituted, while an exact snapshot sat beside it — so two authored
+        # prompts differing only in their source input rendered one preview,
+        # collided on one hash, and were filed as one prompt version.
+        hashed = prompt_snapshot if prompt_snapshot is not None else prompt
+        prompt_hash = _hash(hashed) if hashed else None
         prompt_id = _prompt_id(technique_ids, winner)
         signature = {
             "kind": kind,
@@ -383,6 +437,8 @@ class ExperimentStore:
                 metrics=metrics,
                 config_hash=_hash(clean_task),
                 prompt_hash=prompt_hash,
+                prompt_snapshot=prompt_snapshot,
+                prompt_snapshot_kind=prompt_snapshot_kind,
                 authored_hash=authored_hash,
                 task=clean_task,
                 dataset_revision=reproducibility.get("dataset_revision"),

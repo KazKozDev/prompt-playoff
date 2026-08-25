@@ -249,3 +249,204 @@ def test_no_committed_bar_is_not_a_failure(tmp_path: Path):
     other = release_gate("direct", {"quality": 0.1}, _gate_config(tmp_path))
     assert other.status == "not_configured"
     assert "commits no thresholds for direct" in (other.reason or "")
+
+
+# --------------------------------------------------------------------------- #
+# open-ended generation: the half of the catalogue the gate could not reach
+# --------------------------------------------------------------------------- #
+
+
+def _open_generation_files(tmp_path, require):
+    """A drafting task: prose out, no shape to check, requirements a rule can.
+
+    The rows carry a reference reply *and* what the reply has to contain, which
+    is the whole difference between a set that can be gated and one that cannot.
+    """
+    dataset = tmp_path / "replies.jsonl"
+    dataset.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "id": f"reply-{index}",
+                    "input": f"Ticket {index}: where is order A-{index}?",
+                    "expected": (
+                        "Thanks for getting in touch about your order. It left our "
+                        "warehouse and should reach you within two working days."
+                    ),
+                    "graders": ["token_f1", "contains_all", "forbidden_content"],
+                    "grader_options": {
+                        "contains": ["order"],
+                        "forbidden": ["refund", "[INSERT"],
+                    },
+                }
+            )
+            for index in range(4)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "prompt-playoff.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "model": {"provider": "ollama", "model_id": "fake", "model_class": "small"},
+                "checks": [
+                    {
+                        "name": "support-replies",
+                        "technique": "structured.schema-first",
+                        "task": "summarization",
+                        "dataset_file": "./replies.jsonl",
+                        "repeats": 1,
+                        "require": require,
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return config
+
+
+def _drafting_provider(text="Your order is on its way and should arrive shortly."):
+    return lambda model: FakeProvider([text])
+
+
+def test_a_named_grader_gates_open_generation(tmp_path):
+    """The gate that did not exist: a bar on a requirement, not on a headline."""
+    config = _open_generation_files(tmp_path, {"grade.contains_all_min": 1.0})
+    result = asyncio.run(run_checks(config, record=False, provider_factory=_drafting_provider()))
+    assert result.exit_code == 0
+    assert result.checks[0].thresholds[0].field == "grade.contains_all"
+
+
+def test_a_draft_that_says_the_forbidden_thing_fails_ci(tmp_path):
+    config = _open_generation_files(tmp_path, {"grade.forbidden_content_min": 1.0})
+    result = asyncio.run(
+        run_checks(
+            config,
+            record=False,
+            provider_factory=_drafting_provider("Sorry — here is a full refund for your order."),
+        )
+    )
+    assert result.exit_code == 1
+    breached = result.checks[0].thresholds[0]
+    assert breached.field == "grade.forbidden_content"
+    assert breached.measured == 0.0
+
+
+def test_a_checkable_requirement_outranks_word_overlap_as_the_headline(tmp_path):
+    """A rule that decided something beats a similarity that decided nothing.
+
+    Word overlap used to outrank every checkable requirement, so giving a set
+    real requirements changed nothing about the number on the front of the
+    report — it still showed the one grader on it that could not be improved.
+    """
+    config = _open_generation_files(tmp_path, {"quality_min": 0.3})
+    result = asyncio.run(run_checks(config, record=False, provider_factory=_drafting_provider()))
+    assert result.exit_code == 0
+    assert result.checks[0].thresholds[0].measured == 1.0  # contains_all, not token_f1
+
+
+def test_a_quality_bar_over_word_overlap_is_refused_rather_than_enforced(tmp_path):
+    """The gate refusing to be decorative.
+
+    With nothing but prose and one reference each — the state a set arrives in
+    when somebody brings their own drafting task — `quality` is word overlap. A
+    committed `quality_min` would read as a bar on how good the answers are and
+    would in fact pin how closely they echo one person's wording, so the check
+    stops and names what to write instead of quietly enforcing the wrong thing.
+    """
+    config = _open_generation_files(tmp_path, {"quality_min": 0.3})
+    dataset = tmp_path / "replies.jsonl"
+    dataset.write_text(
+        "\n".join(
+            json.dumps({**json.loads(line), "graders": ["token_f1"], "grader_options": {}})
+            for line in dataset.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = asyncio.run(run_checks(config, record=False, provider_factory=_drafting_provider()))
+    assert result.exit_code == 2
+    error = result.checks[0].error or ""
+    assert "token_f1" in error
+    assert "contains_all" in error
+    assert "grade.token_f1_min" in error
+
+
+def test_word_overlap_can_still_be_gated_when_it_is_named_as_itself(tmp_path):
+    """Drift in the metric is a real thing to watch; it just is not quality."""
+    config = _open_generation_files(tmp_path, {"grade.token_f1_min": 0.05})
+    result = asyncio.run(run_checks(config, record=False, provider_factory=_drafting_provider()))
+    assert result.exit_code == 0
+    assert result.checks[0].thresholds[0].field == "grade.token_f1"
+
+
+def test_a_bar_on_a_grader_the_run_never_produced_is_an_error_not_a_pass(tmp_path):
+    config = _open_generation_files(tmp_path, {"grade.unit_tests_min": 0.9})
+    result = asyncio.run(run_checks(config, record=False, provider_factory=_drafting_provider()))
+    assert result.exit_code == 2
+    assert "no unit_tests score" in (result.checks[0].error or "")
+
+
+def test_require_keys_naming_no_grader_are_refused_at_load(tmp_path):
+    config = _open_generation_files(tmp_path, {"grade.vibes_min": 0.9})
+    with pytest.raises(CheckConfigError, match="names no grader"):
+        load_check_file(config)
+
+
+def test_update_rewrites_a_named_grader_bar_in_place(tmp_path):
+    config = _open_generation_files(tmp_path, {"grade.contains_all_min": 2.0})
+    updated = asyncio.run(
+        run_checks(config, record=False, update=True, provider_factory=_drafting_provider())
+    )
+    assert updated.exit_code == 0
+    assert "grade.contains_all_min: 1" in config.read_text(encoding="utf-8")
+
+
+def test_a_release_gate_over_a_named_grader_reads_it_from_the_recorded_run(tmp_path: Path):
+    path = tmp_path / "prompt-playoff.yaml"
+    path.write_text(
+        """version: 1
+model:
+  provider: ollama
+  model_id: llama3.2:3b
+checks:
+  - name: replies
+    technique: direct
+    task: summarization
+    dataset: summarization
+    require:
+      grade.contains_all_min: 0.9
+""",
+        encoding="utf-8",
+    )
+    metrics = {"quality": 0.2, "mean_total_tokens": 250.0}
+
+    passed = release_gate("direct", metrics, path, grades={"contains_all": 0.95})
+    assert passed.status == "passed"
+
+    failed = release_gate("direct", metrics, path, grades={"contains_all": 0.4})
+    assert failed.status == "failed"
+    assert "grade.contains_all 0.4 vs min 0.9" in (failed.reason or "")
+
+    # A run recorded before per-grader numbers were kept carries none of them,
+    # and an absent number is not a cleared bar.
+    old = release_gate("direct", metrics, path)
+    assert old.status == "unenforceable"
+    assert old.blocks_approval
+
+
+def test_a_release_cannot_be_shipped_on_a_quality_bar_the_grader_cannot_support(tmp_path: Path):
+    gate = release_gate(
+        "structured.schema-first",
+        {"quality": 0.91, "mean_total_tokens": 250.0},
+        _gate_config(tmp_path),
+        quality_grader="token_f1",
+    )
+    assert gate.status == "unenforceable"
+    assert gate.blocks_approval
+    assert "token_f1" in (gate.reason or "")

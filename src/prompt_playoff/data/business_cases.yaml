@@ -768,6 +768,15 @@ groups:
 # ship. `max_input_chars` drops rows that are too long rather than truncating
 # them, because half a transcript with the whole summary as its answer is an
 # impossible task, not a hard one.
+# `graders` is what a set declares out loud. `contract` is the second half of
+# the same answer, and the one that decides whether the set can be gated at all:
+# it names what shape of work the rows hold — `reply`, `summary` or `draft` — so
+# `scripts/fetch_business_datasets.py` can derive, per row, the requirements a
+# rule can decide. Those are the checks that need no reference answer: the order
+# reference carried back into the reply, the unfilled `[INSERT NAME]` that must
+# not ship, the length the channel allows. A derived requirement is kept only
+# when the human answer already meets it, so nothing here can mark a model wrong
+# for answering as well as the person did.
 # --------------------------------------------------------------------------- #
 
 sets:
@@ -788,6 +797,7 @@ sets:
     rows: 60
     max_input_chars: 6000
     min_expected_chars: 80
+    contract: reply
     graders: [token_f1]
   - name: business:email-subject
     title: Email to subject line
@@ -824,6 +834,7 @@ sets:
     fetch: subject_body
     rows: 60
     max_input_chars: 400
+    contract: draft
     graders: [token_f1]
   - name: business:meeting-summary
     title: Meeting transcript to minutes
@@ -843,6 +854,7 @@ sets:
     expected: summary
     rows: 50
     max_input_chars: 9000
+    contract: summary
     graders: [token_f1]
   - name: business:meeting-translation
     title: Live translation, English to German
@@ -881,6 +893,7 @@ sets:
     expected: response
     rows: 60
     max_input_chars: 2000
+    contract: reply
     graders: [token_f1]
   - name: business:support-intent
     title: Support question to intent

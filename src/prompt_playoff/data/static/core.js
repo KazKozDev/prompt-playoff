@@ -104,6 +104,10 @@ const state = {
   // reports them: which grader becomes the headline quality, and which ones
   // are contract checks and therefore feed reliability.
   qualityPreference:[], contractGraders:new Set(),
+  // What each grader's number must not be read as, and which graders score
+  // every answer 0 or 1. Both are served rather than written here, so the
+  // warning beside a number is the one the grader itself carries.
+  graderCaveats:{}, passRateGraders:new Set(),
   installed:{ engine:{status:'idle', models:[], error:'', url:null}, judge:{status:'idle', models:[], error:'', url:null}, similarity:{status:'idle', models:[], error:'', url:null}, evaluation:{status:'idle', models:[], error:'', url:null} },
   // The recorded run that justifies the prompt currently held: what a release
   // registered from it points back to. Null means the prompt as it stands has
@@ -116,6 +120,10 @@ const state = {
   // What the last technique export did, kept so the message survives the
   // re-render the export itself triggers.
   techniqueNote:'',
+  // Whether the composer's Delete has been armed. Same reason as the one on a
+  // release row: the control is written from state, so the confirm has to be
+  // state too or the next redraw disarms it under the cursor.
+  pendingPromptDelete:false,
   readinessNotice:null, compileVersion:0, jobs:[], logStatus:'idle', logError:'', logTimer:null,
   openLogs:new Set(), selectedJobId:null, logsInitialized:false, profiles:[], experiments:[], experimentComparison:null,
   // Saved cases organize prompt lineage without making assignment mandatory.
@@ -125,6 +133,11 @@ const state = {
   historyCaseId:null, historyPromptId:null, historyDataset:null, historyTechnique:null,
   historyCompareContext:null, historyError:'',
   quality:{projects:[], reviews:[], releases:[], gates:{}, results:{}, error:'', loading:false, loaded:new Set(),
+    // The one release whose Delete has been armed, or null. Arming lives
+    // here rather than on the button because the table is redrawn from
+    // state on every refresh, and a confirm that survives one redraw and
+    // not the next is a confirm nobody can trust.
+    pendingReleaseDelete:null,
     // The builder form lives here rather than in the DOM: the cost of the
     // settings is quoted before the button is pressed, so a keystroke has to
     // re-render the quote, and a re-render would otherwise wipe the fields.
@@ -147,9 +160,9 @@ const state = {
  * The compiled prompt was held in page memory and nowhere else. A reload — or a
  * closed tab, or a crash — took the only copy with it: the screen that writes
  * it came back saying "Nothing here yet", and no other screen could produce the
- * text, because the run history stores a preview and a fingerprint and the
- * release table stores a fingerprint. So the prompt was unopenable at every
- * step of the workflow, including the one step that had just written it.
+ * text. Historical runs now freeze their own prompt snapshots, but a prompt
+ * that has not run yet still needs this draft: it would otherwise be
+ * unopenable at the one step that had just written it.
  *
  * Only what the screens redraw from is written down. The task profile is not:
  * it carries the evaluation model, and that carries an API key, which has no
@@ -328,12 +341,32 @@ async function api(path, body, method) {
     ? {method:verb, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
     : {method:verb};
   const res = await fetch(path, init);
-  if (!res.ok) throw new Error(await apiError(res));
+  if (!res.ok) {
+    const failure = await apiFailure(res);
+    // The message is what a person reads; the code is what a screen can act on.
+    // A refusal that a screen is allowed to offer to override has to be told
+    // apart from a typo in a field, and matching on the wording would break the
+    // moment the wording improved.
+    const error = new Error(failure.message);
+    error.status = res.status;
+    error.code = failure.code;
+    error.detail = failure.detail;
+    throw error;
+  }
   return res.json();
 }
 
-async function apiError(res) {
+async function apiFailure(res) {
   const text = (await res.text()).slice(0, 2000);
+  let detail = null;
+  try { detail = JSON.parse(text).detail ?? null; } catch { /* plain text below */ }
+  const message = detail && typeof detail === 'object' && !Array.isArray(detail) && detail.message
+    ? detail.message
+    : errorText(text, res);
+  return {message, code: detail?.code || null, detail};
+}
+
+function errorText(text, res) {
   if (!text) return `${res.status} ${res.statusText}`.trim();
   try {
     const payload = JSON.parse(text);
@@ -343,6 +376,11 @@ async function apiError(res) {
     if (detail != null) return JSON.stringify(detail);
   } catch { /* The server returned plain text; show it as-is. */ }
   return text;
+}
+
+// For a caller that reads the response itself and only wants the sentence.
+async function apiError(res) {
+  return errorText((await res.text()).slice(0, 2000), res);
 }
 
 async function loadBackends() {

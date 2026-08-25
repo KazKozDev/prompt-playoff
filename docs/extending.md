@@ -165,6 +165,14 @@ because no honest paraphrase matches a reference verbatim — and a
 are always added on top; a grader that cannot apply returns nothing rather than
 a zero.
 
+That `token_f1` fallback is a similarity, not a verdict: a good answer worded
+differently scores low, and the run reports the *chance level* beside it — what
+the same metric scores on an answer written for a different row. If the rows are
+open-ended work rather than a task with one right answer, name graders a rule
+can decide (`contains_all`, `forbidden_content`, `length_limit`, `regex_match`)
+instead of leaving it inferred. That is also what CI can gate; see
+[configuration](configuration.md).
+
 ## 3. A new grader
 
 ```python
@@ -187,7 +195,15 @@ records, for metrics like agreement or tool success).
 Return `None` when the grader cannot apply. Add the name to
 `RELIABILITY_GRADERS` if it measures contract compliance rather than answer
 quality, and to `QUALITY_PREFERENCE` if it can serve as the headline quality
-number.
+number. Add it to `PASS_RATE_GRADERS` when it returns 0 or 1, so the mean may be
+read out as a share of answers; leave it out when it gives partial credit, and
+the surfaces will call the mean an average score instead of inventing a pass
+rate. If its number has an obvious wrong reading — a similarity that looks like
+a mark out of ten — write the sentence that says so into `GRADER_CAVEATS`, and
+every surface prints it beside the number.
+
+Any grader can be gated in CI by name: `grade.bullet_count_min: 0.95` in
+`prompt-playoff.yaml`.
 
 ## 4. A new strategy
 

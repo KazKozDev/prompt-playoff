@@ -35,9 +35,9 @@ const screenMeta = {
   'dataset-add':['Datasets', 'Add dataset', 'Upload your own rows, import a public set, or generate examples for the gaps you still need to test.'],
   'dataset-builder':['Datasets', 'Build datasets', 'Generate example rows from your task description, or around the ones the last run got wrong. Use it when you have nothing of your own and nothing to import. You approve every row before it counts.'],
   'dataset-bundled':['Datasets', 'Shipped with the tool', 'The benchmark sets that ship inside the package. They are what the tool tests itself with, so use them to try the workflow out — a good score here describes the tool, not your prompt.'],
-  history:['Evaluation', 'Results', 'Every run this server has finished, newest first, with the numbers it produced. Come here to compare two versions or export the history. Prompts and raw answers are not stored.'],
+  history:['Evaluation', 'Results', 'Every run this server has finished, newest first, with the numbers and exact prompt snapshot it recorded. Come here to inspect or compare two versions, or export the history. Raw answers are not stored.'],
   results:['Evaluation', 'Results', 'Read the run history, compare versions, check whether a difference is larger than the noise in the examples, and gate a new run against the last one.'],
-  judge:['Evaluation', 'Answer judging', 'Have a model compare two answers against a rubric without knowing which is which. Use it for work no grader can score, like tone or clarity. Every verdict goes to Reviews for a person to confirm.'],
+  judge:['Evaluation', 'Answer judging', 'Have a model mark answers against a rubric without knowing which is which — a whole run against its reference answers, or one pair by hand. Use it for work no grader can score, like tone or clarity. A judged number never becomes a benchmark score or a CI gate: every verdict goes to Reviews for a person to confirm.'],
   'model-matrix':['Evaluation', 'Model matrix', 'Run the same prompt and the same examples on several models. It tells you whether the prompt works anywhere else, or only on the model you wrote it for.'],
   'context-lab':['Evaluation', 'Context lab', 'Run the same prompt with different context in front of it — a document, a summary, retrieval results. It tells you whether the extra text is worth the tokens it costs.'],
   analysis:['Evaluation', 'Significance', 'Check whether a difference between two runs is real or just noise. Paste the per-example scores and you get a confidence interval, plus the score broken down by tag.'],
@@ -115,7 +115,16 @@ function screenShell(tab, body) {
   // zone of the workspace, held in the left column where the composer that
   // wrote it stands. So one place to look for the prompt, on all four screens
   // of this section.
-  return `${head}${gate}${showingBand(tab)}${setup}${body}`;
+  //
+  // A screen outside that section can still be acting on a prompt, and four of
+  // them are: Results, Test lab, Answer judging and Reviews. They have no
+  // column to spare, so the prompt arrives as a band across the top — the same
+  // text, drawn by the same code, folded shut so a table below it keeps its
+  // place. `screenShell` is where both go, because a prompt shown on some
+  // screens by the shell and on others by the screen itself is a prompt that
+  // will go missing from one of them.
+  const band = typeof promptBand === 'function' ? promptBand(tab) : '';
+  return `${head}${gate}${showingBand(tab)}${band}${setup}${body}`;
 }
 
 /* One compact mode rail teaches the consolidated information architecture on
@@ -411,8 +420,11 @@ function renderSectionCounts() {
   });
 }
 
-// The home tiles report state that arrives after the first paint.
+// The home tiles report state that arrives after the first paint. The rail
+// card is not a tile — it is on screen no matter which tab this is — so it is
+// refreshed here too rather than only when home happens to be open.
 function refreshHomeIfVisible() {
+  refreshRailDatasetField();
   if (state.tab === 'home' || sectionTabs.includes(state.tab)) renderDetailPanel(state.tab);
 }
 
@@ -518,13 +530,84 @@ document.addEventListener('click', event => {
   if (crumb && crumb.dataset.crumb) selectTab(crumb.dataset.crumb, {focus:true});
 });
 
+/* A refusal has to expire with the thing it refused.
+ *
+ * Smart run's two refusals were written into the rail card and left there: the
+ * card said "Describe the task first" under the button for the rest of the
+ * session, past the task being typed, past the prompt being compiled, past the
+ * measurement. A red line that outlives its own cause is worse than no line,
+ * because the one place that reports the button's state is the place that is
+ * now lying about it.
+ *
+ * So the line records which field it is waiting for, and goes the moment that
+ * field arrives. Nothing else is cleared: progress and completion lines are
+ * about a run that really happened.
+ */
+function smartRefusalMet(waitingFor) {
+  if (waitingFor === 'task') return !!($('description')?.value || '').trim();
+  if (waitingFor === 'dataset') return !!state.run.dataset;
+  return false;
+}
+
+function clearSmartRefusal() {
+  document.querySelectorAll('[data-waiting-for]').forEach(node => {
+    if (!smartRefusalMet(node.dataset.waitingFor)) return;
+    delete node.dataset.waitingFor;
+    node.textContent = '';
+    node.className = node.classList[0] || '';
+  });
+}
+
+// The task arrives by typing, which is the one input no other redraw notices.
+let taskFitDebounce = null;
+document.addEventListener('input', event => {
+  if (event.target.id !== 'description') return;
+  clearSmartRefusal();
+  // Debounced: the suggestion is read off whole words, so redrawing on every
+  // keystroke would rebuild three selects to answer a question that has not
+  // finished being typed yet.
+  clearTimeout(taskFitDebounce);
+  taskFitDebounce = setTimeout(() => { if (typeof refreshDatasetSuggestions === 'function') refreshDatasetSuggestions(); }, 300);
+});
+
+/* The set to measure against can now be chosen from three places — the rail
+ * card, the home tile and the run setup on Report — because Smart run reads
+ * whichever one was filled in last. They all write the one field this reads,
+ * so a choice made in any of them has to show up in the other two, or picking
+ * a set on the card and then opening Report would look like the pick did not
+ * take. */
+function syncDatasetFields(source) {
+  document.querySelectorAll('[data-run-field="dataset"]').forEach(field => {
+    if (field !== source) field.value = state.run.dataset || '';
+  });
+}
+
+// The rail card is not a tab panel — nothing re-renders it when the dataset
+// list changes underneath it, so it gets its own redraw rather than inheriting
+// one meant for whichever screen is open.
+function refreshRailDatasetField() {
+  const host = document.querySelector('.rail-smart-dataset');
+  if (host) host.innerHTML = datasetField('rail-run-dataset');
+}
+
+document.addEventListener('change', event => {
+  const field = event.target.closest('[data-run-field="dataset"]');
+  if (!field) return;
+  state.ownRowsNote = '';
+  state.run.dataset = field.value;
+  syncDatasetFields(field);
+  updateEstimates();
+  updateWorkspaceContext();
+  refreshActions();
+});
+
 /* One chain, two doors: the rail card and the home tile run the same thing.
  *
- * Both doors can be pressed from anywhere, and the chain reads two things that
- * live on particular screens — the task, out of the composer, and the set of
- * examples, out of the run setup. So a refusal here has to be a refusal you can
- * act on: the button goes to the screen carrying the missing field before it
- * says what is missing, rather than naming a field that is not on screen.
+ * Both doors can be pressed from anywhere, and the chain reads two things: the
+ * set of examples, which is now a field on the door itself, and the task, which
+ * still only exists on the composer — writing one deserves more than a field
+ * borrowed onto a card. So only that refusal has to leave the door it was
+ * pressed on; the other one just points at the field beside it.
  */
 function wireSmartStart(button, status) {
   button?.addEventListener('click', async () => {
@@ -532,9 +615,15 @@ function wireSmartStart(button, status) {
     // away from home. The rail card is on screen throughout, so every word is
     // said there too and the run is never running silently.
     const rail = document.querySelector('.rail-smart-status');
-    const say = (kind, text) => {
+    // `waitingFor` names the field a refusal is holding out for, so the line
+    // can retire itself once that field is filled.
+    const say = (kind, text, waitingFor = null) => {
       [status, status === rail ? null : rail].forEach(node => {
-        if (node) { node.textContent = text; node.className = `${node.classList[0]} ${kind}`; }
+        if (!node) return;
+        node.textContent = text;
+        node.className = `${node.classList[0]} ${kind}`;
+        if (waitingFor) node.dataset.waitingFor = waitingFor;
+        else delete node.dataset.waitingFor;
       });
     };
     // Both inputs, in the order the work needs them: there is nothing to
@@ -544,12 +633,14 @@ function wireSmartStart(button, status) {
     if (!($('description')?.value || '').trim()) {
       selectTab('prompt', {focus:true});
       $('description')?.focus();
-      say('error-text', 'Describe the task first — the field is on this screen, then start again.');
+      say('error-text', 'Describe the task first — the field is on this screen, then start again.', 'task');
       return;
     }
+    // No navigation for this one: the field the button needs is the field
+    // right above it, on both doors, so pointing at it beats leaving for it.
     if (!state.run.dataset) {
-      selectTab('report', {focus:true});
-      say('error-text', 'Choose a set of examples first — the field is on this screen, then start again.');
+      button.closest('.smart-tile, .rail-smart')?.querySelector('[data-run-field="dataset"]')?.focus();
+      say('error-text', 'Choose a set of examples first — the field above.', 'dataset');
       return;
     }
     if (state.tab !== 'prompt') selectTab('prompt');
@@ -724,11 +815,16 @@ function sectionTiles() {
       pending ? ['wait', `${pending} waiting for you`] : ['idle', 'Nothing waiting']],
     ['s-reference', 'Docs', 'Evaluation methodology, fine-tuning trade-offs, and guides to understanding every score.',
       ['idle', `${MODE_SPECS.guides.modes.length} guides`]]
-  ].map(([tab, name, lead, [tone, label]]) => `<a class="tile" href="#${tab}" data-global-tab="${tab}" data-screen="${tab}">
+  // Each tile used to open the section's own hub, one click short of anything
+  // you could actually do — so it opens where that hub's own "next step" link
+  // would have sent you instead. The hub is still there for whoever wants the
+  // section whole; the breadcrumb above every screen in it still leads back.
+  ].map(([tab, name, lead, [tone, label]]) => { const next = sectionNextTarget(tab.slice(2));
+    return `<a class="tile" href="${next.href}" ${next.attrs}>
       <span class="tile-top"><strong>${esc(name)}</strong></span>
       <span class="tile-lead">${esc(lead)}</span>
       <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
-    </a>`).join('');
+    </a>`; }).join('');
 }
 
 // What a tile says is not what the screen says. A tile is read while scanning
@@ -745,7 +841,7 @@ const tileDesc = {
   'dataset-bundled':'The benchmarks inside the package, for trying the workflow out rather than judging your prompt.',
   history:'Every finished run, newest first, with a version-to-version diff and a CSV export.',
   results:'Run history and statistical significance in one results workspace.',
-  judge:'Have a model compare two answers against a rubric, blind, for work no grader can score.',
+  judge:'Have a model mark a whole run against its reference answers, blind, for work no grader can score.',
   'model-matrix':'Run the same prompt on several models, to see whether it works anywhere but yours.',
   'context-lab':'Run the same prompt with different context, to see whether the extra text pays for its tokens.',
   analysis:'Check whether a difference between two runs is real or just noise, before acting on it.',
@@ -1070,10 +1166,21 @@ function stockBubbles(items) {
   return shown;
 }
 
+// Where "next" points to, as an href plus the data attributes the global
+// click handler reads for it — shared by the section map's own next-step link
+// and by the home tiles, which jump straight there instead of stopping at the
+// section hub first.
+function sectionNextTarget(section) {
+  const [tab, label, hint, showing, mode] = sectionNextStep[section]();
+  const href = mode ? canonicalModePath(tab, mode, showing) : `#${tab}${showing ? `/${encodeURIComponent(showing)}` : ''}`;
+  const attrs = `data-global-tab="${tab}" data-screen="${tab}"${mode ? ` data-mode="${esc(mode)}"` : ''}${showing ? ` data-showing="${esc(showing)}"` : ''}`;
+  return {tab, label, hint, href, attrs};
+}
+
 function renderSectionMap(section) {
   const stock = sectionStock[section]?.();
   if (!stock) return '';
-  const [nextTab, nextLabel, nextHint, nextShowing, nextMode] = sectionNextStep[section]();
+  const next = sectionNextTarget(section);
   const bubbles = stockBubbles(stock.items);
   const packed = packCircles(bubbles.map(item => item.value));
   // The tally of everything that did not fit can outweigh any single thing in
@@ -1119,11 +1226,10 @@ function renderSectionMap(section) {
       </div>
       ${plot}
       ${bubbles.length ? `<p class="map-legend">${esc(stock.legend)}</p>` : ''}
-      <a class="map-next" href="${nextMode ? canonicalModePath(nextTab, nextMode, nextShowing) : `#${nextTab}${nextShowing ? `/${encodeURIComponent(nextShowing)}` : ''}`}"
-        data-global-tab="${nextTab}" data-screen="${nextTab}"${nextMode ? ` data-mode="${esc(nextMode)}"` : ''}${nextShowing ? ` data-showing="${esc(nextShowing)}"` : ''}>
+      <a class="map-next" href="${next.href}" ${next.attrs}>
         <span class="map-next-kicker">Next step</span>
-        <strong>${esc(nextLabel)}</strong>
-        <small>${esc(nextHint)}</small>
+        <strong>${esc(next.label)}</strong>
+        <small>${esc(next.hint)}</small>
       </a>
     </aside>`;
 }
@@ -1144,27 +1250,24 @@ function renderSection(tab) {
     </div>`;
 }
 
-/* The two things Smart run consumes, said before it is pressed rather than
- * after. Neither of them is on this screen — the task is written in the
- * composer and the set is chosen on the screens that run something — so the
- * tile states what the button is holding. A control whose inputs live
- * elsewhere either shows them or refuses as a surprise. */
+/* The one thing Smart run still cannot take here: the task is written in the
+ * composer, a page of its own, and that stays a click away. The set is not —
+ * it is one field, so it is on the card itself now, and the button only ever
+ * has one reason left to refuse. */
 function smartRunHolds() {
   const task = ($('description')?.value || '').trim();
-  return [
-    task ? ['ok', 'Task written'] : ['wait', 'No task yet'],
-    state.run.dataset ? ['ok', state.run.dataset] : ['wait', 'No examples chosen']
-  ];
+  return task ? ['ok', 'Task written'] : ['wait', 'No task yet'];
 }
 
 function renderHome() {
+  const [tone, label] = smartRunHolds();
   return `<div class="tiles">
       <div class="tile wide smart-tile">
         <div>
           <strong>Smart run</strong>
           <p>Writes the prompt, measures it on your examples, improves it over a few rounds, and stops at the first step that needs you. Minutes, not seconds.</p>
-          <span class="tile-foot">${smartRunHolds().map(([tone, label]) =>
-            `<span class="state ${tone}">${esc(label)}</span>`).join('')}</span>
+          <span class="tile-foot"><span class="state ${tone}">${esc(label)}</span></span>
+          <div class="smart-tile-dataset">${datasetField('home-run-dataset')}</div>
         </div>
         <button type="button" class="primary smart-start" data-testid="smart-run">Start</button>
       </div>
@@ -1405,8 +1508,13 @@ function renderDetail() {
   renderDetailPanel(state.tab);
   activateDetailTab();
   // Every path that changes the prompt ends in a render, so this is the one
-  // place the draft has to be written down from.
+  // place the draft has to be written down from — and the one place the copies
+  // of the prompt standing on screens already drawn are brought up to date.
   rememberDraft();
+  if (typeof refreshPromptBands === 'function') refreshPromptBands();
+  // The composer offers Delete only while there is something to delete, so it
+  // is written from the same place the prompt is written down.
+  if (typeof renderPromptDelete === 'function') renderPromptDelete();
 }
 
 function showDetailMessage(tab, body) {
@@ -1834,6 +1942,56 @@ function historyComparisonSeries(records) {
     .map(([id, items]) => ({id, records:items}));
 }
 
+/* The immutable wording behind one recorded run.
+ *
+ * The composer draft is deliberately a different object: it answers "what am
+ * I editing now?", while this snapshot answers "what produced these numbers?".
+ * A comparison records one payload per arm, so the reader handles both the
+ * ordinary single prompt and that list without pretending the current draft is
+ * historical evidence. */
+function historyPromptSnapshotText(snapshot) {
+  const prompts = Array.isArray(snapshot) ? snapshot : [snapshot];
+  return prompts.filter(item => item != null).map((program, index) => {
+    const text = promptPlainText(program) || JSON.stringify(program, null, 2);
+    return prompts.length > 1 ? `VARIANT ${index + 1}\n${text}` : text;
+  }).join('\n\n');
+}
+
+function historyPromptSnapshotRow(record) {
+  if (record.prompt_snapshot == null) {
+    return `<tr class="history-prompt-text" data-history-prompt-text-for="${esc(record.id)}" hidden>
+      <td colspan="7"><div class="history-prompt-body legacy-prompt-snapshot">
+        <p>This run predates saved prompt snapshots. Its fingerprint remains verifiable, but the original wording cannot be recovered.</p>
+      </div></td>
+    </tr>`;
+  }
+  const prompts = Array.isArray(record.prompt_snapshot) ? record.prompt_snapshot : [record.prompt_snapshot];
+  const snapshotNote = record.prompt_snapshot_kind === 'preview'
+    ? 'First-example preview recorded by an automatic benchmark. This run compiled each dataset row separately.'
+    : record.prompt_snapshot_kind === 'optimized'
+      ? 'Exact optimized prompt recorded with this run.'
+      : record.prompt_snapshot_kind === 'mixed'
+        ? 'Exact authored prompt for the arm that ran it; the compiled arms show a first-example preview.'
+        : 'Exact authored prompt recorded with this run.';
+  const body = prompts.map((program, index) => {
+    const parts = promptMessages(program);
+    const label = prompts.length > 1 ? `<div class="stage-title">Variant ${index + 1}</div>` : '';
+    const content = parts.length
+      ? parts.map(promptPartBlock).join('')
+      : `<div class="prompt-part"><span class="prompt-role">FROZEN PAYLOAD</span><pre>${esc(JSON.stringify(program, null, 2))}</pre></div>`;
+    return `${label}${content}`;
+  }).join('');
+  const key = registerCopy(`history:${record.id}`, historyPromptSnapshotText(record.prompt_snapshot));
+  return `<tr class="history-prompt-text" data-history-prompt-text-for="${esc(record.id)}" hidden>
+    <td colspan="7"><div class="history-prompt-body">
+      <p class="field-hint">${esc(snapshotNote)} · fingerprint <code>${esc(record.prompt_hash || 'unavailable')}</code></p>
+      ${body}
+      <div class="subject-full-actions">${copyButton(key, 'Copy recorded prompt', 'Copy the exact prompt that produced this run')}</div>
+      <div class="copy-status" data-copy-status="history:${esc(record.id)}" role="status" aria-live="polite"></div>
+    </div></td>
+  </tr>`;
+}
+
 function renderHistory() {
   // A route may point at one dataset or run, but it still lands inside the
   // portfolio that owns it rather than replacing the portfolio with a flat list.
@@ -1903,7 +2061,11 @@ function renderHistory() {
   }).join('');
   const seriesOptions = compareSeries.map(item => `<option value="${esc(item.id)}"${item.id === state.historyTechnique ? ' selected' : ''}>${esc(techniqueTitle(item.id))} · ${esc(item.id)}</option>`).join('');
   const options = comparableRecords.map(item => `<option value="${esc(item.id)}">prompt v${esc(item.prompt_version ?? item.version)} · ${esc(historyDate(item.created_at))} · ${esc(item.model_id)}</option>`).join('');
-  const runRows = datasetRecords.map(item => { const m = experimentMetric(item); return `<tr${pointed?.id === item.id ? ' class="pointed-run"' : ''}><td><code>v${esc(item.prompt_version ?? item.version)}</code></td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${m ? Number(m.quality).toFixed(3) : '—'}</td><td>${m ? Number(m.mean_latency_seconds).toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${Number(m.mean_cost_usd).toFixed(6)}` : 'unknown'}</td></tr>`; }).join('');
+  const runRows = datasetRecords.map(item => {
+    const m = experimentMetric(item);
+    const availability = item.prompt_snapshot == null ? 'Prompt text unavailable for this legacy run' : 'Open the prompt snapshot recorded with this run';
+    return `<tr${pointed?.id === item.id ? ' class="pointed-run"' : ''}><td><button type="button" class="link-hash history-prompt-link" data-history-prompt-text="${esc(item.id)}" aria-expanded="false" title="${esc(availability)}"><code>v${esc(item.prompt_version ?? item.version)}</code></button></td><td>${esc(historyDate(item.created_at))}</td><td>${esc(item.kind)}</td><td>${esc(item.model_id)}</td><td>${m ? Number(m.quality).toFixed(3) : '—'}</td><td>${m ? Number(m.mean_latency_seconds).toFixed(2) : '—'}</td><td>${m && m.mean_cost_usd != null ? `$${Number(m.mean_cost_usd).toFixed(6)}` : 'unknown'}</td></tr>${historyPromptSnapshotRow(item)}`;
+  }).join('');
   const compareKey = selectedCase && selectedPrompt && state.historyDataset
     ? `${selectedCase.id}:${selectedPrompt.id}:${state.historyDataset}:${state.historyTechnique || ''}` : '';
   const comparison = state.historyCompareContext === compareKey ? renderExperimentComparison(state.experimentComparison) : '';
@@ -1941,6 +2103,12 @@ function renderHistory() {
 }
 
 function wireHistoryControls(panel) {
+  panel.querySelectorAll('[data-history-prompt-text]').forEach(button => button.addEventListener('click', () => {
+    const row = panel.querySelector(`[data-history-prompt-text-for="${CSS.escape(button.dataset.historyPromptText)}"]`);
+    if (!row) return;
+    row.hidden = !row.hidden;
+    button.setAttribute('aria-expanded', String(!row.hidden));
+  }));
   panel.querySelectorAll('[data-history-case]').forEach(button => button.addEventListener('click', () => {
     state.historyCaseId = button.dataset.historyCase; state.historyPromptId = null; state.historyDataset = null; state.historyTechnique = null;
     state.experimentComparison = null; state.historyCompareContext = null; renderDetailPanel('results');

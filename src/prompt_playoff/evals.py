@@ -33,10 +33,13 @@ from prompt_playoff.domain import (
 )
 from prompt_playoff.graders import (
     QUALITY_PREFERENCE,
+    REFERENCE_OVERLAP_GRADERS,
     RELIABILITY_GRADERS,
     GradeContext,
     default_graders,
+    headline_grader,
     run_graders,
+    token_f1_chance_level,
     validate_schema,
 )
 from prompt_playoff.providers import ModelProvider, ProviderError
@@ -91,6 +94,12 @@ class Scorecard(BaseModel):
     total_cost_usd: float | None = None
     grades: dict[str, float] = Field(default_factory=dict)
     quality_grader: str | None = None
+    #: What the headline grader already scores on this data when the answer is
+    #: about something else entirely. Present only for a grader that compares an
+    #: answer with one reference, because that is the only kind whose zero is not
+    #: at zero. A quality of 0.14 above a chance level of 0.13 is not a weak
+    #: prompt; it is a metric that cannot see this task at all.
+    quality_chance_level: float | None = None
     failures: int = 0
     runs: int = 0
 
@@ -113,6 +122,13 @@ class BenchmarkReport(BaseModel):
     delta: dict[str, float] = Field(default_factory=dict)
     runs: list[ExampleRun] = Field(default_factory=list)
     prompt_preview: dict[str, Any] = Field(default_factory=dict)
+    #: Graders nobody chose, and how many rows got each. A row that names its
+    #: own graders states what it wants measured; a row that does not has them
+    #: picked from the shape of its answer — a reasonable guess, and on prose
+    #: the guess is word overlap. That choice used to happen in silence, which
+    #: is how a number arrives looking like somebody's decision when it was the
+    #: tool's. Empty means every row said what it wanted.
+    inferred_graders: dict[str, int] = Field(default_factory=dict)
     dataset_revision: str | None = None
     grader_version: str = "deterministic-graders-v1"
     seed_policy: str = "repeat-index"
@@ -189,6 +205,28 @@ def dataset_revision(dataset: list[BenchmarkExample]) -> str:
             ensure_ascii=False,
         ).encode()
     ).hexdigest()
+
+
+def overlap_scored_references(dataset: list[BenchmarkExample]) -> list[str]:
+    """The reference answers this set will in fact be scored against word by word.
+
+    Not every prose answer is graded that way. A row that names its own graders
+    is scored by those — the translation set asks for glossary consistency and
+    an omission check, and word overlap never becomes its headline — so asking
+    "what does this metric score by chance here" about such a row would answer a
+    question nobody is going to ask. Only the rows where word overlap really is
+    the headline are returned, which is exactly the set whose floor matters.
+    """
+    references: list[str] = []
+    for example in dataset:
+        names = example.graders or default_graders(
+            example.expected, example.response_schema, strict_json=False
+        )
+        if headline_grader(names) in REFERENCE_OVERLAP_GRADERS and isinstance(
+            example.expected, str
+        ):
+            references.append(example.expected)
+    return references
 
 
 def prompt_fingerprint(program: CompiledProgram | dict[str, Any]) -> str:
@@ -271,6 +309,7 @@ class BenchmarkRunner:
         preview: dict[str, Any] = {}
         total = len(dataset) * repeats
         done = 0
+        inferred: dict[str, int] = {}
 
         for example in dataset:
             # The prompt someone wrote and is looking at, when there is one;
@@ -305,11 +344,16 @@ class BenchmarkRunner:
 
             # Dataset graders win; otherwise infer from the data and always add the
             # technique's own validators, which return None when inapplicable.
-            grader_names = example.graders or default_graders(
-                example.expected,
-                example.response_schema,
-                task.constraints.strict_json,
-            )
+            if example.graders:
+                grader_names = list(example.graders)
+            else:
+                grader_names = default_graders(
+                    example.expected,
+                    example.response_schema,
+                    task.constraints.strict_json,
+                )
+                for name in grader_names:
+                    inferred[name] = inferred.get(name, 0) + 1
             grader_names = list(dict.fromkeys([*grader_names, *technique.recipe.validators]))
 
             for repeat in range(repeats):
@@ -352,7 +396,12 @@ class BenchmarkRunner:
         shape_required = task.constraints.strict_json or any(
             example.response_schema is not None for example in dataset
         )
-        scorecard = build_scorecard(runs, repeats, quality_from_contract=shape_required)
+        scorecard = build_scorecard(
+            runs,
+            repeats,
+            quality_from_contract=shape_required,
+            references=overlap_scored_references(dataset),
+        )
         declared = {
             "quality": technique.characteristics.quality,
             "reliability": technique.characteristics.reliability,
@@ -384,6 +433,7 @@ class BenchmarkRunner:
             },
             runs=runs,
             prompt_preview=preview,
+            inferred_graders=inferred,
             dataset_revision=dataset_revision(dataset),
             seed_policy=f"repeat-index:0..{repeats - 1}",
             authored_hash=prompt_fingerprint(authored) if authored is not None else None,
@@ -429,7 +479,11 @@ class BenchmarkRunner:
 
 
 def build_scorecard(
-    runs: list[ExampleRun], repeats: int, *, quality_from_contract: bool = True
+    runs: list[ExampleRun],
+    repeats: int,
+    *,
+    quality_from_contract: bool = True,
+    references: list[str] | None = None,
 ) -> Scorecard:
     """Fold the grades into one card.
 
@@ -440,6 +494,12 @@ def build_scorecard(
     for prose, and reporting that as quality would be a wrong answer to a
     question nobody asked. Then the card carries no quality grader at all, which
     every surface already knows how to say.
+
+    ``references`` are the free-text reference answers the run was scored
+    against. They are asked for so that a headline coming from a word-overlap
+    grader can be reported next to what that grader scores by chance on this
+    same data — the difference between "this prompt is failing" and "this metric
+    was never going to reach 1 here".
     """
     if not runs:
         raise ValueError("No runs to score")
@@ -457,6 +517,11 @@ def build_scorecard(
     ]
     quality_grader = eligible[0] if eligible else None
     quality = grades.get(quality_grader, 0.0) if quality_grader else 0.0
+    chance_level = (
+        token_f1_chance_level(references or [])
+        if quality_grader in REFERENCE_OVERLAP_GRADERS
+        else None
+    )
 
     contract_names = [name for name in grade_names if name in RELIABILITY_GRADERS]
     contract_values = [
@@ -494,6 +559,7 @@ def build_scorecard(
         total_cost_usd=round(sum(costs), 8) if len(costs) == len(runs) else None,
         grades=grades,
         quality_grader=quality_grader,
+        quality_chance_level=chance_level,
         failures=sum(1 for run in runs if run.error),
         runs=len(runs),
     )

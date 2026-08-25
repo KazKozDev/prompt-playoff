@@ -162,3 +162,46 @@ def test_the_ladder_guide_states_as_many_classes_as_it_lists(name: str, pattern:
     match = re.search(pattern, _text(name))
     assert match, f"{name} no longer states how many solution classes there are"
     assert _number(match.group(1)) == _rungs("llm-or-not.html")
+
+
+#: What word overlap already scores on a bundled set when the answer was written
+#: for a different row of it. The guides quote it, because a floor of 0.63 is
+#: the whole argument for not scoring that set this way — and it is measured off
+#: the rows, so a number typed beside it is a claim like any other. Re-sample the
+#: corpus and the sentence has to be re-read, not left standing.
+CHANCE_CLAIMS = [
+    (
+        "docs/configuration.md",
+        r"([\d.]+)\s+on the bundled marketing-email corpus",
+        "business:marketing-email",
+    ),
+    (
+        "evaluation.html",
+        r"marketing-email corpus it is <b>([\d.]+)</b>",
+        "business:marketing-email",
+    ),
+    (
+        "evaluation.ru.html",
+        r"marketing-email он равен <b>([\d.]+)</b>",
+        "business:marketing-email",
+    ),
+]
+
+
+@pytest.mark.parametrize("name,pattern,dataset", CHANCE_CLAIMS, ids=[c[0] for c in CHANCE_CLAIMS])
+def test_the_guides_quote_the_chance_level_the_rows_actually_produce(
+    name: str, pattern: str, dataset: str
+) -> None:
+    from prompt_playoff.evals import load_jsonl, overlap_scored_references
+    from prompt_playoff.graders import token_f1_chance_level
+
+    root = ROOT / name
+    text = root.read_text(encoding="utf-8") if root.is_file() else _text(name)
+    match = re.search(pattern, text)
+    assert match, f"{name} no longer states the chance level of {dataset}"
+    rows = load_jsonl(Registry.load().dataset_path(dataset))
+    measured = token_f1_chance_level(overlap_scored_references(rows))
+    assert measured is not None
+    assert float(match.group(1)) == pytest.approx(measured, abs=0.005), (
+        f"{name} says {match.group(1)}, the rows give {measured:.4f}"
+    )

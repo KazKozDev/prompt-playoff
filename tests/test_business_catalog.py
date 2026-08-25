@@ -17,7 +17,11 @@ from fastapi.testclient import TestClient
 from prompt_playoff.api import app
 from prompt_playoff.business_catalog import CatalogError, catalog, group_of
 from prompt_playoff.evals import load_jsonl
-from prompt_playoff.graders import GradeContext, get_grader
+from prompt_playoff.graders import (
+    REFERENCE_OVERLAP_GRADERS,
+    GradeContext,
+    get_grader,
+)
 from prompt_playoff.registry import Registry
 
 CATALOGUE = Path(__file__).parents[1] / "src/prompt_playoff/data/business_cases.yaml"
@@ -283,7 +287,27 @@ def test_bundled_rows_match_what_the_catalogue_promises(raw):
         for row in rows:
             assert row.input.strip()
             assert row.expected not in (None, ""), f"{row.id} has no answer to be scored against"
-            assert set(row.graders) == set(spec["graders"])
+            declared = set(spec["graders"])
+            assert declared <= set(row.graders)
+            if not spec.get("contract"):
+                assert set(row.graders) == declared
+                continue
+            # A set that names a contract carries, per row, the checks a rule
+            # can decide — and every one of them is a check the human answer
+            # already meets. Without that invariant the derivation would have
+            # swapped a metric that marks good answers wrong for a rule that
+            # does the same thing, which is not an improvement.
+            assert {"forbidden_content", "length_limit"} & set(row.graders)
+            context = GradeContext(
+                output=str(row.expected), expected=row.expected, options=row.grader_options
+            )
+            for name in row.graders:
+                if name in REFERENCE_OVERLAP_GRADERS:
+                    continue
+                score = get_grader(name)(context)
+                assert score is None or score >= 1.0, (
+                    f"{row.id}: the reference itself fails its own {name} check"
+                )
             assert len(row.input) <= spec["max_input_chars"]
 
 

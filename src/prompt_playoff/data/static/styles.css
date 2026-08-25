@@ -156,6 +156,8 @@
     .tile.wide:hover { transform:none; }
     .tile.wide p { margin:4px 0 0; max-width:64ch; color:var(--text-2); font-size:var(--fs-base); line-height:1.6; }
     .tile.wide strong { font-size:var(--fs-lead); font-weight:600; }
+    .smart-tile-dataset { max-width:360px; }
+    .smart-tile-dataset label { margin:10px 0 4px; }
     button.smart-start { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:10px 22px; }
     /* A long chain has to say which link it is on, or it reads as a hang. */
     .smart-status { grid-column:1/-1; margin:0; color:var(--text-2); font-size:var(--fs-sm); line-height:1.6; }
@@ -333,6 +335,25 @@
     }
     .showing-band b { color:var(--text); font-weight:600; overflow-wrap:anywhere; }
     .showing-band button { width:auto; margin:0 0 0 auto; flex:0 0 auto; padding:5px 12px; font-size:var(--fs-sm); }
+    /* The prompt, on a screen with no column to give it. Same grey band as the
+       one above, for the same reason: it reports what this screen is acting on
+       and asks for nothing. Shut by default — the table underneath is what the
+       reader came for, and a wall of prompt above it would be a screen that
+       had changed its mind about its own subject. */
+    .prompt-band { margin:0 0 16px; border-left:2px solid var(--border-strong); border-radius:0 var(--r-sm) var(--r-sm) 0; background:var(--wash); }
+    .prompt-band > summary {
+      display:flex; align-items:baseline; gap:14px; padding:9px 14px;
+      cursor:pointer; list-style:none; font-size:var(--fs-sm); line-height:1.6;
+    }
+    .prompt-band > summary::-webkit-details-marker { display:none; }
+    .prompt-band > summary .stage-title { margin:0; color:var(--accent-ink); }
+    .prompt-band > summary:hover .stage-title { text-decoration:underline; }
+    .prompt-band .band-name { margin-left:auto; color:var(--muted); text-align:right; overflow-wrap:anywhere; }
+    .prompt-band-body { padding:2px 14px 14px; }
+    .prompt-band .band-note { margin:0 0 14px; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
+    .prompt-band.bandless { display:flex; align-items:baseline; gap:14px; padding:9px 14px; color:var(--muted); font-size:var(--fs-sm); line-height:1.6; }
+    .prompt-band.bandless .stage-title { margin:0; }
+    .prompt-band.bandless a { color:var(--accent-ink); }
     /* The verdict. Tinted band, not coloured type: the border carries the
        direction and the words stay the same grey as the rest of the prose. */
     .verdict { margin-bottom:20px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius:0 var(--r-md) var(--r-md) 0; background:var(--panel2); }
@@ -350,6 +371,9 @@
     .ring { position:relative; display:grid; flex:0 0 96px; width:96px; height:96px; place-items:center; }
     .ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
     .ring-track { fill:none; stroke:var(--wash-2); stroke-width:9; }
+    /* Where on the ring an answer written for a different row already lands.
+       Drawn over the fill, so it reads whether the score is above or below it. */
+    .ring-chance { fill:none; stroke:var(--text); stroke-width:15; }
     .ring-fill { fill:none; stroke:var(--accent); stroke-width:9; stroke-linecap:round; }
     .verdict.up .ring-fill { stroke:var(--good); }
     .verdict.down .ring-fill { stroke:var(--bad); }
@@ -446,6 +470,8 @@
     .rail-smart-status:empty { display:none; }
     .rail-smart-status.done { color:var(--good); }
     .rail-smart-status.error-text { color:var(--bad); }
+    .rail-smart-dataset label { margin:10px 0 4px; font-size:var(--fs-micro); }
+    .rail-smart-dataset select { padding:8px 10px; font-size:var(--fs-sm); }
     /* The rail carries no marks at all: it is a list of names, and a name is
        what you are looking for there. Weight, indent, and the caret are what
        separate its two levels. */
@@ -523,6 +549,11 @@
     .how-label { color:var(--muted); font-size:var(--fs-micro); font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
     .how-note { margin:7px 0 0; max-width:74ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.55; }
     .how-note strong { color:var(--text-2); font-weight:600; }
+    /* A warning that arrives before the run, in the same voice as the rest of
+       the panel but impossible to skim past: what the headline number will not
+       be able to say about this data. */
+    .how-note.warn { border-left:2px solid var(--warn-line); padding-left:12px; color:var(--text-2); }
+    .how-note.warn b { color:var(--warn-ink); }
     .how-note code, .grader-line code { color:var(--text-2); font:var(--fs-sm)/1.5 var(--mono); }
     /* One grader per line: its name, what it does to the headline numbers when
        it is one of the two that do, and the sentence the server uses for it
@@ -806,6 +837,15 @@
     .hub-link:hover { color:var(--text); }
     .rank { color:var(--muted); font-weight:600; font-size:var(--fs-sm); }
     .meta { color:var(--muted); font-size:var(--fs-sm); margin-top:4px; }
+    /* A measured floor high enough that the metric cannot separate a good
+       answer from an unrelated one. It changes which set you pick, so it is not
+       allowed to read as one more grey detail. */
+    .meta.warn { color:var(--warn-ink); }
+    /* The shape of the work, then the button that reads the requirements off
+       the rows. Kept on one line with the row's other actions, because it is
+       one more thing you can do to a set, not a section about grading. */
+    .contract-cell { display:inline-flex; gap:6px; align-items:center; margin-right:6px; }
+    .contract-cell select { font-size:var(--fs-sm); padding:5px 8px; }
     .score { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
     /* ---- the method list ----------------------------------------------------
        Hairline-separated rows gave every element on the row the same weight, so
@@ -943,6 +983,14 @@
     .portfolio-compare-note { margin:0 0 14px; }
     .portfolio-runs .stage-title { margin-top:16px; }
     .pointed-run { background:var(--accent-soft); }
+    .history-prompt-link { padding:0; }
+    .history-prompt-text > td { padding:0; border-top:0; }
+    .history-prompt-body { padding:14px 16px 16px; border-left:2px solid var(--accent-line); background:var(--sunken); }
+    .history-prompt-body .field-hint { margin:0 0 12px; }
+    .history-prompt-body .stage-title:first-child { margin-top:0; }
+    .history-prompt-body .prompt-part:last-of-type pre { margin-bottom:0; }
+    .legacy-prompt-snapshot { border-left-color:var(--border-strong); color:var(--muted); }
+    .legacy-prompt-snapshot p { margin:0; }
     .instruction-list { margin-top:6px; }
     .block-index { display:grid; gap:6px; margin-top:12px; }
     .block-index-item { display:grid; grid-template-columns:minmax(90px,.7fr) minmax(110px,1fr) auto; gap:8px; align-items:start; padding:8px 0; border-top:1px solid var(--border); font-size:var(--fs-sm); }
@@ -997,10 +1045,11 @@
     .prompt-msg.picked pre { background:var(--accent-soft); }
     .prompt-foot { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:20px; padding-top:12px; border-top:1px solid var(--border); color:var(--muted); font-size:var(--fs-sm); }
     .prompt-foot strong { color:var(--text-2); font-weight:600; }
-    /* The one step that has not been taken yet, at the foot of the thing it is
-       about. It is a claim about the prompt, not a part of it, so it sits on the
-       sunken ground below the panel's own footer rather than inside the prompt. */
-    .next-step { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:18px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--r-md); background:var(--sunken); }
+    /* The one step that has not been taken yet, stated above the prompt it is
+       about — the foot of a compiled prompt is off the bottom of the screen. It
+       is a claim about the prompt, not a part of it, so it sits on the sunken
+       ground, banded off from the messages that follow it. */
+    .next-step { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:18px 0 24px; padding:16px 18px; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--r-md); background:var(--sunken); }
     .next-step strong { display:block; color:var(--text); font-size:var(--fs-base); font-weight:600; }
     .next-step small { display:block; margin-top:3px; max-width:52ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     /* A filled grey chip, not the accent: this leads to the screen that runs
@@ -1574,7 +1623,15 @@
        above left them sharing an edge, which read as one wide split control. */
     .dataset-list td.row-actions button + button { margin-left:6px; }
     .dataset-list td.row-actions button[aria-current="true"] { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-ink); }
-    .delete-confirm { display:inline-flex; gap:6px; }
+    /* Under the button that creates, separated by a rule: it is the same
+       subject and the opposite move, and it is not a second thing to try. */
+    .composer-delete { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+    .composer-delete > button { width:auto; margin:0; padding:6px 10px; }
+    .delete-confirm { display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    /* What the click costs, beside the button that costs it. A row in a table
+       has no room for a paragraph, and a confirmation that does not say what it
+       destroys is a second click and nothing more. */
+    .delete-confirm small { flex-basis:100%; max-width:34ch; color:var(--muted); font-size:var(--fs-sm); line-height:1.5; }
     button.danger { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad-text); }
     button.danger:hover:not(:disabled) { border-color:var(--bad); background:var(--bad); color:var(--panel); }
 
@@ -1724,6 +1781,8 @@
     }
     .rail-smart strong { font-size:12px; }
     .rail-smart small { font-size:10px; }
+    .rail-smart-dataset label { margin:8px 0 3px; font-size:10px; }
+    .rail-smart-dataset select { padding:6px 8px; font-size:11px; }
     button.rail-smart-start { margin-top:8px; padding:6px 9px; }
     .sidebar-system { gap:0; padding-bottom:6px; }
     .sidebar-system a { min-height:28px; padding:5px 7px; border-radius:3px; font-size:11px; }

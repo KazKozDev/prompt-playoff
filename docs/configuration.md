@@ -67,6 +67,105 @@ Monetary cost is calculated only when both `input_cost_per_million_usd` and
 not ship a mutable tariff catalog: a missing reviewed price is reported as
 unknown rather than zero.
 
+## The check file, and what a bar can be written against
+
+`prompt-playoff.yaml` holds the thresholds `prompt-playoff check` enforces in
+CI. Each `require:` key names a measurement and the side of it that is bounded.
+
+| Key | What it bounds |
+|---|---|
+| `<scorecard field>_min` / `_max` | A headline number: `quality`, `reliability`, `stability`, `contract_pass_rate`, `mean_latency_seconds`, `p95_latency_seconds`, `mean_total_tokens`, `mean_cost_usd`, and the rest of the card |
+| `grade.<grader>_min` / `_max` | One named grader's mean — `grade.contains_all_min: 1.0`, `grade.forbidden_content_min: 1.0` |
+
+`--update` rewrites the values of both kinds in place, keeping comments and
+ordering.
+
+### Open-ended generation
+
+A task with one right answer is gated on `quality_min`, and `quality` is
+whichever grader decided that answer. A drafted reply, summary or email has no
+such grader: the run falls back to `token_f1`, which scores how many words the
+answer shares with the single reference the row happens to hold. A good reply
+worded differently scores around 0.14 there; only a copy of the reference
+reaches 1.0. A `quality_min` over that would pin how closely the model echoes
+one person's wording — something a better prompt can lose and a worse one can
+keep — so `prompt-playoff check` **refuses** it and names what to write instead.
+
+What it enforces is `grade.<grader>_min`, which turns a requirement no reference
+answer exists for into a CI failure. Give the rows requirements a rule can
+decide:
+
+```json
+{"id": "reply-1",
+ "input": "Where is order A-4471?",
+ "graders": ["contains_all", "forbidden_content", "length_limit"],
+ "grader_options": {"contains": ["A-4471"],
+                    "forbidden": ["refund", "guarantee"],
+                    "forbidden_patterns": ["\\[INSERT [A-Z ]+\\]"],
+                    "max_chars": 700}}
+```
+
+and bound them:
+
+```yaml
+require:
+  grade.contains_all_min: 1.0        # every reply cites the order number
+  grade.forbidden_content_min: 1.0   # none of them promises a refund
+  grade.length_limit_min: 0.98       # they fit the channel
+```
+
+`grade.token_f1_min` is permitted and means what it says: watch word overlap for
+drift between runs of the same prompt. It is not a bar on quality, and writing
+it explicitly is how you record that you know the difference.
+
+You do not have to write those requirements by hand. In the app they are one
+button on **Datasets** — pick the shape of the work beside your set and press
+**Add requirements**. From the terminal it is `prompt-playoff
+annotate-dataset rows.jsonl --contract reply --in-place`, which derives them per row —
+the identifier the reply has to carry back, the unfilled `[INSERT NAME]` that
+must not ship, the length the channel allows — and keeps a check only where the
+row's own reference answer already meets it, so nothing it writes can mark a
+model wrong for answering as well as a person did. `--contract summary` requires
+the facts the human summary kept; `--contract draft` does the format checks
+alone. Run it without `--contract` and it only writes down the graders the tool
+would otherwise have guessed, so the choice on record is yours.
+
+### What still cannot be gated
+
+Tone, persuasiveness, whether an explanation lands. **Evaluation → Answer
+judging** (`POST /v1/evaluate/rubric`) judges a whole recorded run against the
+reference answers its rows carry — blind, one review item for the batch — and
+reports a win rate against the person who wrote them, where 0.5 means the prompt
+writes about as well as they did. It deliberately has no route into a scorecard or a `require:`
+key: a bar defended by a model's mood on the day is not a bar. What CI enforces
+is what a rule decided.
+
+### The prompt search refuses the same number
+
+The prompt search stops before its first model call when the rows would
+be scored by word overlap and that metric's floor is at or above 0.35 — the
+point where it can no longer separate a good answer from an answer to a
+different question. A search against such a number does not fail to improve the
+prompt; it reliably raises the score by drifting towards the wording every row
+shares. The refusal names what to give the rows instead, and offers one way
+past it — `--allow-noisy-objective` on the CLI, **Search anyway, and read it as
+drift** in the app.
+
+`prompt-playoff list-datasets` prints, for every set whose quality number would
+come from word overlap, what that metric already scores when the answer was
+written for a *different* row of the same set. Where that floor is high — 0.41
+on the bundled marketing-email corpus — the metric cannot separate a good answer
+from an unrelated one at all, and no prompt work will move it. That listing is
+how you find out whether a set can be improved against before you try.
+
+The bundled drafting sets carry their requirements already: a set that declares
+a `contract` in the catalogue has, per row, the checks a rule can decide,
+derived from the rows themselves and kept only where the human answer meets
+them. `business:support-reply` is the clearest case — its word-overlap floor was
+0.63, because every reference in it is a template — and it is now scored on
+whether the reply carries the order reference back, which is the thing the work
+actually requires.
+
 Regression webhooks can also be committed in the check file:
 
 ```yaml

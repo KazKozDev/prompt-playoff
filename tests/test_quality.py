@@ -125,6 +125,59 @@ def test_release_registry_enforces_lifecycle_and_rollback(tmp_path: Path):
     assert rolled_back.status == "production"
 
 
+def test_a_release_deleted_leaves_no_pointer_to_itself(tmp_path: Path):
+    """The register erases where a business case archives.
+
+    A case is what recorded runs are filed under, so erasing one strands their
+    lineage; a release is a row about a prompt somebody froze, and the record of
+    what shipped is the exported manifest in a repository. So a wrong row can
+    go — but the row that replaced it cited it by id, and a citation pointing at
+    nothing is the one fault this register exists to prevent.
+    """
+    store = QualityStore(tmp_path / "quality.json")
+    first = store.create_release(
+        ReleaseCreateRequest(name="support", technique_id="direct", prompt={"text": "v1"})
+    )
+    for action in ("test", "approve", "release"):
+        first = store.act_on_release(first.id, action)
+    second = store.create_release(
+        ReleaseCreateRequest(name="support", technique_id="direct", prompt={"text": "v2"})
+    )
+    for action in ("test", "approve", "release"):
+        second = store.act_on_release(second.id, action)
+    assert second.previous_production_id == first.id
+
+    removed = store.delete_release(first.id)
+
+    assert removed.id == first.id
+    remaining = store.releases()
+    assert [item.id for item in remaining] == [second.id]
+    assert remaining[0].previous_production_id is None
+
+
+def test_deleting_a_release_is_refused_when_there_is_no_such_release(tmp_path: Path):
+    store = QualityStore(tmp_path / "quality.json")
+    with pytest.raises(ValueError, match="Unknown release"):
+        store.delete_release("rel_nothing")
+
+
+def test_a_deleted_release_takes_nothing_else_with_it(client: TestClient):
+    """The run it cited is a measurement that happened, and still did."""
+    created = client.post(
+        "/v1/releases",
+        json={"name": "throwaway", "technique_id": "direct", "prompt": {"text": "wrong"}},
+    ).json()
+    before = client.get("/v1/experiments").json()
+
+    deleted = client.delete(f"/v1/releases/{created['id']}")
+
+    assert deleted.status_code == 200
+    assert deleted.json()["id"] == created["id"]
+    assert all(item["id"] != created["id"] for item in client.get("/v1/releases").json())
+    assert client.get("/v1/experiments").json() == before
+    assert client.delete(f"/v1/releases/{created['id']}").status_code == 404
+
+
 def test_drift_and_security_are_deterministic():
     report = production_drift(
         DriftRequest(

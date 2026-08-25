@@ -202,7 +202,7 @@ Release</code></pre>
   <div class="table-scroll">
   <table class="terms">
     <tr><td><code>field_f1</code></td><td>Partial credit over extracted fields or entities. Primary extraction score.</td></tr>
-    <tr><td><code>token_f1</code></td><td>Word overlap against a reference answer. Primary prose score.</td></tr>
+    <tr><td><code>token_f1</code></td><td>Word overlap against <b>one</b> reference answer. A similarity, not a correctness score — read the section below before acting on it.</td></tr>
     <tr><td><code>exact_match</code></td><td>Character-for-character equality.</td></tr>
     <tr><td><code>label_accuracy</code></td><td>Correct class label for classification tasks.</td></tr>
     <tr><td><code>numeric_close</code></td><td>Numeric value matches within allowed tolerance.</td></tr>
@@ -224,6 +224,7 @@ Release</code></pre>
     <tr><td><code>json_schema</code></td><td>Output fully matches the provided schema.</td></tr>
     <tr><td><code>no_prose</code></td><td>No unwanted conversational chatter around the answer.</td></tr>
     <tr><td><code>allowed_labels</code></td><td>Label comes strictly from the allowed set.</td></tr>
+    <tr><td><code>forbidden_content</code></td><td>The answer contains none of the words or patterns the task rules out.</td></tr>
     <tr><td><code>length_limit</code></td><td>Output stays within the character/word limit.</td></tr>
     <tr><td><code>omission_check</code></td><td>Output is not obviously truncated or bloated against input.</td></tr>
     <tr><td><code>deduplication</code></td><td>Lists contain no duplicate entries.</td></tr>
@@ -237,13 +238,54 @@ Release</code></pre>
     <p><b>Graders are deterministic by default.</b> The same answer always receives the same score. They cost nothing to run, take milliseconds, and you can inspect the exact rule.</p>
   </div>
 
-  <h3>Open-ended prose needs a different workflow</h3>
-  <p>For open-ended text, use <b>Evaluation → Answer judging</b>. The application presents two answers, one rubric, and hides the answer order from the judge. The judge must be a different model from the one being evaluated.</p>
-  <p>A model verdict is not automatically promoted into a measured release result. Every verdict waits for human review under <b>Production → Reviews</b>: the model helps prioritize judgement, but a person decides what the verdict is worth.</p>
+  <h3>Open-ended prose: the number that looks like a verdict and is not</h3>
+  <p>Bring a drafting task — a reply, a summary, a marketing email — and every row carries one reference answer: the reply somebody actually sent. Nothing can compare an answer to that character for character, so the run falls back to <code>token_f1</code>, which counts the words the two share.</p>
+  <div class="note warn">
+    <p><b>A correct answer worded differently scores like a failure.</b> Two replies can say the same thing and share a fifth of their words. 0.1 to 0.3 is the ordinary range for a good answer against one human reference, and 1.0 is not reachable by anything short of a copy. Read <code>token_f1</code> as drift between two runs of the same prompt, never as a share of answers that were right — that reading has sent more than one person off to fix a prompt that was working.</p>
+  </div>
+  <p>So the report does not leave you to know that. Beside a word-overlap headline it prints the <b>chance level</b>: what the same metric already scores when the answer was written for a <em>different row of the same set</em>. It is measured off the rows, costs no model call, and settles the question the warning only describes.</p>
+  <p><code>prompt-playoff list-datasets</code> prints it for every bundled set, and it is on the shelf and on the dataset you upload. On the bundled marketing-email corpus it is <b>0.41</b>: an answer written for a different row already scores 0.41, so almost none of the score is about the prompt. A set like that cannot be scored by word overlap at all.</p>
+  <p>The bundled support-reply corpus was the extreme case — every reference in it is a template, so its floor was 0.63 — and it is no longer scored this way. It now carries the requirement the work actually has: the reply must carry the order reference back. Every drafting set in the catalogue that could be given such requirements has been.</p>
+
+  <h3>What to score open-ended work on instead</h3>
+  <p>Give the rows requirements a rule can decide. None of them needs a reference answer, which is the point — they are enforceable exactly where a reference answer does not exist.</p>
+  <div class="table-scroll">
+  <table class="terms">
+    <tr><td><code>contains_all</code></td><td>The facts that have to survive: the order number, the date, the amount.</td></tr>
+    <tr><td><code>forbidden_content</code></td><td>What the draft may never say: a refund nobody authorised, a competitor, a leftover <code>[INSERT NAME]</code>.</td></tr>
+    <tr><td><code>length_limit</code></td><td>The length the channel allows.</td></tr>
+    <tr><td><code>regex_match</code></td><td>The shape the answer has to take — a subject line, a signature, a reference code.</td></tr>
+    <tr><td><code>grounding_overlap</code></td><td>How much of the answer came from the evidence rather than from the model.</td></tr>
+    <tr><td><code>glossary_consistency</code></td><td>Terms rendered the way the glossary binds them.</td></tr>
+  </table>
+  </div>
+  <p>The bundled <code>translation</code> and <code>summarization</code> sets are written this way, which is why neither is scored by word overlap even though both answer in prose.</p>
+
+  <h3>And that is what CI gates</h3>
+  <p>A committed check bounds one named grader with <code>grade.&lt;grader&gt;_min</code>, so a requirement nobody has a reference answer for still fails the build:</p>
+  <pre><code>require:
+  grade.contains_all_min: 1.0        # every reply cites the order number
+  grade.forbidden_content_min: 1.0   # none of them promises a refund
+  grade.length_limit_min: 0.98       # they fit the channel</code></pre>
+  <p>A plain <code>quality_min</code> over a word-overlap headline is <b>refused</b> rather than enforced: it would commit CI to how closely answers echo one person's wording, which a better prompt can lose and a worse one can keep. <code>grade.token_f1_min</code> is allowed and means what it says — watch this metric for drift — and writing it out is how you record that you know the difference.</p>
+
+  <h3>You do not have to write those requirements by hand</h3>
+  <p>In the app it is one button: open <b>Datasets</b>, pick the shape of the work beside your set — answers to somebody, summaries of a source, drafts — and press <b>Add requirements</b>. From the terminal, <code>prompt-playoff annotate-dataset rows.jsonl --contract reply --in-place</code>. Either way it derives them per row: the identifier the reply has to carry back, the unfilled <code>[INSERT NAME]</code> that must not ship, the length the channel allows. A check is kept only where that row's own reference answer already meets it, so nothing it writes can mark a model wrong for answering as well as a person did. <code>--contract summary</code> requires the facts the human summary kept; <code>--contract draft</code> does the format checks alone.</p>
+  <p>Run it with no <code>--contract</code> and it writes down the graders the tool would otherwise have guessed — so the choice on record is yours rather than the tool's. Every run also reports which of its graders nobody chose.</p>
+
+  <h3>When a rule genuinely cannot decide it</h3>
+  <p>Tone, persuasiveness, whether an explanation lands: for those, use <b>Evaluation → Answer judging</b>. The judge is shown two answers with the order hidden, and must be a different model from the one being evaluated.</p>
+  <p>It is no longer one pair at a time. <b>Judge a whole run</b> on that screen judges every row of a recorded run against the reference answer that row already carries and reports the share of rows your prompt won — a win rate against the person who wrote those references, where 0.5 means it writes about as well as they did.</p>
+  <div class="note">
+    <p><b>A judged number stays a model's opinion.</b> One review item for the batch under <b>Production → Reviews</b>, and no route into a scorecard or a committed threshold. A bar defended by a model's mood on the day is not a bar; what CI enforces is what a rule decided.</p>
+  </div>
+
+  <h3>And the prompt search refuses the same number</h3>
+  <p>A search maximises whatever number it is handed. Handed word overlap on rows whose answers already resemble each other, it reliably raises it — by drifting towards the wording every row shares — which makes the prompt worse while the score goes up. So the search stops before its first model call when the floor is at or above 0.35, and says what to give the rows instead. One button gets past it, and relabels what comes back: <b>Search anyway, and read it as drift</b> (<code>--allow-noisy-objective</code> on the CLI).</p>
 
   <h2>The two headline numbers</h2>
   <span class="num"><code>quality</code> — meaning and correctness</span>
-  <p><code>quality</code> is chosen from the task's meaning graders using a fixed preference order (e.g. <code>unit_tests</code> for code, <code>field_f1</code> for extraction, <code>token_f1</code> for prose, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic). The selected grader is marked as the headline metric in the run.</p>
+  <p><code>quality</code> is chosen from the task's meaning graders using a fixed preference order (e.g. <code>unit_tests</code> for code, <code>field_f1</code> for extraction, <code>label_accuracy</code> for classification, <code>numeric_close</code> for arithmetic, and <code>token_f1</code> only when nothing better applies to prose). The selected grader is marked as the headline metric in the run, and where its number cannot mean what it looks like, the warning is printed beside it.</p>
 
   <span class="num"><code>reliability</code> — structural contract and stability</span>
   <p><code>reliability</code> combines compliance with contract graders and stability across repeated runs. A system can therefore be accurate but structurally unreliable, structurally clean but semantically wrong, or good on average but unstable. One number would hide those differences; two numbers expose them.</p>

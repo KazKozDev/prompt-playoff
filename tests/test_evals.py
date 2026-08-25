@@ -200,6 +200,47 @@ def test_a_shape_check_speaks_for_quality_only_when_a_shape_was_required():
     assert unasked.contract_pass_rate == 0.0
 
 
+def test_a_word_overlap_headline_reports_the_floor_it_is_measured_against():
+    """0.14 next to a chance level of 0.13 is not a weak prompt.
+
+    The card carries what the same metric already gives an answer written for a
+    different row, because that is the difference between a number worth acting
+    on and a number that could not have moved.
+    """
+    runs = [
+        ExampleRun(
+            example_id="reply-1",
+            repeat=0,
+            output="Your order is on its way.",
+            grades={"token_f1": 0.2},
+            latency_seconds=0.1,
+            prompt_tokens=1,
+            completion_tokens=1,
+            calls=1,
+        )
+    ]
+    templated = [
+        "Thank you for contacting us about your order. We are looking into it now.",
+        "Thank you for contacting us about your invoice. We are looking into it now.",
+        "Thank you for contacting us about your refund. We are looking into it now.",
+        "Thank you for contacting us about your delivery. We are looking into it now.",
+    ]
+
+    card = build_scorecard(runs, repeats=1, references=templated)
+    assert card.quality_grader == "token_f1"
+    assert card.quality_chance_level is not None and card.quality_chance_level > 0.8
+
+    # A headline whose zero really is at zero claims no floor, rather than
+    # printing a 0.00 that reads as one.
+    labelled = build_scorecard(
+        [runs[0].model_copy(update={"grades": {"label_accuracy": 1.0}})],
+        repeats=1,
+        references=templated,
+    )
+    assert labelled.quality_grader == "label_accuracy"
+    assert labelled.quality_chance_level is None
+
+
 def test_translation_glossary_score_is_a_headline_quality_metric():
     card = build_scorecard(
         [
@@ -479,3 +520,34 @@ def test_two_runs_of_one_technique_asking_different_things_both_survive(tmp_path
     )
 
     assert len(store.records) == 2
+
+
+def test_a_run_records_which_graders_nobody_chose():
+    """The choice used to happen in silence.
+
+    A row that names its graders states what it wants measured. A row that does
+    not has them picked from the shape of its answer, and on prose that pick is
+    word overlap — so the number arrives looking like somebody's decision when
+    it was the tool's. The run now says which ones it picked and for how many
+    rows, and every surface can repeat it.
+    """
+    from prompt_playoff.evals import BenchmarkRunner
+    from prompt_playoff.registry import Registry
+
+    registry = Registry.load()
+    task = TaskProfile(
+        task_type=TaskType.summarization,
+        model=ModelProfile(provider="ollama", model_id="fake"),
+    )
+    dataset = [
+        BenchmarkExample(
+            id="chosen", input="a", expected="a b c d e f g h i", graders=["token_f1"]
+        ),
+        BenchmarkExample(id="guessed", input="b", expected="a b c d e f g h i j"),
+    ]
+    report = asyncio.run(
+        BenchmarkRunner(FakeProvider(["a b c d e f g h i"])).run(
+            dataset=dataset, task=task, technique=registry.technique("direct.explicit-constraints")
+        )
+    )
+    assert report.inferred_graders == {"token_f1": 1}

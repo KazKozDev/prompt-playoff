@@ -649,3 +649,86 @@ def test_demonstration_turns_are_never_sent_to_a_provider():
         "role": "user",
         "content": "x",
     }
+
+
+def test_a_search_over_word_overlap_says_what_it_was_maximising():
+    """A prompt search moves whatever number it is handed.
+
+    Handed word overlap, it can win by echoing the reference's wording — which
+    is how an evening of model calls produces a worse prompt with a better
+    score. The result says so, and quotes the floor, so a gain inside the
+    metric's own noise is not read as a gain.
+    """
+    from prompt_playoff.providers import OllamaProvider
+
+    optimizer = PromptOptimizer(OllamaProvider())
+    card = Scorecard(
+        quality=0.66,
+        reliability=1.0,
+        contract_pass_rate=1.0,
+        stability=1.0,
+        mean_latency_seconds=1.0,
+        p95_latency_seconds=1.0,
+        mean_total_tokens=100,
+        mean_prompt_tokens=80,
+        mean_completion_tokens=20,
+        mean_calls=1,
+        quality_grader="token_f1",
+        quality_chance_level=0.63,
+    )
+    note = " ".join(optimizer._metric_note(card))
+    assert "token_f1" in note
+    assert "0.63" in note
+    assert "contains_all" in note
+
+    # A grader that decides an answer needs no such warning.
+    decided = card.model_copy(
+        update={"quality_grader": "label_accuracy", "quality_chance_level": None}
+    )
+    assert optimizer._metric_note(decided) == []
+
+
+def test_a_search_refuses_to_run_when_its_objective_cannot_decide_anything():
+    """Warning was not enough. A search handed word overlap on rows that already
+    resemble each other will raise it — by drifting towards the wording every
+    row shares — so it stops before the first call rather than spending an
+    evening making a prompt worse while the number goes up."""
+    import pytest as _pytest
+
+    from prompt_playoff.optimizer import UnmeasurableObjective, refuse_unmeasurable
+
+    templated = [
+        BenchmarkExample(
+            id=f"r{index}",
+            input=f"ticket {index}",
+            expected=(
+                f"Thank you for contacting us about your {word}. "
+                "We are looking into it now and will be in touch shortly."
+            ),
+        )
+        for index, word in enumerate(["order", "invoice", "refund", "delivery", "return"])
+    ]
+    with _pytest.raises(UnmeasurableObjective) as caught:
+        refuse_unmeasurable(templated)
+    assert "contains_all" in str(caught.value)
+    # Saying so explicitly is allowed; it is being surprised by it that is not.
+    refuse_unmeasurable(templated, allowed=True)
+
+    # Rows that name a grader which can decide something are never refused.
+    decided = [item.model_copy(update={"graders": ["contains_all"]}) for item in templated]
+    refuse_unmeasurable(decided)
+
+    # Neither are rows whose answers are genuinely different from one another.
+    distinct = [
+        BenchmarkExample(id=f"d{index}", input=str(index), expected=text)
+        for index, text in enumerate(
+            [
+                "Photosynthesis converts light into chemical energy inside chloroplasts.",
+                "The Treaty of Utrecht ended the War of the Spanish Succession in 1713.",
+                "A red-black tree keeps its height logarithmic by recolouring after inserts.",
+                "Sourdough rises on wild yeast and lactic bacteria rather than baker's yeast.",
+                "Kepler's second law says a planet sweeps equal areas in equal times.",
+            ]
+        )
+    ]
+    refuse_unmeasurable(distinct)

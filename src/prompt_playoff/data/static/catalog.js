@@ -33,10 +33,18 @@ async function loadGraderHelp() {
     // come from before the run, and be saying what the scorecard will do.
     state.qualityPreference = capabilities.quality_preference || [];
     state.contractGraders = new Set(capabilities.reliability_graders || []);
+    // What a number cannot be read as, for the graders where the obvious
+    // reading is wrong, and which graders score every answer 0 or 1. Both come
+    // from the module that applies them, so a report cannot label a number in
+    // words the code would not stand behind.
+    state.graderCaveats = capabilities.grader_caveats || {};
+    state.passRateGraders = new Set(capabilities.pass_rate_graders || []);
   } catch (e) {
     state.graderHelp = {};
     state.qualityPreference = [];
     state.contractGraders = new Set();
+    state.graderCaveats = {};
+    state.passRateGraders = new Set();
   }
   if (state.report) renderDetail();
   if (typeof refreshRunSubject === 'function') refreshRunSubject();
@@ -44,6 +52,17 @@ async function loadGraderHelp() {
 
 function graderMeaning(name) {
   return name ? (state.graderHelp[name] || name) : 'no grader could score this data';
+}
+
+// The sentence that goes beside the number, for graders whose number misleads.
+function graderCaveat(name) {
+  return name ? (state.graderCaveats[name] || null) : null;
+}
+
+// Whether this grader's mean is a share of answers rather than an average
+// score. Only the first may be read out as "N out of every 100 were correct".
+function isPassRate(name) {
+  return !!name && state.passRateGraders.has(name);
 }
 
 function refreshMethodBodies() {

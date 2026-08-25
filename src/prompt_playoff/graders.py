@@ -38,6 +38,7 @@ RELIABILITY_GRADERS = {
     "json_schema",
     "no_prose",
     "allowed_labels",
+    "forbidden_content",
     "length_limit",
     "deduplication",
     "glossary_consistency",
@@ -45,20 +46,54 @@ RELIABILITY_GRADERS = {
     "python_syntax",
     "tool_success",
 }
+#: Graders that score an answer by comparing it with one reference answer.
+#: They are the only graders whose number says as much about the reference as
+#: about the answer, and the reason every surface that reports one has to say
+#: so: on a task with one right answer the comparison is the score, and on a
+#: reply, a summary or an email — where the reference is one of many answers a
+#: person could have written — it is a similarity, and a low one is normal.
+REFERENCE_OVERLAP_GRADERS = {"token_f1"}
+#: Graders that score each answer 0 or 1, so the mean of them is the share of
+#: answers that passed. Everything else gives partial credit, and reading its
+#: mean as "N answers in 100 were right" is wrong in both directions: it calls
+#: a half-right answer half an answer, and it hides a run where every answer
+#: was slightly off behind the same number as one where half collapsed.
+PASS_RATE_GRADERS = {
+    "allowed_labels",
+    "exact_match",
+    "forbidden_content",
+    "injection_resistance",
+    "json_schema",
+    "json_validity",
+    "label_accuracy",
+    "length_limit",
+    "no_prose",
+    "numeric_close",
+    "omission_check",
+    "regex_match",
+}
 #: Preference order when picking the headline quality number.
+#:
+#: A grader that can decide whether an answer is right outranks one that can
+#: only say how similar it is to somebody else's answer. `token_f1` used to sit
+#: third, above every checkable requirement, so a set that had been given real
+#: requirements still reported word overlap as its quality — the one number on
+#: it that could not be improved. It now sits at the bottom of the meaning
+#: graders: the fallback for prose with nothing better, which is exactly what it
+#: is, and never the winner over a rule that decided something.
 QUALITY_PREFERENCE = (
     "unit_tests",
     "field_f1",
-    "token_f1",
     "exact_match",
     "label_accuracy",
     "numeric_close",
     "coverage",
+    "contains_all",
     "grounding_overlap",
     "glossary_consistency",
-    "contains_all",
     "injection_resistance",
     "regex_match",
+    "token_f1",
     "json_schema",
     "json_validity",
 )
@@ -79,6 +114,7 @@ GRADER_HELP: dict[str, str] = {
     "deduplication": "share of list entries that are not repeats",
     "exact_match": "whether the answer matches the reference character for character",
     "field_f1": "per-item overlap with the reference, extras penalised",
+    "forbidden_content": "whether the answer avoided every word the task rules out",
     "glossary_consistency": "share of terms translated the way the glossary says",
     "grounding_overlap": "share of the answer's words taken from the evidence",
     "injection_resistance": (
@@ -94,9 +130,40 @@ GRADER_HELP: dict[str, str] = {
     "python_syntax": "whether every code block in the answer parses",
     "regex_match": "whether the answer matches the required pattern",
     "schema_shape": "share of the required keys that are present",
-    "token_f1": "word overlap with the reference answer",
+    "token_f1": "word overlap with one reference answer, which is not the same as correctness",
     "tool_success": "share of tool calls that returned a result, not an error",
     "unit_tests": "share of the task's tests the generated code passes",
+}
+
+
+#: What a grader's number cannot be read as, for the graders where the obvious
+#: reading is wrong. `GRADER_HELP` says what a number measures; this says what
+#: it does not, and it exists because the difference is where a reader loses a
+#: day. A score of 0.14 from `token_f1` on a drafted reply is the metric
+#: speaking, not the prompt, and nothing in a table of numbers can say that.
+#: Any surface that reports a grader's number reports this beside it.
+GRADER_CAVEATS: dict[str, str] = {
+    "token_f1": (
+        "This counts shared words, not whether the answer is right. On open-ended "
+        "work — a reply, a summary, a marketing email — the reference is one of "
+        "many answers a person could have written, and a good answer that words "
+        "it differently scores low: 0.1 to 0.3 is the ordinary range, and 1.0 is "
+        "not reachable by anything but a copy. Read it as drift between two runs "
+        "of the same prompt, never as a share of answers that were correct. To "
+        "score whether an open-ended answer is any good, give the rows "
+        "requirements a rule can check — contains_all, length_limit, "
+        "forbidden_content, regex_match, grounding_overlap — and read those."
+    ),
+    "grounding_overlap": (
+        "This counts how much of the answer's wording came from the evidence, so "
+        "a faithful paraphrase scores below a copy-paste. It is a check against "
+        "invention, not a quality score."
+    ),
+    "exact_match": (
+        "Only one string can score here. On anything longer than a label or a "
+        "field, a correct answer worded differently scores 0, so a low number "
+        "may be about the comparison rather than the answer."
+    ),
 }
 
 
@@ -105,6 +172,16 @@ def describe(name: str | None) -> str:
     if not name:
         return "no grader could score this data"
     return GRADER_HELP.get(name, name)
+
+
+def caveat(name: str | None) -> str | None:
+    """How this grader's number gets misread, when there is a known way."""
+    return GRADER_CAVEATS.get(name) if name else None
+
+
+def is_pass_rate(name: str | None) -> bool:
+    """Whether the mean of this grader is a share of answers rather than a score."""
+    return bool(name) and name in PASS_RATE_GRADERS
 
 
 GraderT = TypeVar("GraderT", bound=Grader)
@@ -195,6 +272,33 @@ def schema_shape(ctx: GradeContext) -> float | None:
     return sum(1 for key in required if key in parsed) / len(required)
 
 
+@grader("forbidden_content")
+def forbidden_content(ctx: GradeContext) -> float | None:
+    """1.0 when the answer contains none of the things the task rules out.
+
+    The check most open-ended work is actually gated on. A drafted reply is
+    rarely refused for saying the wrong thing in the wrong words; it is refused
+    for promising a refund nobody authorised, naming a competitor, quoting a
+    price, or shipping with ``[INSERT NAME]`` still in it. None of that needs a
+    reference answer, which is what makes it enforceable on a task where no
+    reference answer exists.
+
+    ``forbidden`` is matched case-insensitively as plain substrings;
+    ``forbidden_patterns`` as regular expressions. An answer that trips either
+    scores 0 — a draft that says one forbidden thing is not nine-tenths safe.
+    """
+    forbidden = (ctx.options or {}).get("forbidden") or []
+    patterns = (ctx.options or {}).get("forbidden_patterns") or []
+    if not forbidden and not patterns:
+        return None
+    haystack = ctx.output.casefold()
+    if any(str(item).casefold() in haystack for item in forbidden):
+        return 0.0
+    if any(re.search(str(item), ctx.output, re.IGNORECASE | re.DOTALL) for item in patterns):
+        return 0.0
+    return 1.0
+
+
 @grader("length_limit")
 def length_limit(ctx: GradeContext) -> float | None:
     limit = (ctx.options or {}).get("max_chars")
@@ -271,18 +375,7 @@ def token_f1(ctx: GradeContext) -> float | None:
     """
     if ctx.expected is None or isinstance(ctx.expected, (dict, list)):
         return None
-    reference = _token_counts(str(ctx.expected))
-    answer = _token_counts(ctx.output)
-    if not reference and not answer:
-        return 1.0
-    if not reference or not answer:
-        return 0.0
-    overlap = sum((answer & reference).values())
-    if overlap == 0:
-        return 0.0
-    precision = overlap / sum(answer.values())
-    recall = overlap / sum(reference.values())
-    return round(2 * precision * recall / (precision + recall), 4)
+    return round(_counter_f1(_token_counts(ctx.output), _token_counts(str(ctx.expected))), 4)
 
 
 @grader("label_accuracy")
@@ -492,6 +585,57 @@ def is_free_text(expected: Any) -> bool:
     return isinstance(expected, str) and len(expected.split()) > FREE_TEXT_WORDS
 
 
+#: How many mismatched reference pairs the chance level is averaged over. Every
+#: pair is one cheap Counter intersection, and the mean stops moving long before
+#: this; the cap is here so a large set cannot turn an O(n²) sanity check into
+#: the slowest part of a run.
+CHANCE_LEVEL_PAIRS = 400
+#: Below this many references the pairs are too few to average, and a chance
+#: level from three numbers would be quoted with more authority than it has.
+_MIN_CHANCE_REFERENCES = 4
+#: Above this chance level, word overlap has stopped telling a good answer apart
+#: from an answer to a different question, and a score on it is not evidence
+#: about a prompt. One number, in one place, because four surfaces draw the same
+#: line — the shelf, the dataset list, the report and the prompt search — and a
+#: line drawn four times drifts. Set where templated business prose lands: the
+#: bundled support-reply corpus sits at 0.63 and the marketing one at 0.41,
+#: while sets with genuinely different answers sit near 0.10.
+CHANCE_LEVEL_CEILING = 0.35
+
+
+def chance_level_is_useless(chance: float | None) -> bool:
+    """Whether word overlap on this data can no longer decide anything."""
+    return chance is not None and chance >= CHANCE_LEVEL_CEILING
+
+
+def token_f1_chance_level(references: list[str]) -> float | None:
+    """What ``token_f1`` scores on this data when the answer is about something else.
+
+    Word overlap has a floor that is not zero. Two support replies share *your*,
+    *order*, *sorry*, *we will*; two meeting summaries share the shape of a
+    sentence about a decision. Until that floor is known, 0.14 cannot be told
+    apart from noise, and the reader has no way to see that the metric was never
+    going to reach 1 here.
+
+    So it is measured rather than asserted: every reference is scored against
+    other rows' references — answers that are known to be about something else —
+    and the mean of that is the number a wrong answer already earns. It is
+    deterministic, needs no model call, and pairs rows at a fixed set of offsets
+    so the same dataset always yields the same floor.
+    """
+    usable = [item for item in references if item and item.strip()]
+    if len(usable) < _MIN_CHANCE_REFERENCES:
+        return None
+    counts = [_token_counts(item) for item in usable]
+    scores: list[float] = []
+    for offset in range(1, len(counts)):
+        for index in range(len(counts)):
+            scores.append(_counter_f1(counts[index], counts[(index + offset) % len(counts)]))
+            if len(scores) >= CHANCE_LEVEL_PAIRS:
+                return round(sum(scores) / len(scores), 4)
+    return round(sum(scores) / len(scores), 4) if scores else None
+
+
 def default_graders(
     expected: Any | None,
     response_schema: dict[str, Any] | None,
@@ -514,6 +658,12 @@ def default_graders(
         else:
             names += ["label_accuracy", "exact_match"]
     return list(dict.fromkeys(names))
+
+
+def headline_grader(names: list[str]) -> str | None:
+    """Which of these graders the scorecard would put forward as the quality number."""
+    available = set(names)
+    return next((name for name in QUALITY_PREFERENCE if name in available), None)
 
 
 def run_graders(names: list[str], ctx: GradeContext) -> dict[str, float]:
@@ -654,6 +804,21 @@ _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
 
 def _token_counts(text: str) -> Counter[str]:
     return Counter(word for word in _TOKEN.findall(text.lower()) if word not in _ARTICLES)
+
+
+def _counter_f1(answer: Counter[str], reference: Counter[str]) -> float:
+    """F1 over two word multisets. One definition, so the chance level below
+    measures the same thing ``token_f1`` reports."""
+    if not reference and not answer:
+        return 1.0
+    if not reference or not answer:
+        return 0.0
+    overlap = sum((answer & reference).values())
+    if overlap == 0:
+        return 0.0
+    precision = overlap / sum(answer.values())
+    recall = overlap / sum(reference.values())
+    return 2 * precision * recall / (precision + recall)
 
 
 def _content_words(text: str) -> set[str]:

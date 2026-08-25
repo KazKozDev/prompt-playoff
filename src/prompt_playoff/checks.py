@@ -23,24 +23,70 @@ from prompt_playoff.domain import (
     TaskType,
 )
 from prompt_playoff.evals import BenchmarkRunner, Scorecard, load_jsonl
+from prompt_playoff.graders import REFERENCE_OVERLAP_GRADERS, describe, grader_names
 from prompt_playoff.measurements import MeasurementStore
 from prompt_playoff.providers import ModelProvider, ProviderError, provider_for
 from prompt_playoff.registry import Registry
 
 ProviderFactory = Callable[[ModelProfile], ModelProvider]
 
+#: Scorecard numbers that describe the metric rather than the prompt, so a bar
+#: on one would move when the examples change and never when the prompt does.
+_NOT_THRESHOLDS = {"quality_chance_level"}
 _NUMERIC_SCORECARD_FIELDS = {
     name
     for name, field in Scorecard.model_fields.items()
-    if field.annotation in {float, int}
-    or (
-        isinstance(field.annotation, types.UnionType)
-        and any(item in {float, int} for item in get_args(field.annotation))
+    if name not in _NOT_THRESHOLDS
+    and (
+        field.annotation in {float, int}
+        or (
+            isinstance(field.annotation, types.UnionType)
+            and any(item in {float, int} for item in get_args(field.annotation))
+        )
     )
 }
 VALID_REQUIRE_KEYS = tuple(
     sorted(f"{field}_{bound}" for field in _NUMERIC_SCORECARD_FIELDS for bound in ("min", "max"))
 )
+#: The prefix that gates one named grader instead of a headline number.
+#:
+#: `quality` is whichever grader won the preference order, which is the right
+#: bar for a task with one right answer and no bar at all for open-ended work:
+#: there the graders that can decide anything — every required fact present, no
+#: forbidden wording, inside the length the channel allows — are not the
+#: headline and never were. Without a way to name one, half the catalogue could
+#: only be gated on a number that does not describe it, which is the same as
+#: not being gated. With it, `grade.contains_all_min: 0.95` is a CI failure
+#: when a rewritten prompt starts dropping order numbers from replies.
+GRADE_PREFIX = "grade."
+
+
+def parse_require_key(key: str) -> tuple[str, str]:
+    """Split a require key into what it measures and which side of it is bounded.
+
+    Returns the measurement (`quality`, or `grade.contains_all`) and the bound
+    (`min` or `max`). Raises ValueError with wording a person can act on, since
+    this is the one place a typo in a committed file gets caught.
+    """
+    measure, _, bound = key.rpartition("_")
+    if bound not in {"min", "max"} or not measure:
+        raise ValueError(
+            f"require key {key!r} must end in '_min' or '_max'; "
+            f"valid keys: {', '.join(VALID_REQUIRE_KEYS)}, "
+            f"or {GRADE_PREFIX}<grader>_min / _max for one named grader"
+        )
+    if measure.startswith(GRADE_PREFIX):
+        name = measure[len(GRADE_PREFIX) :]
+        if name not in grader_names():
+            raise ValueError(
+                f"require key {key!r} names no grader; known graders: {', '.join(grader_names())}"
+            )
+    elif measure not in _NUMERIC_SCORECARD_FIELDS:
+        raise ValueError(
+            f"unknown require key {key!r}; valid keys: {', '.join(VALID_REQUIRE_KEYS)}, "
+            f"or {GRADE_PREFIX}<grader>_min / _max for one named grader"
+        )
+    return measure, bound
 
 
 class CheckModelConfig(BaseModel):
@@ -88,11 +134,8 @@ class CheckSpec(BaseModel):
             raise ValueError("set exactly one config key: dataset or dataset_file")
         if not self.require:
             raise ValueError("require must contain at least one <Scorecard field>_min or _max key")
-        unknown = sorted(set(self.require) - set(VALID_REQUIRE_KEYS))
-        if unknown:
-            raise ValueError(
-                f"unknown require key {unknown[0]!r}; valid keys: {', '.join(VALID_REQUIRE_KEYS)}"
-            )
+        for key in sorted(self.require):
+            parse_require_key(key)
         return self
 
 
@@ -219,18 +262,11 @@ async def run_checks(
             if record:
                 assert store is not None
                 store.record(report.to_evidence())
-            values = {}
-            for name in _NUMERIC_SCORECARD_FIELDS:
-                value = getattr(report.scorecard, name)
-                if value is not None:
-                    values[name] = float(value)
-            missing = sorted({key.rsplit("_", 1)[0] for key in spec.require} - set(values))
-            if missing:
-                raise CheckConfigError(
-                    f"Cannot enforce {', '.join(missing)} because model pricing is not configured"
-                )
-            measured_by_check.append(values)
-            thresholds = [_compare(key, required, values) for key, required in spec.require.items()]
+            measured = measured_values(spec.require, report.scorecard)
+            measured_by_check.append(measured)
+            thresholds = [
+                _compare(key, required, measured[key]) for key, required in spec.require.items()
+            ]
             status = "passed" if all(item.passed for item in thresholds) else "failed"
             results.append(
                 CheckResult(
@@ -321,9 +357,63 @@ def _redact_destination(url: str) -> str:
         return "invalid webhook URL"
 
 
-def _compare(key: str, required: float, values: dict[str, float]) -> ThresholdResult:
-    field, bound = key.rsplit("_", 1)
-    measured = values[field]
+def overlap_refusal(measure: str, quality_grader: str | None) -> str | None:
+    """Why a bar on `quality` is not a bar at all when the headline is word overlap.
+
+    This is the gate refusing to be decorative. A committed `quality_min` reads
+    as "answers must be this good"; when quality came from comparing an answer
+    with one reference answer, what it actually pins is how closely the model
+    reproduces one person's wording — which a rewritten prompt can lose while
+    getting better, and a copy-paste prompt can hold while getting worse. Rather
+    than enforce that under a name it does not deserve, the check stops and says
+    what to write instead.
+    """
+    if measure != "quality" or quality_grader not in REFERENCE_OVERLAP_GRADERS:
+        return None
+    return (
+        f"quality on this run is {quality_grader} — {describe(quality_grader)} — so a "
+        "quality bar here would commit CI to how closely answers echo one reference, "
+        "not to whether they are any good. Give the rows requirements a rule can "
+        "check (contains_all, forbidden_content, length_limit, regex_match, "
+        "grounding_overlap) and gate those with grade.<grader>_min; or write "
+        f"{GRADE_PREFIX}{quality_grader}_min to say you are watching this metric drift "
+        "rather than claiming a bar on quality."
+    )
+
+
+def measured_values(require: dict[str, float], scorecard: Scorecard) -> dict[str, float]:
+    """The number each require key is about, or an error naming what is missing.
+
+    A threshold with nothing behind it is the one outcome a gate must never
+    report as passed, so every way a key can fail to resolve ends here as a
+    refusal rather than a default.
+    """
+    resolved: dict[str, float] = {}
+    for key in require:
+        measure, _ = parse_require_key(key)
+        if refusal := overlap_refusal(measure, scorecard.quality_grader):
+            raise CheckConfigError(f"Cannot enforce {key}: {refusal}")
+        if measure.startswith(GRADE_PREFIX):
+            name = measure[len(GRADE_PREFIX) :]
+            if name not in scorecard.grades:
+                raise CheckConfigError(
+                    f"Cannot enforce {key} because this run produced no {name} score. "
+                    "A grader only runs when the dataset names it or the data implies it — "
+                    f'add {name!r} to the rows\' "graders" and give it what it needs.'
+                )
+            resolved[key] = float(scorecard.grades[name])
+            continue
+        value = getattr(scorecard, measure, None)
+        if value is None:
+            raise CheckConfigError(
+                f"Cannot enforce {measure} because model pricing is not configured"
+            )
+        resolved[key] = float(value)
+    return resolved
+
+
+def _compare(key: str, required: float, measured: float) -> ThresholdResult:
+    field, bound = parse_require_key(key)
     passed = measured >= required if bound == "min" else measured <= required
     difference = measured - required
     breach = 0.0 if passed else abs(difference)
@@ -376,6 +466,8 @@ def release_gate(
     path: Path | None = None,
     evidence: str = "measured",
     dataset_changed: bool = False,
+    grades: dict[str, float] | None = None,
+    quality_grader: str | None = None,
 ) -> ReleaseGate:
     """Read the committed thresholds for this technique and apply them to a run.
 
@@ -443,7 +535,16 @@ def release_gate(
     required: dict[str, float] = {}
     for spec in specs:
         required |= spec.require
-    missing = sorted({key.rsplit("_", 1)[0] for key in required} - set(metrics))
+    available = dict(metrics)
+    for name, value in (grades or {}).items():
+        available[f"{GRADE_PREFIX}{name}"] = value
+    for key in sorted(required):
+        measure, _ = parse_require_key(key)
+        if refusal := overlap_refusal(measure, quality_grader):
+            return ReleaseGate(
+                status="unenforceable", config=str(path), checks=names, reason=refusal
+            )
+    missing = sorted({parse_require_key(key)[0] for key in required} - set(available))
     if missing:
         return ReleaseGate(
             status="unenforceable",
@@ -454,7 +555,10 @@ def release_gate(
                 f"{', '.join(sorted(required))} cannot be checked against it."
             ),
         )
-    thresholds = [_compare(key, value, metrics) for key, value in sorted(required.items())]
+    thresholds = [
+        _compare(key, value, available[parse_require_key(key)[0]])
+        for key, value in sorted(required.items())
+    ]
     passed = all(item.passed for item in thresholds)
     breached = [
         f"{item.field} {item.measured:g} vs {item.bound} {item.required:g}"
@@ -475,6 +579,11 @@ def _setup_error(exc: Exception, spec: CheckSpec, path: Path) -> str:
         return f"Provider setup failed for {spec.name!r}: {exc}; check model credentials/base_url"
     if isinstance(exc, FileNotFoundError):
         return f"Dataset file for {spec.name!r} was not found relative to {path.parent}: {exc}"
+    if isinstance(exc, CheckConfigError):
+        # A refusal to enforce a threshold is not a setup failure, and it
+        # already names both the check and what to write instead; prefixing it
+        # with "Setup failed" would bury the fix under a wrong diagnosis.
+        return f"{spec.name!r}: {exc}"
     return f"Setup failed for {spec.name!r}: {exc}"
 
 
@@ -508,17 +617,16 @@ def _update_require_values(
         if require_line is None:
             raise CheckConfigError(f"Cannot update {spec.name!r}: require must be a YAML block")
         for index in range(require_line + 1, end):
-            match = re.match(r"^(\s+)([a-z0-9_]+)(\s*:\s*)([^#\r\n]*)(.*)$", lines[index])
+            match = re.match(r"^(\s+)([a-z0-9_.]+)(\s*:\s*)([^#\r\n]*)(.*)$", lines[index])
             if not match or match.group(2) not in spec.require:
                 continue
-            field, _ = match.group(2).rsplit("_", 1)
             newline = "\n" if lines[index].endswith("\n") else ""
             suffix = match.group(5).rstrip("\r\n")
             if suffix.startswith("#"):
                 suffix = f"  {suffix}"
             lines[index] = (
                 f"{match.group(1)}{match.group(2)}{match.group(3)}"
-                f"{_format_number(values[field])}{suffix}{newline}"
+                f"{_format_number(values[match.group(2)])}{suffix}{newline}"
             )
     path.write_text("".join(lines), encoding="utf-8")
 

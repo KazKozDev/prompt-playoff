@@ -330,7 +330,10 @@ def test_the_section_map_is_one_column_at_the_width_it_actually_gets(client):
     1100 — and splitting 340px in two left the words in a column of zero, so
     every caption wrapped one word per line on all five section screens.
     """
-    styles = client.get("/assets/styles.css").text
+    # HTTP text keeps the server's line endings: CRLF on Windows and LF on
+    # Unix. This assertion is about the CSS rule, not the runner's newline
+    # convention, so compare one normalized representation on every platform.
+    styles = client.get("/assets/styles.css").text.replace("\r\n", "\n")
 
     assert 'grid-template-areas:"head plot"' not in styles
     assert "@media (min-width:1100px) and (max-width:1479px)" not in styles
@@ -673,6 +676,52 @@ def test_datasets_are_listed_and_readable(client):
     assert client.get("/v1/datasets/does-not-exist").status_code == 404
 
 
+def test_a_set_of_prose_answers_reports_what_word_overlap_scores_by_chance(client):
+    """Said on the shelf, before a model is ever called.
+
+    Four templated replies about four different things share nearly every word.
+    A set like that cannot be scored by word overlap at all, and the cheapest
+    place to learn it is the moment the rows arrive — not after an evening spent
+    improving a prompt against a number with no room to move.
+    """
+    rows = [
+        {
+            "id": f"reply-{index}",
+            "input": f"Ticket {index}",
+            "expected": (
+                f"Thank you for contacting us about your {word}. "
+                "We are looking into it now and will be in touch shortly."
+            ),
+        }
+        for index, word in enumerate(["order", "invoice", "refund", "delivery"])
+    ]
+    body = client.post(
+        "/v1/datasets/upload",
+        files={
+            "file": (
+                "replies.jsonl",
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                "application/x-ndjson",
+            )
+        },
+    ).json()
+    assert body["free_text"] == 4
+    assert body["token_f1_chance_level"] > 0.8
+
+    listed = next(
+        item for item in client.get("/v1/datasets").json() if item["name"] == body["name"]
+    )
+    assert listed["token_f1_chance_level"] == body["token_f1_chance_level"]
+
+    # A set whose rows name graders of their own is not scored this way, so it
+    # claims no floor rather than quoting one nobody will read.
+    entities = next(
+        item for item in client.get("/v1/datasets").json() if item["name"] == "entity-extraction"
+    )
+    assert entities["free_text"] == 0
+    assert entities["token_f1_chance_level"] is None
+
+
 def test_dataset_upload_reports_the_first_bad_line(client):
     response = client.post(
         "/v1/datasets/upload",
@@ -786,8 +835,22 @@ def test_capabilities_documents_the_extension_contract(client):
 
 def test_capabilities_carries_the_wording_every_report_labels_its_numbers_with(client):
     body = client.get("/v1/capabilities").json()
-    assert body["grader_help"]["token_f1"] == "word overlap with the reference answer"
+    assert "word overlap" in body["grader_help"]["token_f1"]
     assert set(body["grader_help"]) == set(body["graders"])
+
+
+def test_capabilities_serves_the_warning_that_goes_beside_a_word_overlap_score(client):
+    """A number nobody warned about is the one that sends a reader to fix a
+    prompt that was never broken. The warning travels with the number."""
+    body = client.get("/v1/capabilities").json()
+    assert "token_f1" in body["reference_overlap_graders"]
+    assert "not whether the answer is right" in body["grader_caveats"]["token_f1"]
+    assert set(body["grader_caveats"]) <= set(body["graders"])
+    # A share of answers and an average score are different claims, and only the
+    # first may be printed as "N in 100 were correct".
+    assert "exact_match" in body["pass_rate_graders"]
+    assert "token_f1" not in body["pass_rate_graders"]
+    assert set(body["pass_rate_graders"]) <= set(body["graders"])
 
 
 def test_capabilities_says_how_the_grades_become_the_headline_numbers(client):
@@ -886,7 +949,7 @@ def test_benchmark_starts_a_job_and_reports_provider_failure(client):
         assert job["result"]["scorecard"]["failures"] >= 0
 
 
-def test_a_benchmark_measures_the_prompt_it_is_handed(client):
+def test_a_benchmark_measures_and_records_the_prompt_it_is_handed(client):
     """The authored prompt travels with the request and is what runs.
 
     The Prompt text screen can have an engine model write text into the compiled
@@ -918,7 +981,6 @@ def test_a_benchmark_measures_the_prompt_it_is_handed(client):
             "task": task,
             "technique_id": "structured.schema-first",
             "dataset": "entity-extraction",
-            "record": False,
             "prompt": compiled,
         },
     )
@@ -930,6 +992,16 @@ def test_a_benchmark_measures_the_prompt_it_is_handed(client):
     sent = job["result"]["prompt_preview"]["stages"][0]["user"]
     assert sent.startswith("HOUSE RULE: never invent a place.")
     assert "{input}" not in sent
+    recorded = client.get(f"/v1/experiments/{job['result']['experiment_id']}").json()
+    assert recorded["prompt_snapshot"] == compiled
+    assert recorded["prompt_snapshot_kind"] == "authored"
+    authored_user = next(
+        message["content"]
+        for message in recorded["prompt_snapshot"]["stages"][0]["messages"]
+        if message["role"] == "user"
+    )
+    assert authored_user.startswith("HOUSE RULE: never invent a place.")
+    assert "{input}" in authored_user
 
 
 def test_a_prompt_from_another_technique_is_refused(client):
@@ -1563,12 +1635,55 @@ def test_smart_run_consumes_nothing_the_reader_has_not_seen(client):
     task_check = smart.index("Describe the task first")
     dataset_check = smart.index("Choose a set of examples first")
     assert task_check < dataset_check
-    # Each refusal lands on the screen carrying the field it names.
+    # The task still only exists on the composer, so its refusal still leaves
+    # for it. The set is now a field on the card the button lives on, so its
+    # refusal points at that field instead of leaving for a different screen.
     assert "selectTab('prompt', {focus:true});" in smart
-    assert "selectTab('report', {focus:true});" in smart
+    assert "querySelector('[data-run-field=\"dataset\"]')?.focus();" in smart
     # And Home says what the button is holding before it is pressed.
     assert "function smartRunHolds()" in navigation
-    assert "smartRunHolds().map" in navigation
+
+
+def test_a_smart_run_refusal_expires_with_the_field_it_named(client):
+    """The rail card kept its refusal for the rest of the session.
+
+    Both of Smart run's refusals were written into the one line that reports
+    the button's state and left there — "Describe the task first" stayed under
+    the button past the task being typed, past the prompt being compiled, past
+    the measurement. So each refusal now records the field it is waiting for,
+    and the line retires itself once that field arrives.
+    """
+    navigation = client.get("/assets/navigation.js").text
+    measurements = client.get("/assets/measurements.js").text
+
+    smart = navigation.split("function wireSmartStart(", 1)[1].split("\nconst routeAliases", 1)[0]
+    # Neither refusal is printed without naming what would satisfy it.
+    assert "'Describe the task first" in smart and "'task');" in smart
+    assert "'Choose a set of examples first" in smart and "'dataset');" in smart
+    assert "node.dataset.waitingFor = waitingFor" in smart
+
+    # And the line is cleared by both of the things that can satisfy it: typing
+    # the task, and any redraw that follows a dataset being chosen.
+    assert "function clearSmartRefusal()" in navigation
+    assert "if (event.target.id !== 'description') return;" in navigation
+    assert "clearSmartRefusal();" in navigation
+    assert "clearSmartRefusal();" in measurements.split("function refreshActions(", 1)[1]
+
+
+def test_the_next_step_is_stated_before_the_prompt_and_not_under_it(client):
+    """At the foot of a compiled prompt, the next step is off the screen.
+
+    The block naming the one step not yet taken sat after the messages, the
+    footer and the notes: on the rendered page it landed at 919px of a 2418px
+    column, below the fold and behind a wall of monospace. The only pointer out
+    of the screen was in its least-read place, so it stands above the prompt
+    now, beside the copy buttons.
+    """
+    measurements = client.get("/assets/measurements.js").text
+
+    program = measurements.split("function renderProgram(", 1)[1].split("\nfunction ", 1)[0]
+    assert program.count("${nextStep()}") == 1
+    assert program.index("${nextStep()}") < program.index("${stages}")
 
 
 def test_the_opening_run_is_one_the_scorecard_will_stand_behind(client):
@@ -1625,3 +1740,259 @@ def test_a_structured_right_answer_is_shown_as_json_not_as_object_object(client)
     assert "JSON.stringify(value, null, 2)" not in measurements
     for source in (platform, measurements):
         assert "String(value ?? '')" not in source
+
+
+def test_the_report_takes_its_warning_from_the_server_rather_than_keeping_a_copy(client):
+    """One wording for a grader, in the module that applies it.
+
+    A caveat written into the page would be a second definition of what a
+    grader means, free to drift from the code the moment either changes — the
+    same reason `grader_help` is served rather than copied. So the page has to
+    look these up, and it has to actually use them: on the report, and on the
+    panel that names the headline grader *before* a run is spent.
+    """
+    catalog = client.get("/assets/catalog.js").text
+    measurements = client.get("/assets/measurements.js").text
+    platform = client.get("/assets/platform.js").text
+    datasets = client.get("/assets/datasets.js").text
+
+    assert "capabilities.grader_caveats" in catalog
+    assert "capabilities.pass_rate_graders" in catalog
+    # No page may hold its own copy of the sentence.
+    body = measurements + platform + datasets
+    assert "not whether the answer is right" not in body
+
+    # Beside the score, and before the run that produces it.
+    assert "graderCaveat(c.quality_grader)" in measurements
+    assert "graderCaveat(headline)" in measurements
+    # A partial-credit mean is never read out as a share of answers.
+    assert "isPassRate(c.quality_grader)" in measurements
+    assert "out of every 100 answers</strong> passed" in measurements
+    # The measured floor, wherever a set is chosen or a score is read.
+    assert "quality_chance_level" in measurements
+    assert "token_f1_chance_level" in platform
+    assert "token_f1_chance_level" in datasets
+
+
+def test_a_rubric_verdict_covers_a_whole_run_and_stays_a_model_opinion(client, monkeypatch):
+    """The judge used to answer one question nobody had.
+
+    Whether one answer beats another settles an argument about one example. The
+    question a person has about a drafting prompt is whether it writes well
+    across the set, and that is what this returns — a win rate against the
+    reference answers, blind, with one review item for the batch and no route
+    into a benchmark number or a CI gate.
+    """
+    from prompt_playoff.domain import ModelResult
+
+    async def generate(prompt, model, timeout_seconds=120):
+        body = prompt.messages[1].content
+        first = body.split("FIRST ANSWER:\n", 1)[1].split("\n\nSECOND ANSWER:", 1)[0]
+        winner = "first" if first.startswith("model wrote") else "second"
+        return ModelResult(content=json.dumps({"winner": winner, "rationale": "clearer"}), usage={})
+
+    service = client.app.state.service
+    monkeypatch.setattr(
+        service, "provider", lambda *a, **k: type("P", (), {"generate": staticmethod(generate)})()
+    )
+    rows = client.get("/v1/datasets/summarization").json()[:4]
+    body = client.post(
+        "/v1/evaluate/rubric",
+        json={
+            "dataset": "summarization",
+            "rubric": ["keeps every named entity", "reads as one sentence"],
+            "judge_model": {"provider": "ollama", "model_id": "judge-7b"},
+            "runs": [
+                {
+                    "example_id": row["id"],
+                    "repeat": 0,
+                    "output": f"model wrote this for {row['id']}",
+                    "grades": {},
+                    "latency_seconds": 0.1,
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "calls": 1,
+                }
+                for row in rows
+            ],
+        },
+    ).json()
+
+    assert body["wins"] == len(rows)
+    assert body["win_rate"] == 1.0
+    assert body["status"] == "pending_human_review"
+    assert body["review_id"]
+    assert "preferred these answers to the reference" in body["summary"]
+    # One item for the batch, not one per row: a person confirming a verdict is
+    # confirming the verdict, not clicking through fifty of them.
+    judged = [item for item in client.get("/v1/reviews").json() if item["kind"] == "judge"]
+    assert len(judged) == 1
+
+
+def test_a_run_with_no_written_reference_is_refused_rather_than_judged_against_nothing(client):
+    body = client.post(
+        "/v1/evaluate/rubric",
+        json={
+            "dataset": "entity-extraction",
+            "rubric": ["clarity"],
+            "judge_model": {"provider": "ollama", "model_id": "judge-7b"},
+            "runs": [
+                {
+                    "example_id": "entity-extraction-001",
+                    "repeat": 0,
+                    "output": "anything",
+                    "grades": {},
+                    "latency_seconds": 0.1,
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "calls": 1,
+                }
+            ],
+        },
+    )
+    assert body.status_code == 422
+    assert "graded by rule, not judged" in body.json()["detail"]
+
+
+def test_the_report_says_which_graders_nobody_chose(client):
+    measurements = client.get("/assets/measurements.js").text
+    assert "report.inferred_graders" in measurements
+    assert "not by you" in measurements
+
+
+def test_a_search_with_no_number_worth_maximising_is_refused_at_the_click(client):
+    """Refused as an answer to the click, not as a failed run.
+
+    A job that dies halfway reads as something broken. This is not broken — it
+    is the tool declining to spend an evening raising a number that cannot
+    decide anything — so it comes back immediately, with a code the screen can
+    act on and an override that relabels what the result means.
+    """
+    rows = [
+        {
+            "id": f"r{index}",
+            "input": f"ticket {index}",
+            "expected": (
+                f"Thank you for contacting us about your {word}. "
+                "We are looking into it now and will be in touch shortly."
+            ),
+        }
+        for index, word in enumerate(["order", "invoice", "refund", "delivery", "return"])
+    ]
+    body = {
+        "task": {"task_type": "summarization", "model": {"provider": "ollama", "model_id": "x"}},
+        "technique_id": "direct.explicit-constraints",
+        "examples": rows,
+        "record": False,
+    }
+    refused = client.post("/v1/optimize", json=body)
+    assert refused.status_code == 422
+    detail = refused.json()["detail"]
+    assert detail["code"] == "unmeasurable_objective"
+    assert detail["chance_level"] > 0.35
+    assert "contains_all" in detail["message"]
+
+    # Saying so explicitly is allowed; being surprised by it is what is not.
+    allowed = client.post("/v1/optimize", json={**body, "allow_noisy_objective": True})
+    assert allowed.status_code == 200
+
+
+def test_the_screen_can_act_on_the_refusal_and_offer_to_override_it(client):
+    measurements = client.get("/assets/measurements.js").text
+    core = client.get("/assets/core.js").text
+    # The code, not the wording: a screen that matched on the sentence would
+    # break the moment the sentence improved.
+    assert "error.code" in core
+    assert "'unmeasurable_objective'" in measurements
+    assert 'data-action="optimize-anyway"' in measurements
+    assert "allow_noisy_objective" in measurements
+
+
+def test_the_judge_screen_judges_a_run_and_not_only_a_pair(client):
+    platform = client.get("/assets/platform.js").text
+    assert "'/v1/evaluate/rubric'" in platform
+    assert "Judge a whole run" in platform
+    # And says what the number is not, where the number is shown.
+    assert "no route into a scorecard" in platform
+
+
+def test_the_dataset_shelf_can_read_requirements_off_prose_rows(client):
+    platform = client.get("/assets/platform.js").text
+    assert "derive-requirements" in platform
+    assert "/requirements" in platform
+
+
+def test_a_set_of_prose_rows_can_be_given_requirements_without_leaving_the_screen(client):
+    """The half of the fix that only existed in the terminal.
+
+    Somebody brings their own drafting rows through the browser; deriving the
+    requirements that make them gateable used to mean finding a CLI command.
+    """
+    rows = [
+        {
+            "id": f"r{index}",
+            "input": f"Ticket about my {word} A-{4400 + index}",
+            "expected": (
+                f"About A-{4400 + index}: thank you for contacting us about your {word}. "
+                "We are looking into it now and will be in touch shortly."
+            ),
+        }
+        for index, word in enumerate(["order", "invoice", "refund", "delivery", "return"])
+    ]
+    name = client.post(
+        "/v1/datasets/upload",
+        files={
+            "file": (
+                "tickets.jsonl",
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                "application/x-ndjson",
+            )
+        },
+    ).json()["name"]
+
+    body = client.post(f"/v1/datasets/{name}/requirements", json={"contract": "reply"}).json()
+    assert body["requirements"]["contains_all"] == len(rows)
+    assert body["requirements"]["forbidden_content"] == len(rows)
+    # A checkable requirement now answers for quality, so no row is left with
+    # word overlap standing in for it.
+    assert body["still_overlap_scored"] == 0
+
+    # Pressing it twice is a reasonable thing to do, and must not report a set
+    # that is fully derived as one nothing could be derived from.
+    again = client.post(f"/v1/datasets/{name}/requirements", json={"contract": "reply"}).json()
+    assert again["requirements"] == body["requirements"]
+    assert again["added"] == {}
+
+    # A bundled set already carries whatever contract its catalogue declares.
+    refused = client.post(
+        "/v1/datasets/business:support-reply/requirements", json={"contract": "reply"}
+    )
+    assert refused.status_code == 409
+
+
+def test_rows_with_no_requirement_to_find_are_told_so_rather_than_left_looking_fixed(client):
+    """Half the honesty of this feature is admitting when it found nothing."""
+    rows = [
+        {
+            "id": f"r{index}",
+            "input": f"ticket {index}",
+            "expected": (
+                f"Thank you for contacting us about your {word}. "
+                "We are looking into it now and will be in touch shortly."
+            ),
+        }
+        for index, word in enumerate(["order", "invoice", "refund", "delivery", "return"])
+    ]
+    name = client.post(
+        "/v1/datasets/upload",
+        files={
+            "file": (
+                "plain.jsonl",
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                "application/x-ndjson",
+            )
+        },
+    ).json()["name"]
+    body = client.post(f"/v1/datasets/{name}/requirements", json={"contract": "reply"}).json()
+    assert "contains_all" not in body["requirements"]
+    assert body["still_overlap_scored"] == len(rows)

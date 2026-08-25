@@ -41,7 +41,12 @@ from prompt_playoff.integrations.tracing import (
 )
 from prompt_playoff.measurements import MeasurementStore
 from prompt_playoff.model_profiles import ModelProfileStore
-from prompt_playoff.optimizer import BACKENDS, OptimizationResult, PromptOptimizer
+from prompt_playoff.optimizer import (
+    BACKENDS,
+    OptimizationResult,
+    PromptOptimizer,
+    refuse_unmeasurable,
+)
 from prompt_playoff.providers import ModelProvider, provider_for
 from prompt_playoff.registry import Registry
 from prompt_playoff.selector import Selector
@@ -372,7 +377,10 @@ class PromptSelectorService:
             # The report carries its own record id: a release registered from
             # this prompt has to be able to name the run that justified it.
             report.experiment_id = self.experiments.add_benchmark(
-                report, task, business_case=business_case
+                report,
+                task,
+                business_case=business_case,
+                prompt_snapshot=prompt.model_dump(mode="json") if prompt is not None else None,
             ).id
         return report
 
@@ -426,7 +434,13 @@ class PromptSelectorService:
         if record:
             for report in reports:
                 self.measurements.record(report.to_evidence())
-            self.experiments.add_comparison(comparison, reports, task, business_case=business_case)
+            self.experiments.add_comparison(
+                comparison,
+                reports,
+                task,
+                business_case=business_case,
+                prompt_snapshot=prompt.model_dump(mode="json") if prompt is not None else None,
+            )
         return comparison, reports
 
     async def optimize(
@@ -449,6 +463,7 @@ class PromptSelectorService:
         progress: ProgressCallback | None = None,
         prompt: CompiledProgram | None = None,
         business_case: BusinessCaseRecord | None = None,
+        allow_noisy_objective: bool = False,
     ) -> OptimizationResult:
         """Search for a better prompt. `backend` picks the search algorithm only —
         compilation, execution and grading are the same either way.
@@ -459,6 +474,11 @@ class PromptSelectorService:
         """
         technique = self.resolve_technique(task, technique_id)
         examples, name = self.resolve_dataset(dataset_name, inline)
+        # Before the backend is chosen, because either of them would spend the
+        # same evening of calls raising a number that cannot decide anything.
+        # Measuring such a set stays allowed — a number read correctly is still
+        # a number. Searching against it is what produces a worse prompt.
+        refuse_unmeasurable(examples, allowed=allow_noisy_objective)
         if prompt is not None:
             self._check_measurable(prompt, technique, examples)
         provider = self.provider(task, technique_id=technique.id, phase="optimize")
@@ -480,6 +500,7 @@ class PromptSelectorService:
                 ),
                 engine_model=engine_profile,
                 compiler=self.compiler,
+                allow_noisy_objective=allow_noisy_objective,
             )
             result = await optimizer.optimize(
                 task=task,

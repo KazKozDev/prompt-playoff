@@ -61,6 +61,7 @@ function renderProgram(p) {
       <div class="export-actions">${demos ? `<button type="button" class="copy-btn" data-action="drop-demos">Remove ${plural(demos, 'example')}</button>` : ''}<button type="button" class="copy-btn" data-runtime-export="python">Export Python</button><button type="button" class="copy-btn" data-runtime-export="typescript">Export TypeScript</button><button type="button" class="copy-btn copy-all-btn" data-copy-key="${esc(programKey)}" aria-label="${esc(`Copy the full compiled prompt for ${p.technique_title}`)}">${multi ? 'Copy all calls' : 'Copy prompt'}</button></div>
     </div>
     <div class="copy-status" data-copy-status="compiled" role="status" aria-live="polite"></div>
+    ${nextStep()}
     ${demos ? `<p class="prompt-lead">${plural(demos, 'worked example')} sit ahead of your request — the search
       found ${demos > 1 ? 'them' : 'it'} helped and kept ${demos > 1 ? 'them' : 'it'}. Your own text is untouched
       underneath, and removing ${demos > 1 ? 'them' : 'it'} leaves exactly what you wrote.</p>` : ''}
@@ -73,8 +74,7 @@ function renderProgram(p) {
         <div>${esc(p.technique_id)} v${esc(p.technique_version)} · strategy ${esc(p.strategy)} · ${p.expected_calls} model call(s) · validators: ${esc(p.validators.join(', ') || 'none')}</div>
       </details>
     </footer>
-    ${notes}
-    ${nextStep()}`;
+    ${notes}`;
 }
 
 /* --------------------------------------------------------------------------
@@ -82,10 +82,17 @@ function renderProgram(p) {
  *
  * The screen ended at a copy button, and the whole argument of the tool — that
  * a prompt nobody measured is a prompt nobody can defend — was left to whoever
- * thought to open the rail. It is stated here instead, at the foot of the thing
- * it is about, and it names the state the prompt is actually in: unmeasured,
- * measured, or measured and improved. Only the step that has not been taken is
- * offered, so the block disappears rather than turning into a row of buttons.
+ * thought to open the rail. It is stated on the screen instead, and it names
+ * the state the prompt is actually in: unmeasured, measured, or measured and
+ * improved. Only the step that has not been taken is offered, so the block
+ * disappears rather than turning into a row of buttons.
+ *
+ * It sits under the copy buttons rather than at the foot of the prompt, because
+ * the foot of a compiled prompt is a screen and a half down: measured on the
+ * rendered page, the block landed at 919px of a 2418px column, below the fold
+ * and behind a wall of monospace. The two things you can do with a prompt that
+ * has just appeared — take it away, or find out whether it works — now stand
+ * together, where the eye already is.
  * -------------------------------------------------------------------------- */
 function nextStep() {
   const step = (tab, title, lead, label) => `<aside class="next-step" data-testid="next-step">
@@ -185,6 +192,83 @@ function subjectFullText() {
         <div class="copy-status" data-copy-status="subject:full" role="status" aria-live="polite"></div>
       </div>
     </details>`;
+}
+
+/* --------------------------------------------------------------------------
+ * The prompt on the four screens that cannot give it a column.
+ *
+ * Results, Test lab, Answer judging and Reviews all act on a prompt, and all
+ * four are full-width tables and queues with no left column to hold one. So
+ * each of them named the prompt in a sentence — "every model runs the same
+ * prompt", "the answers this run produced" — while the words themselves were
+ * two screens away. The band puts the text where the sentence is. It is closed
+ * by default: a table keeps its height, and the reader keeps the option.
+ *
+ * Each entry says *which* prompt, because they are not the same one. Test lab
+ * runs the prompt being held. Judging works on the answers of the last run.
+ * Results lists recorded runs, each with its own immutable prompt snapshot.
+ * The band still identifies the current draft rather than letting the text
+ * above a table pass for the wording behind every historical row.
+ * -------------------------------------------------------------------------- */
+const PROMPT_BAND = {
+  results: ['The prompt you are holding now',
+    () => 'This is the current draft in Prompt Studio. Open a run version below to read the exact snapshot that produced its numbers; legacy runs recorded before snapshots retain only their fingerprint.'],
+  'test-lab': ['The prompt under test',
+    () => 'This exact text is what runs. Every model and every context variant below is scored on these words, unchanged — that is the whole point of the screen.'],
+  judge: ['The prompt behind the answers',
+    () => state.report
+      ? `The answers being judged came out of this text, run over ${state.report.dataset}. Edit the prompt and the answers already on this screen still belong to the wording that produced them.`
+      : 'Nothing has been judged yet. When a run is, its answers will have come out of this text.'],
+  reviews: ['The prompt this queue is about',
+    () => 'The text in Prompt Studio now. Every item below names its own subject in its payload — a judge verdict or a breached gate can belong to an earlier wording than this one.']
+};
+
+function promptBand(tab) {
+  const entry = PROMPT_BAND[tab];
+  if (!entry) return '';
+  const [kicker, note] = entry;
+  const parts = promptMessages(state.program);
+  if (!parts.length) {
+    return `<div class="prompt-band bandless" data-testid="prompt-band">
+        <span class="stage-title">${esc(kicker)}</span>
+        <span>Nothing is written yet — <a href="#prompt" data-global-tab="prompt" data-screen="prompt">Prompt text</a> is where a prompt starts.</span>
+      </div>`;
+  }
+  const key = registerCopy(`band:${tab}`, promptPlainText(state.program));
+  return `<details class="prompt-band" data-testid="prompt-band">
+      <summary>
+        <span class="stage-title">${esc(kicker)}</span>
+        <span class="band-name">${esc(techniqueTitle(state.chosen))} · ${plural(parts.length, 'message')}</span>
+      </summary>
+      <div class="prompt-band-body">
+        <p class="band-note">${esc(note())}</p>
+        ${parts.map(promptPartBlock).join('')}
+        <div class="subject-full-actions">${copyButton(key, 'Copy prompt', 'Copy the text this screen is working on')}</div>
+        <div class="copy-status" data-copy-status="band:${esc(tab)}" role="status" aria-live="polite"></div>
+      </div>
+    </details>`;
+}
+
+/* A screen carrying this band is drawn once and then left alone — half of them
+ * hold a half-typed rubric or a list of model ids. So when the prompt changes,
+ * the copy standing on a screen nobody is looking at is the one that goes
+ * stale, and a band showing last week's wording under the words "this exact
+ * text is what runs" is worse than no band at all. Only the band is redrawn,
+ * from state, rather than the screen holding it: throwing the screen away to
+ * correct one band would throw the half-typed rubric away with it. */
+function refreshPromptBands() {
+  document.querySelectorAll('[data-tab-panel]').forEach(panel => {
+    const tab = panel.dataset.tabPanel;
+    if (!PROMPT_BAND[tab] || panel.dataset.rendered !== 'true') return;
+    const band = panel.querySelector('[data-testid="prompt-band"]');
+    if (!band) return;
+    // Reading it open and finding it shut a moment later is the band losing
+    // your place, so being open survives the text underneath changing.
+    const open = band.open === true;
+    band.outerHTML = promptBand(tab);
+    const drawn = panel.querySelector('[data-testid="prompt-band"]');
+    if (open && drawn && 'open' in drawn) drawn.open = true;
+  });
 }
 
 // The third zone of the workspace: the rail, the screen, and — on every screen
@@ -325,7 +409,9 @@ function measurementGraders(name) {
   const all = [...found.named, ...validators.filter(item => !found.named.includes(item))];
   if (!all.length) {
     return `<p class="how-note">No row here names a grader, so each answer is scored by graders inferred from the
-      shape of its expected answer — word overlap for prose, per-item overlap for a list, the label for a category.</p>`;
+      shape of its expected answer — word overlap for prose, per-item overlap for a list, the label for a category.</p>
+      <p class="how-note warn"><b>If these rows hold prose</b> — a reply, a summary, an email — the inferred score is
+      word overlap with your reference answer, and ${esc(graderCaveat('token_f1') || '')}</p>`;
   }
   const headline = state.qualityPreference.find(item => all.includes(item)) || null;
   const inferred = found.inferred
@@ -336,9 +422,14 @@ function measurementGraders(name) {
     ? `<p class="how-note">${validators.length === 1 ? 'The last one comes' : `The last ${validators.length} come`}
       from the method itself — its own contract checks, which score nothing when they do not apply.</p>`
     : '';
+  // Said before the run rather than after it. Learning that the headline number
+  // cannot decide this task is worth an hour when it arrives with the number,
+  // and worth the whole run when it arrives before one.
+  const warning = graderCaveat(headline);
   return `<ul class="grader-list">${all.map(item => graderChip(item, headline)).join('')}</ul>
     ${headline ? `<p class="how-note">Quality will be <code>${esc(headline)}</code>: the first of these in the order the
       scorecard prefers for a headline number. The rest are shown beside it on the report.</p>` : ''}
+    ${warning ? `<p class="how-note warn"><b>Before you read that number:</b> ${esc(warning)}</p>` : ''}
     ${inferred}${added}`;
 }
 
@@ -401,29 +492,89 @@ const DATASET_GROUPS = [
   ['Shipped with the tool', () => true]
 ];
 
+// The whole name stays the value — it is what the server is asked for — while
+// the label drops the prefix the group above it already carries.
+function datasetOption(name, size) {
+  const shown = name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
+  return `<option value="${esc(name)}"${name === state.run.dataset ? ' selected' : ''}>${esc(shown)} — ${size} examples</option>`;
+}
+
+const TASK_FIT_STOPWORDS = new Set(['this','that','with','from','into','your','their',
+  'using','used','then','than','have','will','each','which','about','when','they',
+  'them','what','also','only','just','some','more','over','under','without','make',
+  'need','like','answer','text','output','input','write','model']);
+
+// Loose enough to catch "extract"/"extraction" as the same idea, strict enough
+// that four-letter overlaps stop being noise: every word truncates to a root of
+// five letters, so a shared root has to be a real word, not a fragment of one.
+function taskFitWords(text) {
+  return new Set((text || '').toLowerCase().match(/[a-z]{4,}/g)
+    ?.filter(word => !TASK_FIT_STOPWORDS.has(word)).map(word => word.slice(0, 5)) || []);
+}
+
+/* The catalogue exists to answer exactly this — which public set measures the
+ * business work a sentence describes — and until now that answer lived only on
+ * the Dataset library's own browse-by-category screen, a detour from the field
+ * that actually needs it. So the same taxonomy is read here: a task's name is
+ * a few real words about real work ("Ticket classification", "Invoice
+ * extraction"), and a root shared with the description is a hint worth
+ * surfacing, not a claim of certainty — which is why it is a separate group
+ * above the rest rather than a reordering of it. */
+function taskFitSuggestions(description) {
+  const words = taskFitWords(description);
+  if (!words.size || !state.catalog?.taxonomy) return [];
+  const scored = [];
+  for (const category of state.catalog.taxonomy) {
+    for (const task of category.tasks) {
+      if (!task.dataset || !state.datasetSizes.has(task.dataset)) continue;
+      const score = [...taskFitWords(`${category.name} ${task.name}`)].filter(word => words.has(word)).length;
+      if (score > 0) scored.push({dataset:task.dataset, score});
+    }
+  }
+  const seen = new Set();
+  return scored.sort((a, b) => b.score - a.score)
+    .filter(item => !seen.has(item.dataset) && seen.add(item.dataset)).slice(0, 3);
+}
+
 function datasetOptions() {
   const sets = [...state.datasetSizes.entries()];
-  return DATASET_GROUPS.map(([label, belongs], index) => {
+  const description = ($('description')?.value || '').trim();
+  const suggestions = description ? taskFitSuggestions(description) : [];
+  const suggested = suggestions.length
+    ? `<optgroup label="Fits your task">${suggestions
+        .map(item => datasetOption(item.dataset, state.datasetSizes.get(item.dataset))).join('')}</optgroup>`
+    : '';
+  return suggested + DATASET_GROUPS.map(([label, belongs], index) => {
     const mine = sets.filter(([name]) =>
       belongs(name) && !DATASET_GROUPS.slice(0, index).some(([, earlier]) => earlier(name)));
     if (!mine.length) return '';
-    const options = mine.map(([name, size]) => {
-      // The whole name stays the value — it is what the server is asked for —
-      // while the label drops the prefix the group above it already carries.
-      const shown = name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
-      return `<option value="${esc(name)}"${name === state.run.dataset ? ' selected' : ''}>${esc(shown)} — ${size} examples</option>`;
-    }).join('');
-    return `<optgroup label="${esc(label)}">${options}</optgroup>`;
+    return `<optgroup label="${esc(label)}">${mine.map(([name, size]) => datasetOption(name, size)).join('')}</optgroup>`;
   }).join('');
 }
 
-function runField(name) {
-  const options = datasetOptions();
-  // The empty row is the opening state and stays in the list afterwards: a set
-  // can be un-chosen the same way it was chosen, and nothing runs until one is.
+// Smart run needs this same field wherever its Start button lives — the rail
+// card and the home tile — so a click there never has to leave for a screen
+// whose only job was picking a set. One markup, several ids: the value is the
+// same field in `state.run`, kept level by `syncDatasetFields`.
+function datasetField(id, label = 'Measure against') {
   const placeholder = `<option value=""${state.run.dataset ? '' : ' selected'}>Choose a set of examples…</option>`;
+  return `<label for="${id}">${esc(label)}<select id="${id}" data-run-field="dataset">${placeholder}${datasetOptions()}</select></label>`;
+}
+
+// The suggestions above depend on the task, which can change without the
+// dataset list changing at all — so this is the one redraw keyed to typing
+// rather than to a set arriving or leaving the server.
+function refreshDatasetSuggestions() {
+  document.querySelectorAll('[data-run-field="dataset"]').forEach(field => {
+    const value = field.value;
+    field.innerHTML = `<option value=""${value ? '' : ' selected'}>Choose a set of examples…</option>${datasetOptions()}`;
+    field.value = value;
+  });
+}
+
+function runField(name) {
   switch (name) {
-    case 'dataset': return `<label for="run-dataset">Measure against<select id="run-dataset" data-run-field="dataset">${placeholder}${options}</select></label>`;
+    case 'dataset': return datasetField('run-dataset');
     case 'repeats': return `<label for="run-repeats">Runs per example<input id="run-repeats" type="number" min="1" max="10" value="${esc(state.run.repeats)}" data-run-field="repeats"></label>`;
     case 'rounds': return `<label for="run-rounds">Rounds<input id="run-rounds" type="number" min="1" max="6" value="${esc(state.run.rounds)}" data-run-field="rounds"></label>`;
     case 'backend': return `<label for="run-backend">How to search<select id="run-backend" data-run-field="backend">${state.backendOptions}</select></label>`;
@@ -533,8 +684,10 @@ function wireRunSetup(panel) {
   panel.querySelector('[data-action="save-technique"]')
     ?.addEventListener('click', event => exportTechnique(event.currentTarget, true));
   panel.querySelector('[data-action="use-own-rows"]')?.addEventListener('click', () => useOwnRows(panel));
-  panel.querySelectorAll('[data-run-field]').forEach(field => field.addEventListener('change', () => {
-    if (field.dataset.runField === 'dataset') state.ownRowsNote = '';
+  // The dataset field is wired once, globally — it now also lives on the rail
+  // card and the home tile, and a per-panel listener would either miss those
+  // or double-fire on this one. Repeats, rounds and backend live nowhere else.
+  panel.querySelectorAll('[data-run-field]:not([data-run-field="dataset"])').forEach(field => field.addEventListener('change', () => {
     state.run[field.dataset.runField] = field.value;
     updateEstimates();
     // The bar names the set every number is computed from, so it is rewritten
@@ -612,6 +765,9 @@ function refreshActions(running = false) {
   // open, so what the screen says it is working on is redrawn with the buttons
   // that would run it.
   refreshRunSubject();
+  // A dataset chosen or a prompt compiled is exactly what Smart run was waiting
+  // for, and both land here. The refusal it printed goes with them.
+  if (typeof clearSmartRefusal === 'function') clearSmartRefusal();
   refreshHomeIfVisible();
   updateEstimates();
 }
@@ -673,12 +829,44 @@ async function runOptimization() {
       task: await taskProfile(), technique_id: state.chosen, prompt: state.program,
       dataset: state.run.dataset, repeats: Number(state.run.repeats),
       rounds: Number(state.run.rounds), backend: state.run.backend,
-      engine_model: engineProfile(), ...businessCaseRequestFields()
+      engine_model: engineProfile(), ...businessCaseRequestFields(),
+      allow_noisy_objective: state.run.allowNoisyObjective === true
     });
     state.optimization = await pollJob(job.id, showProgress);
     state.tab = 'optimization'; renderDetail();
-  } catch (e) { showDetailMessage('optimization', `<div class="error">${esc(e.message)}</div>`); }
+  } catch (e) { showDetailMessage('optimization', optimizeFailure(e)); }
   finally { busy(false); }
+}
+
+/* A search maximises whatever number it is handed. Handed word overlap on rows
+ * whose answers already resemble each other, it raises it by drifting towards
+ * the wording every row shares — the prompt gets worse while the score goes up.
+ * The server refuses that before spending a call, and this is where the refusal
+ * turns into something a person can act on: what to give the rows instead, and
+ * the one way to proceed anyway, which relabels what comes back. */
+// The override, wired once. The refusal is drawn into a panel that redraws
+// itself, so the button cannot be bound where it is written.
+document.addEventListener('click', event => {
+  if (!event.target.closest('[data-action="optimize-anyway"]')) return;
+  // Set for this search only. A run that opted out of the refusal is a run
+  // whose result is drift, and the next one should have to say so again.
+  state.run.allowNoisyObjective = true;
+  runOptimization().finally(() => { state.run.allowNoisyObjective = false; });
+});
+
+function optimizeFailure(error) {
+  if (error.code !== 'unmeasurable_objective') return `<div class="error">${esc(error.message)}</div>`;
+  const floor = error.detail?.chance_level;
+  return `<div class="error">
+    <p><strong>This set has no number worth searching against.</strong>${floor == null ? ''
+      : ` An answer written for a different row of it already scores ${Number(floor).toFixed(2)} on word overlap, which is what the search would be raising.`}</p>
+    <p>Give the rows requirements a rule can decide and the search has something real to maximise —
+      <a href="#dataset-library" data-global-tab="dataset-library" data-screen="dataset-library">Datasets</a> can read them
+      off the rows for you.</p>
+    <div class="quality-actions">
+      <button type="button" class="ghost" data-action="optimize-anyway">Search anyway, and read it as drift</button>
+    </div>
+  </div>`;
 }
 
 // The exporter's own default collides with the next winner from the same recipe,
@@ -840,6 +1028,26 @@ function verdictCautions(report) {
   if (c.failures) {
     notes.push(`${plural(c.failures, 'answer')} failed outright and count as zero — worth reading before trusting the average.`);
   }
+  // The measured floor under the headline metric, when the headline is a
+  // comparison against one reference answer. This is the note that stops
+  // someone rewriting a working prompt: if answers to other rows already score
+  // what this run scored, the number is about the metric, not the prompt.
+  if (c.quality_chance_level != null) {
+    const margin = c.quality - c.quality_chance_level;
+    notes.push(margin <= 0.05
+      ? `Answers copied from other rows of this set already score ${c.quality_chance_level.toFixed(2)} here — at or above what this run scored. This metric is not telling your prompt apart from an answer to a different question, so the number is not a verdict on the prompt at all.`
+      : `Answers copied from other rows of this set already score ${c.quality_chance_level.toFixed(2)} here, so ${c.quality.toFixed(2)} is ${margin.toFixed(2)} above what wording alone earns. 1.00 is not reachable by anything but a copy of the reference.`);
+  }
+  const graderNote = graderCaveat(c.quality_grader);
+  if (graderNote) notes.push(graderNote);
+  // Which of these numbers nobody chose. A row that names its graders said what
+  // it wanted measured; a row that did not had them picked from the shape of
+  // its answer, and the result reads the same either way unless it is said.
+  const inferred = Object.keys(report.inferred_graders || {});
+  if (inferred.length) {
+    const rows = Math.max(...Object.values(report.inferred_graders));
+    notes.push(`${rows} of ${report.examples} examples name no grader of their own, so ${inferred.join(', ')} ${inferred.length === 1 ? 'was' : 'were'} chosen for them from the shape of their answers — not by you. Write "graders" into the rows to make the choice yours.`);
+  }
   // A score over rows a model invented is a score about invented rows. It is
   // said here rather than on the builder screen, because here is where the
   // number gets read and believed.
@@ -881,10 +1089,16 @@ function renderVerdict(report) {
         <svg viewBox="0 0 96 96" aria-hidden="true"><circle class="ring-track" cx="48" cy="48" r="43.5"></circle></svg>
         <b>—</b><span>unscored</span>
       </div>`
-    : `<div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1">
+    // The floor is marked on the ring, not only said underneath it. An arc
+    // filled to 0.66 reads as two thirds of the way to right; over a metric
+    // that already gives an answer to a different question 0.63, almost all of
+    // that arc was never the prompt's to earn. The tick is where that line
+    // falls, drawn over the fill so it shows on either side of it.
+    : `<div class="ring" role="img" aria-label="Quality ${c.quality.toFixed(3)} out of 1${c.quality_chance_level == null ? '' : `, where an answer written for a different row already scores ${c.quality_chance_level.toFixed(2)}`}">
         <svg viewBox="0 0 96 96" aria-hidden="true">
           <circle class="ring-track" cx="48" cy="48" r="43.5"></circle>
           <circle class="ring-fill" cx="48" cy="48" r="43.5" stroke-dasharray="${circumference}" stroke-dashoffset="${(circumference * (1 - Math.max(0, Math.min(1, c.quality)))).toFixed(1)}"></circle>
+          ${c.quality_chance_level == null ? '' : `<circle class="ring-chance" cx="48" cy="48" r="43.5" stroke-dasharray="2 ${circumference}" stroke-dashoffset="${(1 - circumference * Math.max(0, Math.min(1, c.quality_chance_level))).toFixed(1)}"><title>an answer written for a different row scores ${c.quality_chance_level.toFixed(2)}</title></circle>`}
         </svg>
         <b>${c.quality.toFixed(2)}</b><span>quality</span>
       </div>`;
@@ -892,7 +1106,15 @@ function renderVerdict(report) {
     ? `<p class="verdict-line"><strong>Nothing here could score correctness.</strong> These rows carry no right
         answer and the task sets no shape to check against, so what was measured is repeatability, time and cost.</p>
       <p class="verdict-move">Add the right answer to some rows and the same run returns a quality number.</p>`
-    : `<p class="verdict-line"><strong>${percent} out of every 100 answers</strong> were judged correct by ${esc(graderMeaning(c.quality_grader))}.</p>
+    // A share of answers and an average score are two different claims, and the
+    // second one was being read out as the first. `token_f1` gives an answer
+    // partial credit for the words it shares with a reference, so "14 out of
+    // every 100 answers were correct" was a pass rate nobody measured — and the
+    // one sentence most likely to send a reader off to fix a working prompt.
+    : isPassRate(c.quality_grader)
+    ? `<p class="verdict-line"><strong>${percent} out of every 100 answers</strong> passed — ${esc(graderMeaning(c.quality_grader))}.</p>
+      <p class="verdict-move">${esc(movement)}</p>`
+    : `<p class="verdict-line">Answers scored <strong>${c.quality.toFixed(2)} out of 1 on average</strong>, where the score is ${esc(graderMeaning(c.quality_grader))}. That is an average, not a share of answers that were right.</p>
       <p class="verdict-move">${esc(movement)}</p>`;
   const headline = unscored
     ? stat('Same answer twice', c.stability.toFixed(3), report.repeats > 1 ? `over ${plural(report.repeats, 'run')}` : 'raise runs per example')
@@ -1046,6 +1268,10 @@ function renderReport(r) {
   const unscored = !c.quality_grader;
   const rows = [
     ['quality — ' + graderMeaning(c.quality_grader), c.quality, r.declared.quality, 'ratio'],
+    // Directly under quality, because it is the row that says where this
+    // metric's zero actually is: the score an answer about a different row
+    // already earns. Absent for every grader whose zero is at zero.
+    ...(c.quality_chance_level == null ? [] : [['chance level — what an unrelated answer scores here', c.quality_chance_level, null, 'ratio']]),
     ['reliability', c.reliability, r.declared.reliability, 'ratio'],
     ['contract pass rate', c.contract_pass_rate, null, 'ratio'],
     ['stability across repeats', c.stability, null, 'ratio'],
