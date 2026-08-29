@@ -5,7 +5,8 @@ Prompt optimization and LLM evaluation for local LLMs: picks the prompting techn
 ```bash
 # macOS / Linux
 git clone https://github.com/KazKozDev/prompt-playoff.git && cd prompt-playoff && ./start.command
-
+```
+```bash
 # Windows (PowerShell or cmd, after cloning)
 git clone https://github.com/KazKozDev/prompt-playoff.git
 cd prompt-playoff
