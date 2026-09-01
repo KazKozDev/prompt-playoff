@@ -64,7 +64,7 @@ dev = [
 # and the toolchain no longer decides what installs.
 dspy = [
   "dspy>=3,<4",
-  "litellm<1.98",
+  "litellm<1.99",
   # MIPROv2 drives its search with optuna; without it that backend raises on the
   # third step, after already spending model calls.
   "optuna>=4,<5",
