@@ -71,7 +71,7 @@ dspy = [
 ]
 # Tracing to Langfuse, or to Phoenix / any OTLP collector.
 tracing = [
-  "langfuse>=3,<5",
+  "langfuse>=3,<6",
   "opentelemetry-sdk>=1.30",
   "opentelemetry-exporter-otlp-proto-http>=1.30",
 ]
